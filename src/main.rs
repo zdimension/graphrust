@@ -1,13 +1,10 @@
 mod utils;
 
-use std::borrow::Cow;
-use utils::*;
 
 use std::cmp::Ordering;
 use std::ffi::CStr;
-use std::fs::File;
 
-use glfw::{Context, SwapInterval};
+
 use chrono;
 
 extern crate speedy;
@@ -16,13 +13,12 @@ use speedy::{Readable};
 
 #[macro_use]
 extern crate glium;
-#[macro_use]
 extern crate imgui;
 extern crate imgui_glium_renderer;
 
 
 use itertools::Itertools;
-use nalgebra::{Isometry2, Matrix4, Orthographic3, Similarity2, Similarity3, Translation2, UnitQuaternion, Vector2, Vector3};
+use nalgebra::{Matrix4, Orthographic3, Similarity2, Similarity3, Translation2, UnitQuaternion, Vector2, Vector3};
 use winit::dpi::PhysicalPosition;
 
 
@@ -488,11 +484,11 @@ fn main() {
     let event_loop = glutin::event_loop::EventLoop::new();
     let wb = glutin::window::WindowBuilder::new()
         .with_title("Graphe")
-        .with_inner_size(glium::glutin::dpi::LogicalSize::new(512f64, 512f64));
+        .with_inner_size(glium::glutin::dpi::LogicalSize::new(500f64, 500f64));
     let cb = glutin::ContextBuilder::new()
-        //.with_multisampling(4)
-        //.with_vsync(true)
-        .with_hardware_acceleration(Some(true));
+        .with_multisampling(4)
+        .with_vsync(true)
+        ;
     let display = glium::Display::new(wb, cb, &event_loop).expect("Failed to initialize display");
 
     let mut imgui = Context::create();
@@ -547,12 +543,6 @@ fn main() {
 
     let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
-    /* let mut camera = Camera {
-         center: Point::new(0.0, 0.0),
-         zoom: 0.0005,
-         angle: 0.0,
-     };*/
-
     let mut transf: Similarity3<f32> = Similarity3::new(
         Vector3::new(0.0, 0.0, 0.0),
         Vector3::new(0.0, 0.0, 0.0),
@@ -562,10 +552,15 @@ fn main() {
 
     let mut pressed_left = false;
     let mut pressed_right = false;
-    ;
     let mut mouse: PhysicalPosition<f64> = Default::default();
 
+    let mut frames = 0;
+    let mut start = std::time::Instant::now();
     event_loop.run(move |ev, _, control_flow| {
+        let next_frame_time = std::time::Instant::now() +
+            std::time::Duration::from_nanos(16_666_667);
+        *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
+
         let gl_window = display.gl_window();
         let window = gl_window.window();
         let inner_size = window.inner_size();
@@ -591,10 +586,10 @@ fn main() {
             },
             glutin::event::Event::DeviceEvent { event, .. } => match event {
                 /*glutin::event::DeviceEvent::MouseMotion { delta } => {
-                    let (dx, dy) = delta;
-                    camera.angle += dx as f32 / 100.0;
-                    camera.center.x += dy as f32 / 100.0;
-                }*/
+                let (dx, dy) = delta;
+                camera.angle += dx as f32 / 100.0;
+                camera.center.x += dy as f32 / 100.0;
+            }*/
                 glutin::event::DeviceEvent::MouseWheel { delta } => {
                     let dy = match delta
                     {
@@ -636,34 +631,39 @@ fn main() {
                         transf.append_translation_mut(&nalgebra::Translation3::new(dx as f32, -dy as f32, 0.0));
                     }
                     /*else if pressed_right {
-                        let mouse_vec2 = Vector2::new(mouse.x as f32, mouse.y as f32);
-                        let diff = mouse_vec2 - size_vec2;
-                        let diffpoint = nalgebra::Point3::new(diff.x, diff.y, 0.0);
-                        let rot = diff.y.atan2(diff.x);
-                        let center = transf.inverse_transform_point(&diffpoint);
-                        transf.append_rotation_wrt_point_mut(&nalgebra::UnitQuaternion::from_euler_angles(0.0, 0.0, rot), &center);
-                    }*/
+                    let mouse_vec2 = Vector2::new(mouse.x as f32, mouse.y as f32);
+                    let diff = mouse_vec2 - size_vec2;
+                    let diffpoint = nalgebra::Point3::new(diff.x, diff.y, 0.0);
+                    let rot = diff.y.atan2(diff.x);
+                    let center = transf.inverse_transform_point(&diffpoint);
+                    transf.append_rotation_wrt_point_mut(&nalgebra::UnitQuaternion::from_euler_angles(0.0, 0.0, rot), &center);
+                }*/
                 }
                 _ => return,
             },
-            _ => (),
+            glutin::event::Event::MainEventsCleared => {
+                frames += 1;
+                let threshold_ms = 200;
+                if start.elapsed().as_millis() >= threshold_ms {
+                    window.set_title(&format!("Graphe - {:.0} fps", frames as f64 / start.elapsed().as_millis() as f64 * 1000.0));
+                    start = std::time::Instant::now();
+                    frames = 0;
+                }
+
+                let mut target = display.draw();
+
+                target.clear_color(1.0, 1.0, 1.0, 1.0);
+
+                let uniforms = uniform! {
+                    matrix: *transf.to_homogeneous().as_ref(),
+                    perspective: *ortho.to_homogeneous().as_ref(),
+                };
+
+                target.draw(&vertex_buffer, &indices, &program, &uniforms,
+                            &Default::default()).unwrap();
+                target.finish().unwrap();
+            }
+            _ => return,
         }
-
-        let next_frame_time = std::time::Instant::now() +
-            std::time::Duration::from_nanos(16_666_667);
-        *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
-
-        let mut target = display.draw();
-
-        target.clear_color(1.0, 1.0, 1.0, 1.0);
-
-        let uniforms = uniform! {
-            matrix: *transf.to_homogeneous().as_ref(),
-            perspective: *ortho.to_homogeneous().as_ref(),
-        };
-
-        target.draw(&vertex_buffer, &indices, &program, &uniforms,
-                    &Default::default()).unwrap();
-        target.finish().unwrap();
     });
 }
