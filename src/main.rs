@@ -1,11 +1,18 @@
 mod utils;
+mod graph_storage;
+mod camera;
 
+use camera::Camera;
+
+use graph_storage::*;
 
 use std::cmp::Ordering;
 use std::ffi::CStr;
+use std::time::Instant;
 
 
 use chrono;
+use imgui::Ui;
 
 extern crate speedy;
 
@@ -21,210 +28,6 @@ use itertools::Itertools;
 use nalgebra::{Matrix4, Orthographic3, Similarity2, Similarity3, Translation2, UnitQuaternion, Vector2, Vector3};
 use winit::dpi::PhysicalPosition;
 
-
-// 24bpp color structure
-#[derive(Copy, Clone)]
-#[derive(Readable)]
-struct Color3b
-{
-    r: u8,
-    g: u8,
-    b: u8,
-}
-
-// same but f32
-#[derive(Copy, Clone)]
-struct Color3f
-{
-    r: f32,
-    g: f32,
-    b: f32,
-}
-
-impl Color3b
-{
-    fn to_f32(&self) -> Color3f
-    {
-        Color3f {
-            r: self.r as f32 / 255.0,
-            g: self.g as f32 / 255.0,
-            b: self.b as f32 / 255.0,
-        }
-    }
-}
-
-impl Color3f
-{
-    fn new(r: f32, g: f32, b: f32) -> Color3f
-    {
-        Color3f {
-            r,
-            g,
-            b,
-        }
-    }
-
-    fn average(&self, other: Color3f) -> Color3f
-    {
-        Color3f {
-            r: (self.r + other.r) / 2.0,
-            g: (self.g + other.g) / 2.0,
-            b: (self.b + other.b) / 2.0,
-        }
-    }
-}
-
-unsafe impl glium::vertex::Attribute for Color3f
-{
-    fn get_type() -> glium::vertex::AttributeType
-    {
-        glium::vertex::AttributeType::F32F32F32
-    }
-}
-
-#[derive(Copy, Clone)]
-#[derive(Readable)]
-struct Point
-{
-    x: f32,
-    y: f32,
-}
-
-impl Into<Vector2<f32>> for Point
-{
-    fn into(self) -> Vector2<f32>
-    {
-        Vector2::new(self.x, self.y)
-    }
-}
-
-impl Into<Point> for Vector2<f32>
-{
-    fn into(self) -> Point
-    {
-        Point {
-            x: self.x,
-            y: self.y,
-        }
-    }
-}
-
-unsafe impl glium::vertex::Attribute for Point
-{
-    fn get_type() -> glium::vertex::AttributeType
-    {
-        glium::vertex::AttributeType::F32F32
-    }
-}
-
-impl Point
-{
-    fn new(x: f32, y: f32) -> Point
-    {
-        Point { x: x, y: y }
-    }
-
-    fn polar(r: f32, theta: f32) -> Point
-    {
-        Point { x: r * theta.cos(), y: r * theta.sin() }
-    }
-
-    fn norm(&self) -> f32
-    {
-        (self.x * self.x + self.y * self.y).sqrt()
-    }
-
-    fn ortho(&self) -> Point
-    {
-        Point { x: -self.y, y: self.x }
-    }
-
-    fn normalized(&self) -> Point
-    {
-        *self / self.norm()
-    }
-}
-
-impl std::ops::Add for Point
-{
-    type Output = Point;
-
-    fn add(self, other: Point) -> Point
-    {
-        Point { x: self.x + other.x, y: self.y + other.y }
-    }
-}
-
-impl std::ops::Sub for Point
-{
-    type Output = Point;
-
-    fn sub(self, other: Point) -> Point
-    {
-        Point { x: self.x - other.x, y: self.y - other.y }
-    }
-}
-
-impl std::ops::Mul<f32> for Point
-{
-    type Output = Point;
-
-    fn mul(self, other: f32) -> Point
-    {
-        Point { x: self.x * other, y: self.y * other }
-    }
-}
-
-impl std::ops::Div<f32> for Point
-{
-    type Output = Point;
-
-    fn div(self, other: f32) -> Point
-    {
-        Point { x: self.x / other, y: self.y / other }
-    }
-}
-
-#[derive(Readable)]
-struct NodeStore
-{
-    position: Point,
-    size: f32,
-    class: u16,
-    offset_id: u32,
-    offset_name: u32,
-}
-
-#[derive(Readable)]
-struct EdgeStore
-{
-    a: u32,
-    b: u32,
-}
-
-#[derive(Readable)]
-struct GraphFile
-{
-    class_count: u16,
-    #[speedy(length = class_count)]
-    classes: Vec<Color3b>,
-
-    node_count: u64,
-    #[speedy(length = node_count)]
-    nodes: Vec<NodeStore>,
-
-    edge_count: u64,
-    #[speedy(length = edge_count)]
-    edges: Vec<EdgeStore>,
-
-    ids_size: u64,
-    #[speedy(length = ids_size)]
-    ids: Vec<u8>,
-
-    names_size: u64,
-    #[speedy(length = names_size)]
-    names: Vec<u8>,
-}
 
 struct Person<'a>
 {
@@ -266,7 +69,7 @@ impl Vertex
 {
     fn new(position: Point, color: Color3f) -> Vertex
     {
-        Vertex { position: position, color: color }
+        Vertex { position, color }
     }
 }
 
@@ -283,8 +86,8 @@ impl<'a> ModularityClass<'a>
     fn new(color: Color3f, id: u16) -> ModularityClass<'a>
     {
         ModularityClass {
-            color: color,
-            id: id,
+            color,
+            id,
             name: format!("Classe {}", id),
             people: None,
         }
@@ -443,32 +246,40 @@ fn load_binary<'a>() -> ViewerData<'a>
     }
 }
 
-// 2D orthografic projection
-struct Camera
+struct UiState
 {
-    center: Point,
-    zoom: f32,
-    angle: f32,
+    g_show_nodes: bool,
+    g_show_edges: bool,
+infos_current: Option<usize>
 }
 
-// use nalgebra
-impl Camera
+fn combo_with_filter(ui: &Ui, label: &str, current: &mut Option<usize>)
 {
-    fn get_transformation(&self) -> Similarity3<f32>
-    {
-        Similarity3::new(
-            Vector3::new(-self.center.x, -self.center.y, 0.0),
-            self.angle * Vector3::z(),
-            self.zoom)
-    }
 
-    // return the orthographic projection matrix
-    fn get_view_matrix(&self) -> Matrix4<f32>
-    {
-        self.get_transformation()
-            .to_homogeneous()
-    }
 }
+
+fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData)
+{
+    imgui::Window::new("Graphe")
+        .size([400.0, 500.0], imgui::Condition::FirstUseEver)
+        .build(ui, ||
+            {
+                if ui.collapsing_header("Affichage", imgui::TreeNodeFlags::DEFAULT_OPEN)
+                {
+                    ui.checkbox("Afficher les nœuds", &mut state.g_show_nodes);
+                    ui.checkbox("Afficher les liens", &mut state.g_show_edges);
+                }
+
+                if ui.collapsing_header("Chemin le plus court", imgui::TreeNodeFlags::DEFAULT_OPEN)
+                {}
+
+                if ui.collapsing_header("Informations", imgui::TreeNodeFlags::empty())
+                {
+                    combo_with_filter(ui, "#infos_user", &mut state.infos_current);
+                }
+            });
+}
+
 
 fn main() {
     let data = load_binary();
@@ -494,17 +305,19 @@ fn main() {
     let mut imgui = Context::create();
     imgui.set_ini_filename(None);
 
-    /*let mut platform = WinitPlatform::init(&mut imgui);
+
+
+    let mut platform = WinitPlatform::init(&mut imgui);
     {
         let gl_window = display.gl_window();
         let window = gl_window.window();
 
         platform.attach_window(imgui.io_mut(), window, HiDpiMode::Default);
-    }*/
+    }
 
-    let font_size = 13.0;
+    let font_size = 14.0;
 
-    imgui.fonts().add_font(&[
+   imgui.fonts().add_font(&[
         FontSource::TtfData {
             data: include_bytes!("../Roboto-Medium.ttf"),
             size_pixels: font_size,
@@ -516,39 +329,14 @@ fn main() {
             }),
         }]);
 
+    let mut renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize imgui renderer");
+
     let vertex_buffer = glium::VertexBuffer::new(&display, &data.vertices).unwrap();
     let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-    let vertex_shader_src = r#"
-        #version 140
-        in vec2 position;
-        in vec3 color;
-        out vec3 my_attr;      // our new attribute
-        uniform mat4 matrix;
-        uniform mat4 perspective;
-        void main() {
-            my_attr = color;     // we need to set the value of each `out` variable.
-            gl_Position = perspective * matrix * vec4(position, 0.0, 1.0);
-        }
-    "#;
+    let program = glium::Program::from_source(&display, include_str!("graph.vert"), include_str!("graph.frag"), None).unwrap();
 
-    let fragment_shader_src = r#"
-        #version 140
-        in vec3 my_attr;
-        out vec4 color;
-        void main() {
-            color = vec4(my_attr, 1.0);   // we build a vec4 from a vec2 and two floats
-        }
-    "#;
-
-    let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
-
-    let mut transf: Similarity3<f32> = Similarity3::new(
-        Vector3::new(0.0, 0.0, 0.0),
-        Vector3::new(0.0, 0.0, 0.0),
-        1.0);
-
-    let mut ortho = Orthographic3::new(-250.0, 250.0, -250.0, 250.0, -10.0, 10.0);
+    let mut camera = Camera::new(500, 500);
 
     let mut pressed_left = false;
     let mut pressed_right: Option<f32> = None;
@@ -556,18 +344,32 @@ fn main() {
 
     let mut frames = 0;
     let mut start = std::time::Instant::now();
+    let mut last_frame = Instant::now();
+    let mut ui_state = UiState {
+        g_show_nodes: false,
+        g_show_edges: true,
+        infos_current: None
+    };
     event_loop.run(move |ev, _, control_flow| {
         let next_frame_time = std::time::Instant::now() +
             std::time::Duration::from_nanos(16_666_667);
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
-        let gl_window = display.gl_window();
-        let window = gl_window.window();
-        let inner_size = window.inner_size();
-        let size_vec2 = Vector2::new(inner_size.width as f32 / 2.0, inner_size.height as f32 / 2.0);
+        {
+            let gl_window = display.gl_window();
+            let window = gl_window.window();
+            platform.handle_event(imgui.io_mut(), window, &ev);
+        }
 
         match ev {
-            glutin::event::Event::WindowEvent { event, .. } => match event {
+            glutin::event::Event::NewEvents(_) =>
+                {
+                    let now = Instant::now();
+                    imgui.io_mut().update_delta_time(now - last_frame);
+                    last_frame = now;
+                }
+            glutin::event::Event::WindowEvent { event, .. } => match event
+            {
                 glutin::event::WindowEvent::CloseRequested => {
                     *control_flow = glutin::event_loop::ControlFlow::Exit;
                     return;
@@ -576,92 +378,114 @@ fn main() {
                     {
                         mouse = position;
                     }
-                glutin::event::WindowEvent::Resized(size) => {
-                    let w = size.width as f32 / 2.0;
-                    let h = size.height as f32 / 2.0;
-                    ortho.set_left_and_right(-w, w);
-                    ortho.set_bottom_and_top(-h, h);
-                }
-                _ => return,
-            },
-            glutin::event::Event::DeviceEvent { event, .. } => match event {
-                /*glutin::event::DeviceEvent::MouseMotion { delta } => {
-                let (dx, dy) = delta;
-                camera.angle += dx as f32 / 100.0;
-                camera.center.x += dy as f32 / 100.0;
-            }*/
-                glutin::event::DeviceEvent::MouseWheel { delta } => {
-                    let dy = match delta
+                glutin::event::WindowEvent::Resized(size) =>
                     {
-                        glutin::event::MouseScrollDelta::LineDelta(_dx, dy) => dy,
-                        glutin::event::MouseScrollDelta::PixelDelta(glutin::dpi::PhysicalPosition { y, .. }) => y as f32,
-                    };
-                    let zoom_speed = 1.1;
-                    let s = if dy > 0.0 { zoom_speed } else { 1.0 / zoom_speed };
-                    let mouse_vec2 = Vector2::new(mouse.x as f32, mouse.y as f32);
-                    let diff = mouse_vec2 - size_vec2;
-                    let diffpoint = nalgebra::Point3::new(diff.x, diff.y, 0.0);
-                    let before = transf.inverse_transform_point(&diffpoint);
-                    transf.append_scaling_mut(s);
-                    let after = transf.inverse_transform_point(&diffpoint);
-                    transf.append_translation_mut(&nalgebra::Translation3::new((after.x - before.x) * transf.scaling(), -(after.y - before.y) * transf.scaling(), 0.0));
-                }
-                glutin::event::DeviceEvent::Button { state, button, .. } => {
-                    match button {
-                        1 => {
-                            if state == winit::event::ElementState::Pressed {
-                                pressed_left = true;
-                            } else {
-                                pressed_left = false;
-                            }
-                        }
-                        3 => {
-                            if state == winit::event::ElementState::Pressed {
-                                pressed_right = Some((-(mouse.y as f32 - size_vec2.y)).atan2(mouse.x as f32 - size_vec2.x));
-                            } else {
-                                pressed_right = None;
-                            }
-                        }
-                        _ => return,
+                        camera.set_window_size(size.width, size.height);
                     }
-                }
-                glutin::event::DeviceEvent::MouseMotion { delta } => {
-                    let (dx, dy) = delta;
-                    if pressed_left {
-                        transf.append_translation_mut(&nalgebra::Translation3::new(dx as f32, -dy as f32, 0.0));
-                    }
-                    else if let Some(vec) = pressed_right {
-                        let rot = (-(mouse.y as f32 - size_vec2.y)).atan2(mouse.x as f32 - size_vec2.x);
-                        let center = transf.inverse_transform_point(&nalgebra::Point3::new(0.0, 0.0, 0.0));
-                        transf.append_rotation_wrt_center_mut(&nalgebra::UnitQuaternion::from_euler_angles(0.0, 0.0, rot - vec));
-                        pressed_right = Some(rot);
-                    }
-                }
                 _ => return,
             },
-            glutin::event::Event::MainEventsCleared => {
-                frames += 1;
-                let threshold_ms = 200;
-                if start.elapsed().as_millis() >= threshold_ms {
-                    window.set_title(&format!("Graphe - {:.0} fps", frames as f64 / start.elapsed().as_millis() as f64 * 1000.0));
-                    start = std::time::Instant::now();
-                    frames = 0;
+            glutin::event::Event::DeviceEvent { event, .. } => match event
+            {
+                glutin::event::DeviceEvent::MouseWheel { delta } =>
+                    {
+                        if imgui.io().want_capture_mouse {
+                            return;
+                        }
+                        let dy = match delta
+                        {
+                            glutin::event::MouseScrollDelta::LineDelta(_dx, dy) => dy,
+                            glutin::event::MouseScrollDelta::PixelDelta(glutin::dpi::PhysicalPosition { y, .. }) => y as f32,
+                        };
+                        camera.zoom(dy, mouse);
+                    }
+                glutin::event::DeviceEvent::Button { state, button, .. } =>
+                    {
+                        match button {
+                            1 => {
+                                if state == winit::event::ElementState::Pressed && !imgui.io().want_capture_mouse {
+                                    pressed_left = true;
+                                } else {
+                                    pressed_left = false;
+                                }
+                            }
+                            3 => {
+                                if state == winit::event::ElementState::Pressed && !imgui.io().want_capture_mouse {
+                                    let gl_window = display.gl_window();
+                                    let window = gl_window.window();
+                                    let inner_size = window.inner_size();
+                                    let size_vec2 = Vector2::new(inner_size.width as f32 / 2.0, inner_size.height as f32 / 2.0);
+                                    pressed_right = Some((-(mouse.y as f32 - size_vec2.y)).atan2(mouse.x as f32 - size_vec2.x));
+                                } else {
+                                    pressed_right = None;
+                                }
+                            }
+                            _ => return,
+                        }
+                    }
+                glutin::event::DeviceEvent::MouseMotion { delta } =>
+                    {
+                        let (dx, dy) = delta;
+                        if pressed_left {
+                            camera.pan(dx as f32, dy as f32);
+                        } else if let Some(vec) = pressed_right {
+                            let gl_window = display.gl_window();
+                            let window = gl_window.window();
+                            let inner_size = window.inner_size();
+                            let size_vec2 = Vector2::new(inner_size.width as f32 / 2.0, inner_size.height as f32 / 2.0);
+                            let rot = (-(mouse.y as f32 - size_vec2.y)).atan2(mouse.x as f32 - size_vec2.x);
+                            camera.rotate(rot - vec);
+                            pressed_right = Some(rot);
+                        }
+                    }
+                _ => return,
+            },
+            glutin::event::Event::MainEventsCleared =>
+                {
+                    let gl_window = display.gl_window();
+                    platform
+                        .prepare_frame(imgui.io_mut(), gl_window.window())
+                        .expect("Failed to prepare frame");
+                    gl_window.window().request_redraw();
                 }
+            glutin::event::Event::RedrawRequested(_) =>
+                {
+                    let mut ui = imgui.frame();
+                    let gl_window = display.gl_window();
+                    let window = gl_window.window();
 
-                let mut target = display.draw();
+                    draw_ui(&mut ui, &mut ui_state, &data);
 
-                target.clear_color(1.0, 1.0, 1.0, 1.0);
+                    frames += 1;
+                    let threshold_ms = 200;
+                    if start.elapsed().as_millis() >= threshold_ms {
+                        window.set_title(&format!("Graphe - {:.0} fps", frames as f64 / start.elapsed().as_millis() as f64 * 1000.0));
+                        start = std::time::Instant::now();
+                        frames = 0;
+                    }
 
-                let uniforms = uniform! {
-                    matrix: *transf.to_homogeneous().as_ref(),
-                    perspective: *ortho.to_homogeneous().as_ref(),
-                };
+                    let mut target = display.draw();
 
-                target.draw(&vertex_buffer, &indices, &program, &uniforms,
-                            &Default::default()).unwrap();
-                target.finish().unwrap();
-            }
-            _ => return,
+                    target.clear_color(1.0, 1.0, 1.0, 1.0);
+
+                    let uniforms = uniform! {
+                        matrix: *camera.get_matrix().as_ref(),
+                    };
+
+                    target.draw(&vertex_buffer, &indices, &program, &uniforms,
+                                &Default::default()).unwrap();
+                    platform.prepare_render(&ui, gl_window.window());
+                    let draw_data = ui.render();
+                    renderer
+                        .render(&mut target, draw_data)
+                        .expect("Rendering failed");
+                    target.finish().expect("Failed to swap buffers");
+                }
+            event =>
+                {
+                    let gl_window = display.gl_window();
+                    let window = gl_window.window();
+                    platform.handle_event(imgui.io_mut(), &window, &event);
+                }
         }
     });
 }
