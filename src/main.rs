@@ -1,5 +1,6 @@
 mod utils;
 
+use std::borrow::Cow;
 use utils::*;
 
 use std::cmp::Ordering;
@@ -19,12 +20,10 @@ extern crate glium;
 extern crate imgui;
 extern crate imgui_glium_renderer;
 
-extern crate binread;
 
-use binread::*;
-use glium::glutin::dpi::LogicalSize;
-use glium::glutin::dpi::Size::Logical;
 use itertools::Itertools;
+use nalgebra::{Isometry2, Matrix4, Orthographic3, Similarity2, Similarity3, Translation2, UnitQuaternion, Vector2, Vector3};
+use winit::dpi::PhysicalPosition;
 
 
 // 24bpp color structure
@@ -60,6 +59,15 @@ impl Color3b
 
 impl Color3f
 {
+    fn new(r: f32, g: f32, b: f32) -> Color3f
+    {
+        Color3f {
+            r,
+            g,
+            b,
+        }
+    }
+
     fn average(&self, other: Color3f) -> Color3f
     {
         Color3f {
@@ -70,12 +78,47 @@ impl Color3f
     }
 }
 
+unsafe impl glium::vertex::Attribute for Color3f
+{
+    fn get_type() -> glium::vertex::AttributeType
+    {
+        glium::vertex::AttributeType::F32F32F32
+    }
+}
+
 #[derive(Copy, Clone)]
 #[derive(Readable)]
 struct Point
 {
     x: f32,
     y: f32,
+}
+
+impl Into<Vector2<f32>> for Point
+{
+    fn into(self) -> Vector2<f32>
+    {
+        Vector2::new(self.x, self.y)
+    }
+}
+
+impl Into<Point> for Vector2<f32>
+{
+    fn into(self) -> Point
+    {
+        Point {
+            x: self.x,
+            y: self.y,
+        }
+    }
+}
+
+unsafe impl glium::vertex::Attribute for Point
+{
+    fn get_type() -> glium::vertex::AttributeType
+    {
+        glium::vertex::AttributeType::F32F32
+    }
 }
 
 impl Point
@@ -195,7 +238,7 @@ struct Person<'a>
     id: &'a str,
     name: &'a str,
     sorted_id: u64,
-    neighbors: Vec<(&'a Person<'a>, usize)>,
+    neighbors: Vec<(usize, usize)>,
 }
 
 impl<'a> Person<'a>
@@ -214,11 +257,14 @@ impl<'a> Person<'a>
     }
 }
 
+#[derive(Copy, Clone)]
 struct Vertex
 {
     position: Point,
     color: Color3f,
 }
+
+implement_vertex!(Vertex, position, color);
 
 impl Vertex
 {
@@ -331,6 +377,7 @@ fn load_binary<'a>() -> ViewerData<'a>
 
     let mut edge_data = content.edges
         .iter()
+        //.take(1000)
         .map(|edge|
             {
                 let a = &content.nodes[edge.a as usize];
@@ -352,8 +399,8 @@ fn load_binary<'a>() -> ViewerData<'a>
                 let ortho = (edge.b.1 - edge.a.1).ortho().normalized();
                 let v0 = edge.a.1 + ortho;
                 let v1 = edge.a.1 - ortho;
-                let v2 = edge.b.1 + ortho;
-                let v3 = edge.b.1 - ortho;
+                let v2 = edge.b.1 - ortho;
+                let v3 = edge.b.1 + ortho;
                 let color = edge.color;
                 vec![
                     Vertex::new(v0, color),
@@ -383,16 +430,12 @@ fn load_binary<'a>() -> ViewerData<'a>
 
     log!("Generating neighbor lists");
 
-    /*for (i, edge) in edge_data.iter().enumerate()
+    for (i, edge) in edge_data.iter().enumerate()
     {
         let (p1, p2) = person_data.get_two_mut(edge.a.0 as usize, edge.b.0 as usize);
-        p1.neighbors.push((p2, i));
-        p2.neighbors.push((p1, i));
-    }*/
-
-    let (p1, p2) = person_data.get_two_mut(0, 21);
-    p1.neighbors.push((p2, 0));
-    p2.neighbors.push((p1, 0));
+        p1.neighbors.push((edge.a.0 as usize, i));
+        p2.neighbors.push((edge.b.0 as usize, i));
+    }
 
     log!("Done");
 
@@ -404,6 +447,32 @@ fn load_binary<'a>() -> ViewerData<'a>
     }
 }
 
+// 2D orthografic projection
+struct Camera
+{
+    center: Point,
+    zoom: f32,
+    angle: f32,
+}
+
+// use nalgebra
+impl Camera
+{
+    fn get_transformation(&self) -> Similarity3<f32>
+    {
+        Similarity3::new(
+            Vector3::new(-self.center.x, -self.center.y, 0.0),
+            self.angle * Vector3::z(),
+            self.zoom)
+    }
+
+    // return the orthographic projection matrix
+    fn get_view_matrix(&self) -> Matrix4<f32>
+    {
+        self.get_transformation()
+            .to_homogeneous()
+    }
+}
 
 fn main() {
     let data = load_binary();
@@ -420,7 +489,10 @@ fn main() {
     let wb = glutin::window::WindowBuilder::new()
         .with_title("Graphe")
         .with_inner_size(glium::glutin::dpi::LogicalSize::new(512f64, 512f64));
-    let cb = glutin::ContextBuilder::new();
+    let cb = glutin::ContextBuilder::new()
+        //.with_multisampling(4)
+        //.with_vsync(true)
+        .with_hardware_acceleration(Some(true));
     let display = glium::Display::new(wb, cb, &event_loop).expect("Failed to initialize display");
 
     let mut imgui = Context::create();
@@ -441,50 +513,157 @@ fn main() {
             data: include_bytes!("../Roboto-Medium.ttf"),
             size_pixels: font_size,
             config: Some(FontConfig {
-                // As imgui-glium-renderer isn't gamma-correct with
-                // it's font rendering, we apply an arbitrary
-                // multiplier to make the font a bit "heavier". With
-                // default imgui-glow-renderer this is unnecessary.
                 rasterizer_multiply: 1.5,
-                // Oversampling font helps improve text rendering at
-                // expense of larger font atlas texture.
                 oversample_h: 4,
                 oversample_v: 4,
                 ..FontConfig::default()
             }),
         }]);
 
+    let vertex_buffer = glium::VertexBuffer::new(&display, &data.vertices).unwrap();
+    let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+
+    let vertex_shader_src = r#"
+        #version 140
+        in vec2 position;
+        in vec3 color;
+        out vec3 my_attr;      // our new attribute
+        uniform mat4 matrix;
+        uniform mat4 perspective;
+        void main() {
+            my_attr = color;     // we need to set the value of each `out` variable.
+            gl_Position = perspective * matrix * vec4(position, 0.0, 1.0);
+        }
+    "#;
+
+    let fragment_shader_src = r#"
+        #version 140
+        in vec3 my_attr;
+        out vec4 color;
+        void main() {
+            color = vec4(my_attr, 1.0);   // we build a vec4 from a vec2 and two floats
+        }
+    "#;
+
+    let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
+
+    /* let mut camera = Camera {
+         center: Point::new(0.0, 0.0),
+         zoom: 0.0005,
+         angle: 0.0,
+     };*/
+
+    let mut transf: Similarity3<f32> = Similarity3::new(
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector3::new(0.0, 0.0, 0.0),
+        1.0);
+
+    let mut ortho = Orthographic3::new(-250.0, 250.0, -250.0, 250.0, -10.0, 10.0);
+
+    let mut pressed_left = false;
+    let mut pressed_right = false;
+    ;
+    let mut mouse: PhysicalPosition<f64> = Default::default();
+
     event_loop.run(move |ev, _, control_flow| {
-        let mut target = display.draw();
-        target.clear_color(0.0, 0.0, 1.0, 1.0);
-        target.finish().unwrap();
+        let gl_window = display.gl_window();
+        let window = gl_window.window();
+        let inner_size = window.inner_size();
+        let size_vec2 = Vector2::new(inner_size.width as f32 / 2.0, inner_size.height as f32 / 2.0);
 
-        let next_frame_time = std::time::Instant::now() +
-            std::time::Duration::from_nanos(16_666_667);
-
-        *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
         match ev {
             glutin::event::Event::WindowEvent { event, .. } => match event {
                 glutin::event::WindowEvent::CloseRequested => {
                     *control_flow = glutin::event_loop::ControlFlow::Exit;
                     return;
                 }
+                glutin::event::WindowEvent::CursorMoved { position, .. } =>
+                    {
+                        mouse = position;
+                    }
+                glutin::event::WindowEvent::Resized(size) => {
+                    let w = size.width as f32 / 2.0;
+                    let h = size.height as f32 / 2.0;
+                    ortho.set_left_and_right(-w, w);
+                    ortho.set_bottom_and_top(-h, h);
+                }
+                _ => return,
+            },
+            glutin::event::Event::DeviceEvent { event, .. } => match event {
+                /*glutin::event::DeviceEvent::MouseMotion { delta } => {
+                    let (dx, dy) = delta;
+                    camera.angle += dx as f32 / 100.0;
+                    camera.center.x += dy as f32 / 100.0;
+                }*/
+                glutin::event::DeviceEvent::MouseWheel { delta } => {
+                    let dy = match delta
+                    {
+                        glutin::event::MouseScrollDelta::LineDelta(_dx, dy) => dy,
+                        glutin::event::MouseScrollDelta::PixelDelta(glutin::dpi::PhysicalPosition { y, .. }) => y as f32,
+                    };
+                    let zoom_speed = 1.1;
+                    let s = if dy > 0.0 { zoom_speed } else { 1.0 / zoom_speed };
+                    let mouse_vec2 = Vector2::new(mouse.x as f32, mouse.y as f32);
+                    let diff = mouse_vec2 - size_vec2;
+                    let diffpoint = nalgebra::Point3::new(diff.x, diff.y, 0.0);
+                    let before = transf.inverse_transform_point(&diffpoint);
+                    transf.append_scaling_mut(s);
+                    let after = transf.inverse_transform_point(&diffpoint);
+                    transf.append_translation_mut(&nalgebra::Translation3::new((after.x - before.x) * transf.scaling(), -(after.y - before.y) * transf.scaling(), 0.0));
+                }
+                glutin::event::DeviceEvent::Button { state, button, .. } => {
+                    match button {
+                        1 => {
+                            if state == winit::event::ElementState::Pressed {
+                                pressed_left = true;
+                            } else {
+                                pressed_left = false;
+                            }
+                        }
+                        3 => {
+                            if state == winit::event::ElementState::Pressed {
+                                pressed_right = true;
+                            } else {
+                                pressed_right = false;
+                            }
+                        }
+                        _ => return,
+                    }
+                }
+                glutin::event::DeviceEvent::MouseMotion { delta } => {
+                    let (dx, dy) = delta;
+                    if pressed_left {
+                        transf.append_translation_mut(&nalgebra::Translation3::new(dx as f32, -dy as f32, 0.0));
+                    }
+                    /*else if pressed_right {
+                        let mouse_vec2 = Vector2::new(mouse.x as f32, mouse.y as f32);
+                        let diff = mouse_vec2 - size_vec2;
+                        let diffpoint = nalgebra::Point3::new(diff.x, diff.y, 0.0);
+                        let rot = diff.y.atan2(diff.x);
+                        let center = transf.inverse_transform_point(&diffpoint);
+                        transf.append_rotation_wrt_point_mut(&nalgebra::UnitQuaternion::from_euler_angles(0.0, 0.0, rot), &center);
+                    }*/
+                }
                 _ => return,
             },
             _ => (),
         }
+
+        let next_frame_time = std::time::Instant::now() +
+            std::time::Duration::from_nanos(16_666_667);
+        *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
+
+        let mut target = display.draw();
+
+        target.clear_color(1.0, 1.0, 1.0, 1.0);
+
+        let uniforms = uniform! {
+            matrix: *transf.to_homogeneous().as_ref(),
+            perspective: *ortho.to_homogeneous().as_ref(),
+        };
+
+        target.draw(&vertex_buffer, &indices, &program, &uniforms,
+                    &Default::default()).unwrap();
+        target.finish().unwrap();
     });
-
-    /*let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
-
-    let (mut window, _events) = glfw
-        .create_window(500, 500, "Graph", glfw::WindowMode::Windowed)
-        .expect("Failed to create GLFW window.");
-
-    window.make_current();
-    glfw.set_swap_interval(SwapInterval::Sync(1));
-
-    gl::load_with(|s| window.get_proc_address(s) as *const _);*/
-
-    /**/
 }
