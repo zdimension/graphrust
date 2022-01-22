@@ -551,7 +551,7 @@ fn main() {
     let mut ortho = Orthographic3::new(-250.0, 250.0, -250.0, 250.0, -10.0, 10.0);
 
     let mut pressed_left = false;
-    let mut pressed_right = false;
+    let mut pressed_right: Option<f32> = None;
     let mut mouse: PhysicalPosition<f64> = Default::default();
 
     let mut frames = 0;
@@ -617,9 +617,9 @@ fn main() {
                         }
                         3 => {
                             if state == winit::event::ElementState::Pressed {
-                                pressed_right = true;
+                                pressed_right = Some((-(mouse.y as f32 - size_vec2.y)).atan2(mouse.x as f32 - size_vec2.x));
                             } else {
-                                pressed_right = false;
+                                pressed_right = None;
                             }
                         }
                         _ => return,
@@ -630,14 +630,12 @@ fn main() {
                     if pressed_left {
                         transf.append_translation_mut(&nalgebra::Translation3::new(dx as f32, -dy as f32, 0.0));
                     }
-                    /*else if pressed_right {
-                    let mouse_vec2 = Vector2::new(mouse.x as f32, mouse.y as f32);
-                    let diff = mouse_vec2 - size_vec2;
-                    let diffpoint = nalgebra::Point3::new(diff.x, diff.y, 0.0);
-                    let rot = diff.y.atan2(diff.x);
-                    let center = transf.inverse_transform_point(&diffpoint);
-                    transf.append_rotation_wrt_point_mut(&nalgebra::UnitQuaternion::from_euler_angles(0.0, 0.0, rot), &center);
-                }*/
+                    else if let Some(vec) = pressed_right {
+                        let rot = (-(mouse.y as f32 - size_vec2.y)).atan2(mouse.x as f32 - size_vec2.x);
+                        let center = transf.inverse_transform_point(&nalgebra::Point3::new(0.0, 0.0, 0.0));
+                        transf.append_rotation_wrt_center_mut(&nalgebra::UnitQuaternion::from_euler_angles(0.0, 0.0, rot - vec));
+                        pressed_right = Some(rot);
+                    }
                 }
                 _ => return,
             },
