@@ -1,35 +1,23 @@
 mod utils;
 mod graph_storage;
 mod camera;
-
 use camera::Camera;
-
 use graph_storage::*;
-
-use std::cmp::Ordering;
-use std::ffi::CStr;
 use std::time::Instant;
-
-
 use chrono;
 use imgui::Ui;
+use nalgebra::Vector2;
 
 extern crate speedy;
-
 use speedy::{Readable};
-
 #[macro_use]
 extern crate glium;
 extern crate imgui;
 extern crate imgui_glium_renderer;
-
-
-use itertools::Itertools;
-use nalgebra::{Matrix4, Orthographic3, Similarity2, Similarity3, Translation2, UnitQuaternion, Vector2, Vector3};
 use winit::dpi::PhysicalPosition;
 
 
-struct Person<'a>
+pub struct Person<'a>
 {
     position: Point,
     size: f32,
@@ -57,10 +45,10 @@ impl<'a> Person<'a>
 }
 
 #[derive(Copy, Clone)]
-struct Vertex
+pub struct Vertex
 {
-    position: Point,
-    color: Color3f,
+    pub position: Point,
+    pub color: Color3f,
 }
 
 implement_vertex!(Vertex, position, color);
@@ -73,7 +61,7 @@ impl Vertex
     }
 }
 
-struct ModularityClass<'a>
+pub struct ModularityClass<'a>
 {
     color: Color3f,
     id: u16,
@@ -108,155 +96,23 @@ impl<'a> ModularityClass<'a>
     }
 }
 
-unsafe fn str_from_null_terminated_utf8<'a>(s: *const u8) -> &'a str {
-    CStr::from_ptr(s as *const _).to_str().unwrap()
-}
-
-pub trait SliceExt {
-    type Item;
-
-    fn get_two_mut(&mut self, index0: usize, index1: usize) -> (&mut Self::Item, &mut Self::Item);
-}
-
-impl<T> SliceExt for [T] {
-    type Item = T;
-
-    fn get_two_mut(&mut self, index0: usize, index1: usize) -> (&mut Self::Item, &mut Self::Item) {
-        match index0.cmp(&index1) {
-            Ordering::Less => {
-                let mut iter = self.iter_mut();
-                let item0 = iter.nth(index0).unwrap();
-                let item1 = iter.nth(index1 - index0 - 1).unwrap();
-                (item0, item1)
-            }
-            Ordering::Equal => panic!("[T]::get_two_mut(): received same index twice ({})", index0),
-            Ordering::Greater => {
-                let mut iter = self.iter_mut();
-                let item1 = iter.nth(index1).unwrap();
-                let item0 = iter.nth(index0 - index1 - 1).unwrap();
-                (item0, item1)
-            }
-        }
-    }
-}
-
-struct ViewerData<'a>
+pub struct ViewerData<'a>
 {
-    persons: Vec<Person<'a>>,
-    vertices: Vec<Vertex>,
-    modularity_classes: Vec<ModularityClass<'a>>,
-    edge_sizes: Vec<f32>,
-}
-
-fn load_binary<'a>() -> ViewerData<'a>
-{
-    log!("Loading binary");
-    let content: GraphFile = GraphFile::read_from_file("graph2.bin").unwrap();
-    log!("Binary content loaded");
-    log!("Class count: {}", content.class_count);
-    log!("Node count: {}", content.node_count);
-    log!("Edge count: {}", content.edge_count);
-
-    log!("Processing modularity classes");
-
-    let modularity_classes = content.classes
-        .iter().enumerate()
-        .map(|(id, color)| ModularityClass::new(color.to_f32(), id as u16))
-        .collect_vec();
-
-    struct VertexInter
-    {
-        a: (u32, Point),
-        b: (u32, Point),
-        dist: f32,
-        color: Color3f,
-    }
-
-    log!("Processing edges");
-
-    let mut edge_data = content.edges
-        .iter()
-        //.take(1000)
-        .map(|edge|
-            {
-                let a = &content.nodes[edge.a as usize];
-                let b = &content.nodes[edge.b as usize];
-                let dist = (a.position - b.position).norm();
-                let color = modularity_classes[a.class as usize].color.average(modularity_classes[b.class as usize].color);
-                VertexInter { a: (edge.a, a.position), b: (edge.b, b.position), dist, color }
-            })
-        .collect_vec();
-
-    log!("Sorting edges");
-    edge_data.sort_by(|a, b| b.dist.partial_cmp(&a.dist).unwrap());
-
-    log!("Drawing edges");
-
-    let edge_vertices = edge_data.iter()
-        .flat_map(|edge|
-            {
-                let ortho = (edge.b.1 - edge.a.1).ortho().normalized();
-                let v0 = edge.a.1 + ortho;
-                let v1 = edge.a.1 - ortho;
-                let v2 = edge.b.1 - ortho;
-                let v3 = edge.b.1 + ortho;
-                let color = edge.color;
-                vec![
-                    Vertex::new(v0, color),
-                    Vertex::new(v1, color),
-                    Vertex::new(v2, color),
-                    Vertex::new(v2, color),
-                    Vertex::new(v3, color),
-                    Vertex::new(v0, color),
-                ]
-            })
-        .collect_vec();
-
-    let edge_sizes = edge_data.iter().map(|edge| edge.dist).collect_vec();
-
-    log!("Processing nodes");
-
-    let mut person_data = content.nodes.iter()
-        .map(|node|
-            unsafe {
-                Person::new(node.position, node.size, node.class as u16,
-                            str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)),
-                            str_from_null_terminated_utf8(content.names.as_ptr().offset(node.offset_name as isize)),
-                )
-            }
-        )
-        .collect_vec();
-
-    log!("Generating neighbor lists");
-
-    for (i, edge) in edge_data.iter().enumerate()
-    {
-        let (p1, p2) = person_data.get_two_mut(edge.a.0 as usize, edge.b.0 as usize);
-        p1.neighbors.push((edge.a.0 as usize, i));
-        p2.neighbors.push((edge.b.0 as usize, i));
-    }
-
-    log!("Done");
-
-    ViewerData {
-        persons: person_data,
-        vertices: edge_vertices,
-        modularity_classes,
-        edge_sizes,
-    }
+    pub persons: Vec<Person<'a>>,
+    pub vertices: Vec<Vertex>,
+    pub modularity_classes: Vec<ModularityClass<'a>>,
+    pub edge_sizes: Vec<f32>,
 }
 
 struct UiState
 {
     g_show_nodes: bool,
     g_show_edges: bool,
-infos_current: Option<usize>
+    infos_current: Option<usize>,
 }
 
 fn combo_with_filter(ui: &Ui, label: &str, current: &mut Option<usize>)
-{
-
-}
+{}
 
 fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData)
 {
@@ -306,7 +162,6 @@ fn main() {
     imgui.set_ini_filename(None);
 
 
-
     let mut platform = WinitPlatform::init(&mut imgui);
     {
         let gl_window = display.gl_window();
@@ -317,7 +172,7 @@ fn main() {
 
     let font_size = 14.0;
 
-   imgui.fonts().add_font(&[
+    imgui.fonts().add_font(&[
         FontSource::TtfData {
             data: include_bytes!("../Roboto-Medium.ttf"),
             size_pixels: font_size,
@@ -348,7 +203,7 @@ fn main() {
     let mut ui_state = UiState {
         g_show_nodes: false,
         g_show_edges: true,
-        infos_current: None
+        infos_current: None,
     };
     event_loop.run(move |ev, _, control_flow| {
         let next_frame_time = std::time::Instant::now() +

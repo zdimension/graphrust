@@ -1,5 +1,8 @@
+use itertools::Itertools;
 use nalgebra::Vector2;
 use speedy::{Readable};
+use crate::{log, ModularityClass, Person, Vertex, ViewerData};
+use crate::utils::{SliceExt, str_from_null_terminated_utf8};
 
 // 24bpp color structure
 #[derive(Copy, Clone)]
@@ -205,4 +208,101 @@ pub struct GraphFile
     pub names_size: u64,
     #[speedy(length = names_size)]
     pub names: Vec<u8>,
+}
+
+pub fn load_binary<'a>() -> ViewerData<'a>
+{
+    log!("Loading binary");
+    let content: GraphFile = GraphFile::read_from_file("graph2.bin").unwrap();
+    log!("Binary content loaded");
+    log!("Class count: {}", content.class_count);
+    log!("Node count: {}", content.node_count);
+    log!("Edge count: {}", content.edge_count);
+
+    log!("Processing modularity classes");
+
+    let modularity_classes = content.classes
+        .iter().enumerate()
+        .map(|(id, color)| ModularityClass::new(color.to_f32(), id as u16))
+        .collect_vec();
+
+    struct VertexInter
+    {
+        a: (u32, Point),
+        b: (u32, Point),
+        dist: f32,
+        color: Color3f,
+    }
+
+    log!("Processing edges");
+
+    let mut edge_data = content.edges
+        .iter()
+        .map(|edge|
+            {
+                let a = &content.nodes[edge.a as usize];
+                let b = &content.nodes[edge.b as usize];
+                let dist = (a.position - b.position).norm();
+                let color = modularity_classes[a.class as usize].color.average(modularity_classes[b.class as usize].color);
+                VertexInter { a: (edge.a, a.position), b: (edge.b, b.position), dist, color }
+            })
+        .collect_vec();
+
+    log!("Sorting edges");
+    edge_data.sort_by(|a, b| b.dist.partial_cmp(&a.dist).unwrap());
+
+    log!("Drawing edges");
+
+    let edge_vertices = edge_data.iter()
+        .flat_map(|edge|
+            {
+                let ortho = (edge.b.1 - edge.a.1).ortho().normalized();
+                let v0 = edge.a.1 + ortho;
+                let v1 = edge.a.1 - ortho;
+                let v2 = edge.b.1 - ortho;
+                let v3 = edge.b.1 + ortho;
+                let color = edge.color;
+                vec![
+                    Vertex::new(v0, color),
+                    Vertex::new(v1, color),
+                    Vertex::new(v2, color),
+                    Vertex::new(v2, color),
+                    Vertex::new(v3, color),
+                    Vertex::new(v0, color),
+                ]
+            })
+        .collect_vec();
+
+    let edge_sizes = edge_data.iter().map(|edge| edge.dist).collect_vec();
+
+    log!("Processing nodes");
+
+    let mut person_data = content.nodes.iter()
+        .map(|node|
+            unsafe {
+                Person::new(node.position, node.size, node.class as u16,
+                            str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)),
+                            str_from_null_terminated_utf8(content.names.as_ptr().offset(node.offset_name as isize)),
+                )
+            }
+        )
+        .collect_vec();
+
+    log!("Generating neighbor lists");
+
+    for (i, edge) in edge_data.iter().enumerate()
+    {
+        let (p1, p2) = person_data.get_two_mut(edge.a.0 as usize, edge.b.0 as usize);
+        p1.neighbors.push((edge.a.0 as usize, i));
+        p2.neighbors.push((edge.b.0 as usize, i));
+    }
+
+    log!("Done");
+
+    ViewerData {
+        persons: person_data,
+        vertices: edge_vertices,
+        modularity_classes,
+        edge_sizes,
+    }
 }
