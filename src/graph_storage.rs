@@ -277,6 +277,7 @@ pub fn load_binary<'a>() -> ViewerData<'a>
 
     log!("Processing nodes");
 
+    let idbuf = content.ids.as_ptr();
     let mut person_data = content.nodes.iter()
         .map(|node|
             unsafe {
@@ -300,6 +301,8 @@ pub fn load_binary<'a>() -> ViewerData<'a>
     log!("Done");
 
     ViewerData {
+        ids: content.ids,
+        names: content.names,
         persons: person_data,
         vertices: edge_vertices,
         modularity_classes,
