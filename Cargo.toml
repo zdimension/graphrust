@@ -16,8 +16,8 @@ imgui-glium-renderer = "0.8.2"
 imgui-winit-support = { version = "0.8.2", features = ["winit-25"] }
 itertools = "0.10.3"
 nalgebra = "0.30.1"
-open = "2.0.2"
 simsearch = "0.2.3"
 speedy = "0.8.1"
+webbrowser = "0.5.5"
 winit = "0.25.0"
 

@@ -150,9 +150,10 @@ fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData)
                         ui.same_line();
                         if ui.button("Ouvrir")
                         {
-                            if let Err(err) = open::that(format!("https://facebook.com/{}", person.id)) {
+                            // TODO: crashes on Windows because of a Winit bug
+                            /*if let Err(err) = webbrowser::open(format!("https://facebook.com/{}", person.id).as_str()) {
                                 log!("Couldn't open URL: {}", err);
-                            };
+                            };*/
                         }
 
                         if let Some(_t) = ui.begin_table("#infos", 2)
