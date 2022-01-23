@@ -10,7 +10,8 @@ use graph_storage::*;
 use std::time::Instant;
 use chrono;
 use imgui::sys::{ImGuiDir, ImGuiHoveredFlags_None, ImU32, ImVec2};
-use imgui::Ui;
+use imgui::*;
+
 use nalgebra::Vector2;
 
 extern crate speedy;
@@ -143,6 +144,34 @@ fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData)
                 if ui.collapsing_header("Informations", imgui::TreeNodeFlags::empty())
                 {
                     combo_with_filter(ui, "#infos_user", &mut state.infos_current, &data);
+                    if let Some(id) = state.infos_current
+                    {
+                        let person = &data.persons[id];
+                        ui.same_line();
+                        if ui.button("Ouvrir")
+                        {
+                            if let Err(err) = open::that(format!("https://facebook.com/{}", person.id)) {
+                                log!("Couldn't open URL: {}", err);
+                            };
+                        }
+
+                        if let Some(_t) = ui.begin_table("#infos", 2)
+                        {
+                            ui.table_next_row();
+                            ui.table_next_column();
+                            ui.text("ID Facebook :");
+                            ui.table_next_column();
+                            ui.text(person.id);
+                            ui.table_next_column();
+                            ui.text("Amis :");
+                            ui.table_next_column();
+                            ui.text(format!("{}", person.neighbors.len()));
+                            ui.table_next_column();
+                            ui.text("Classe :");
+                            ui.table_next_column();
+                            ui.text(format!("{}", person.modularity_class));
+                        }
+                    }
                 }
             });
 }

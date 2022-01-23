@@ -11,11 +11,12 @@ gl = "0.14.0"
 glfw = "0.43.0"
 glium = "0.30.2"
 glutin = "0.27.0"
-imgui = "0.8.2"
+imgui = { version = "0.8.2", features = ["tables-api"] }
 imgui-glium-renderer = "0.8.2"
-imgui-winit-support = {version = "0.8.2", features = ["winit-25"]}
+imgui-winit-support = { version = "0.8.2", features = ["winit-25"] }
 itertools = "0.10.3"
 nalgebra = "0.30.1"
+open = "2.0.2"
 simsearch = "0.2.3"
 speedy = "0.8.1"
 winit = "0.25.0"
