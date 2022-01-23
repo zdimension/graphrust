@@ -328,10 +328,6 @@ fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData)
                             }
                         }
                     }
-                    else
-                    {
-                        state.path_status = String::from("")
-                    };
 
                     ui.text(state.path_status.as_str());
 
