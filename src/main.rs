@@ -9,7 +9,7 @@ use camera::Camera;
 use graph_storage::*;
 use std::time::Instant;
 use chrono;
-use imgui::sys::{ImGuiDir, ImGuiHoveredFlags_None, ImU32, ImVec2};
+use imgui::sys::{ImFontGlyphRangesBuilder, ImGuiDir, ImGuiHoveredFlags_None, ImU32, ImVec2, ImVector_ImWchar, ImWchar};
 use imgui::*;
 
 use nalgebra::Vector2;
@@ -211,17 +211,28 @@ fn main() {
         platform.attach_window(imgui.io_mut(), window, HiDpiMode::Default);
     }
 
-    imgui.fonts().add_font(&[
-        FontSource::TtfData {
-            data: include_bytes!("../Roboto-Medium.ttf"),
-            size_pixels: FONT_SIZE,
-            config: Some(FontConfig {
-                rasterizer_multiply: 1.5,
-                oversample_h: 4,
-                oversample_v: 4,
-                ..FontConfig::default()
-            }),
-        }]);
+    let mut g = ImFontGlyphRangesBuilder::default();
+    let mut ranges = ImVector_ImWchar::default();
+    unsafe {
+        /*let defrange: [ImWchar; 3] = [0x0020, 0x00FF, 0];
+        imgui::sys::ImFontGlyphRangesBuilder_AddRanges(&mut g, defrange.as_ptr());
+        imgui::sys::ImFontGlyphRangesBuilder_AddText(&mut g, data.names.as_ptr() as _, data.names.as_ptr().add(data.names.len()) as _);
+        imgui::sys::ImFontGlyphRangesBuilder_BuildRanges(&mut g, &mut ranges);*/
+
+        imgui.fonts().add_font(&[
+            FontSource::TtfData {
+                data: include_bytes!("../Roboto-Medium.ttf"),
+                size_pixels: FONT_SIZE,
+                config: Some(FontConfig {
+                    rasterizer_multiply: 1.5,
+                    oversample_h: 4,
+                    oversample_v: 4,
+                   // glyph_ranges: FontGlyphRanges::from_ptr(ranges.Data as _),
+                    glyph_ranges: FontGlyphRanges::from_slice(&[0x0020, 0xFFFF, 0]),
+                    ..FontConfig::default()
+                }),
+            }]);
+    }
 
     let mut renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize imgui renderer");
 
