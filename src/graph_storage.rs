@@ -294,8 +294,8 @@ pub fn load_binary<'a>() -> ViewerData<'a>
     for (i, edge) in edge_data.iter().enumerate()
     {
         let (p1, p2) = person_data.get_two_mut(edge.a.0 as usize, edge.b.0 as usize);
-        p1.neighbors.push((edge.a.0 as usize, i));
-        p2.neighbors.push((edge.b.0 as usize, i));
+        p1.neighbors.push((edge.b.0 as usize, i));
+        p2.neighbors.push((edge.a.0 as usize, i));
     }
 
     log!("Creating search engine");
