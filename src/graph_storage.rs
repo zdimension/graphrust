@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use nalgebra::Vector2;
+use simsearch::SimSearch;
 use speedy::{Readable};
 use crate::{log, ModularityClass, Person, Vertex, ViewerData};
 use crate::utils::{SliceExt, str_from_null_terminated_utf8};
@@ -277,7 +278,6 @@ pub fn load_binary<'a>() -> ViewerData<'a>
 
     log!("Processing nodes");
 
-    let idbuf = content.ids.as_ptr();
     let mut person_data = content.nodes.iter()
         .map(|node|
             unsafe {
@@ -298,6 +298,13 @@ pub fn load_binary<'a>() -> ViewerData<'a>
         p2.neighbors.push((edge.b.0 as usize, i));
     }
 
+    log!("Creating search engine");
+    let mut engine: SimSearch<usize> = SimSearch::new();
+    for (i, person) in person_data.iter().enumerate()
+    {
+        engine.insert(i, &person.name);
+    }
+
     log!("Done");
 
     ViewerData {
@@ -307,5 +314,6 @@ pub fn load_binary<'a>() -> ViewerData<'a>
         vertices: edge_vertices,
         modularity_classes,
         edge_sizes,
+        engine
     }
 }

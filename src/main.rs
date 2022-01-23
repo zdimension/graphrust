@@ -15,6 +15,7 @@ use nalgebra::Vector2;
 extern crate speedy;
 
 use speedy::{Readable};
+use simsearch::SimSearch;
 
 #[macro_use]
 extern crate glium;
@@ -112,6 +113,7 @@ pub struct ViewerData<'a>
     pub vertices: Vec<Vertex>,
     pub modularity_classes: Vec<ModularityClass<'a>>,
     pub edge_sizes: Vec<f32>,
+    pub engine: SimSearch<usize>,
 }
 
 struct UiState
@@ -139,33 +141,34 @@ unsafe fn render_arrow(draw_list: *mut imgui::sys::ImDrawList, pos: ImVec2, col:
     imgui::sys::ImDrawList_AddTriangleFilled(draw_list, add(center, a), add(center, b), add(center, c), col);
 }
 
-fn fuzzy_match(pattern: &str, input: &str) -> Option<u32>
+unsafe fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<usize>, viewer_data: &ViewerData<'a>) -> bool
 {
-    Some(0)
-}
-
-unsafe fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<usize>, persons: &Vec<Person<'a>>) -> bool
-{
-    let window = imgui::sys::igGetCurrentContext();
     let storage = imgui::sys::igGetStateStorage();
     let id = imgui::sys::igGetID_Str(label.as_ptr() as _);
-    let mut item_score_vector = imgui::sys::ImGuiStorage_GetVoidPtr(storage, id) as *mut Vec<(usize, u32)>;
-    if item_score_vector.is_null()
+
+    struct ComboFilterData
     {
-        let vec = Vec::new();
-        item_score_vector = Box::into_raw(Box::new(vec)) as _;
-        imgui::sys::ImGuiStorage_SetVoidPtr(storage, id, item_score_vector as _);
+        item_score_vector: Vec<(usize, isize)>,
+        pattern: String,
     }
 
-    let items_count = persons.len();
+    let mut cfdata = imgui::sys::ImGuiStorage_GetVoidPtr(storage, id) as *mut ComboFilterData;
+    if cfdata.is_null()
+    {
+        let vec = ComboFilterData {
+            item_score_vector: Vec::new(),
+            pattern: String::new(),
+        };
+        cfdata = Box::into_raw(Box::new(vec)) as _;
+        imgui::sys::ImGuiStorage_SetVoidPtr(storage, id, cfdata as _);
+    }
 
     let preview_value = match current_item
     {
-        Some(value) => persons[*value].name,
+        Some(value) => viewer_data.persons[*value].name,
         None => "",
     };
 
-    let mut pattern_buffer = String::new();
     let mut is_need_filter = false;
 
     let combo_button_name = format!("{}##name_ComboWithFilter_button_{}", preview_value, label);
@@ -211,7 +214,6 @@ unsafe fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<
     imgui::sys::igSetNextWindowSize(
         ImVec2 { x: item_rect_size.x, y: 0.0 },
         imgui::sys::ImGuiCond_None as i32);
-
     ui.popup(name_popup, ||
         {
             imgui::sys::igPushStyleColor_Vec4(imgui::sys::ImGuiCol_FrameBg as i32, imgui::sys::ImVec4 { x: 240.0 / 255.0, y: 240.0 / 255.0, z: 240.0 / 255.0, w: 255.0 });
@@ -223,31 +225,24 @@ unsafe fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<
                 imgui::sys::igSetKeyboardFocusHere(0);
             }
 
-            let changed = ui.input_text("##ComboWithFilter_inputText", &mut pattern_buffer).build();
+            let changed = ui.input_text("##ComboWithFilter_inputText", &mut (*cfdata).pattern).build();
 
             imgui::sys::igPopStyleColor(2);
-            if !pattern_buffer.is_empty()
+            if !(*cfdata).pattern.is_empty()
             {
                 is_need_filter = true;
             }
 
             if changed && is_need_filter
             {
-                *item_score_vector = persons.iter().enumerate()
-                    .filter_map(|(i, person)|
-                        {
-                            if let Some(score) = fuzzy_match(pattern_buffer.as_str(), &person.name)
-                            {
-                                Some((i, score))
-                            } else {
-                                None
-                            }
-                        })
+                let res = viewer_data.engine.search((*cfdata).pattern.as_str());
+                (*cfdata).item_score_vector = res.iter()
+                    .take(100)
+                    .map(|i| (*i, 0 as isize))
                     .collect();
-                (*item_score_vector).sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
             }
 
-            let show_count = 100.min(if is_need_filter { (*item_score_vector).len() } else { persons.len() });
+            let show_count = 100.min(if is_need_filter { (*cfdata).item_score_vector.len() } else { viewer_data.persons.len() });
             let name = CString::new("##ComboWithFilter_itemList").unwrap();
             let height_in_items_f = show_count.min(7) as f32 + 0.25;
             if imgui::sys::igBeginListBox(
@@ -257,13 +252,13 @@ unsafe fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<
                 for i in 0..show_count
                 {
                     let idx = if is_need_filter {
-                        (*item_score_vector)[i].0
+                        (*cfdata).item_score_vector[i].0
                     } else {
                         i
                     };
                     imgui::sys::igPushID_Int(idx as i32);
                     let item_selected = Some(idx) == *current_item;
-                    let item_text = CString::new(persons[idx].name).expect("What");
+                    let item_text = CString::new(viewer_data.persons[idx].name).expect("What");
                     if imgui::sys::igSelectable_Bool(item_text.as_ptr(), item_selected, 0, ImVec2 { x: 0.0, y: 0.0 })
                     {
                         value_changed = true;
@@ -280,11 +275,6 @@ unsafe fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<
             }
             imgui::sys::igPopItemWidth();
         });
-
-    if value_changed
-    {
-        //imgui::sys::igMarkItemEdited(name_popup);
-    }
 
     value_changed
 }
@@ -306,7 +296,7 @@ fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData)
 
                 if ui.collapsing_header("Informations", imgui::TreeNodeFlags::empty())
                 {
-                    unsafe { combo_with_filter(ui, "#infos_user", &mut state.infos_current, &data.persons); }
+                    unsafe { combo_with_filter(ui, "#infos_user", &mut state.infos_current, &data); }
                 }
             });
 }
