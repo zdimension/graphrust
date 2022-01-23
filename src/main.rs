@@ -180,17 +180,6 @@ unsafe fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<
     let mut is_new_open = false;
     let sz = imgui::sys::igGetFrameHeight();
     let size = imgui::sys::ImVec2 { x: sz, y: sz };
-    let mut cursor_pos = imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
-    imgui::sys::igGetCursorPos(&mut cursor_pos);
-    let pos = add(cursor_pos, imgui::sys::ImVec2 { x: expected_w - sz, y: 0.0 });
-
-    struct ImRect
-    {
-        min: imgui::sys::ImVec2,
-        max: imgui::sys::ImVec2,
-    }
-
-    let bb = ImRect { min: pos, max: add(pos, size) };
 
     let mut style = imgui::sys::igGetStyle();
     let button_text_align_x = (*style).ButtonTextAlign.x;
@@ -201,20 +190,18 @@ unsafe fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<
         is_new_open = true;
     }
     (*style).ButtonTextAlign.x = button_text_align_x;
-    let hovered = imgui::sys::igIsItemHovered(0);
-    let active = imgui::sys::igIsItemActivated();
-    let pressed = imgui::sys::igIsItemClicked(0);
-
+    let mut content_min = imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
+    imgui::sys::igGetItemRectMin(&mut content_min);
+    let pos = add(content_min, imgui::sys::ImVec2 { x: expected_w - sz, y: 0.0 });
     let text_col = imgui::sys::igGetColorU32_Col(imgui::sys::ImGuiCol_Text as i32, 1.0);
     render_arrow(
         imgui::sys::igGetWindowDrawList(),
-        add(bb.min, ImVec2 { x: 0f32.max((size.x - FONT_SIZE) * 0.5), y: 0f32.max((size.y - 14.0) * 0.5) }),
+        add(pos, ImVec2 { x: 0f32.max((size.x - FONT_SIZE) * 0.5), y: 0f32.max((size.y - FONT_SIZE) * 0.5) }),
         text_col,
-        0.0);
+        1.0);
     let mut item_max = imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
     imgui::sys::igGetItemRectMax(&mut item_max);
-    let mut content_min = imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
-    imgui::sys::igGetItemRectMin(&mut content_min);
+
     imgui::sys::igSetNextWindowPos(
         ImVec2 { x: content_min.x, y: item_max.y },
         imgui::sys::ImGuiCond_None as i32,
