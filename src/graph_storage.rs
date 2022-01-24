@@ -1,7 +1,8 @@
 use itertools::Itertools;
 use nalgebra::Vector2;
 use simsearch::SimSearch;
-use speedy::{Readable};
+use speedy::Readable;
+
 use crate::{log, ModularityClass, Person, Vertex, ViewerData};
 use crate::utils::{SliceExt, str_from_null_terminated_utf8};
 
@@ -38,7 +39,7 @@ impl Color3b
 
 impl Color3f
 {
-    fn new(r: f32, g: f32, b: f32) -> Color3f
+    pub fn new(r: f32, g: f32, b: f32) -> Color3f
     {
         Color3f {
             r,
@@ -211,6 +212,23 @@ pub struct GraphFile
     pub names: Vec<u8>,
 }
 
+pub fn create_rectangle(a: Point, b: Point, color: Color3f, size: f32) -> Vec<Vertex>
+{
+    let ortho = (b - a).ortho().normalized() * size;
+    let v0 = a + ortho;
+    let v1 = a - ortho;
+    let v2 = b - ortho;
+    let v3 = b + ortho;
+    vec![
+        Vertex::new(v0, color),
+        Vertex::new(v1, color),
+        Vertex::new(v2, color),
+        Vertex::new(v2, color),
+        Vertex::new(v3, color),
+        Vertex::new(v0, color),
+    ]
+}
+
 pub fn load_binary<'a>() -> ViewerData<'a>
 {
     log!("Loading binary");
@@ -257,20 +275,7 @@ pub fn load_binary<'a>() -> ViewerData<'a>
     let edge_vertices = edge_data.iter()
         .flat_map(|edge|
             {
-                let ortho = (edge.b.1 - edge.a.1).ortho().normalized();
-                let v0 = edge.a.1 + ortho;
-                let v1 = edge.a.1 - ortho;
-                let v2 = edge.b.1 - ortho;
-                let v3 = edge.b.1 + ortho;
-                let color = edge.color;
-                vec![
-                    Vertex::new(v0, color),
-                    Vertex::new(v1, color),
-                    Vertex::new(v2, color),
-                    Vertex::new(v2, color),
-                    Vertex::new(v3, color),
-                    Vertex::new(v0, color),
-                ]
+                create_rectangle(edge.a.1, edge.b.1, edge.color, 1.0)
             })
         .collect_vec();
 

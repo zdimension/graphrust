@@ -1,32 +1,35 @@
-mod utils;
-mod graph_storage;
-mod camera;
-mod combo_filter;
-
-use std::collections::{HashSet, VecDeque};
-use std::ffi::CString;
-use std::ops::Add;
-use camera::Camera;
-use graph_storage::*;
-use std::time::Instant;
-use chrono;
-use imgui::sys::{ImFontGlyphRangesBuilder, ImGuiDir, ImGuiHoveredFlags_None, ImU32, ImVec2, ImVector_ImWchar, ImWchar};
-use imgui::*;
-
-use nalgebra::Vector2;
-
-extern crate speedy;
-
-use speedy::{Readable};
-use simsearch::SimSearch;
-
 #[macro_use]
 extern crate glium;
 extern crate imgui;
 extern crate imgui_glium_renderer;
+extern crate speedy;
 
+use std::collections::{HashSet, VecDeque};
+use std::ffi::CString;
+use std::ops::Add;
+use std::time::Instant;
+
+use array_tool::vec::Intersect;
+use chrono;
+use derivative::*;
+use glium::Display;
+use imgui::*;
+use imgui::sys::{ImFontGlyphRangesBuilder, ImGuiDir, ImGuiHoveredFlags_None, ImU32, ImVec2, ImVector_ImWchar, ImWchar};
+use itertools::Itertools;
+use nalgebra::Vector2;
+use simsearch::SimSearch;
+use speedy::Readable;
 use winit::dpi::PhysicalPosition;
+
+use camera::Camera;
+use graph_storage::*;
+
 use crate::combo_filter::combo_with_filter;
+
+mod utils;
+mod graph_storage;
+mod camera;
+mod combo_filter;
 
 const FONT_SIZE: f32 = 14.0;
 
@@ -120,8 +123,6 @@ pub struct ViewerData<'a>
     pub engine: SimSearch<usize>,
 }
 
-use derivative::*;
-
 #[derive(Derivative)]
 #[derivative(Default)]
 struct UiState
@@ -139,10 +140,8 @@ struct UiState
     path_no_direct: bool,
     path_no_mutual: bool,
     path_status: String,
+    path_vbuf: Option<glium::VertexBuffer<Vertex>>,
 }
-
-use array_tool::vec::Intersect;
-use itertools::Itertools;
 
 impl UiState
 {
@@ -152,7 +151,7 @@ impl UiState
         self.infos_open = id.is_some();
     }
 
-    fn do_pathfinding(&mut self, data: &ViewerData)
+    fn do_pathfinding(&mut self, data: &ViewerData, display: &Display)
     {
         let src_id = self.path_src.unwrap();
         let dest_id = self.path_dest.unwrap();
@@ -164,9 +163,7 @@ impl UiState
             let src_friends = src.neighbors.iter().map(|&(i, _)| i).collect_vec();
             let dest_friends = dest.neighbors.iter().map(|&(i, _)| i).collect_vec();
             HashSet::from_iter(src_friends.intersect(dest_friends))
-        }
-        else
-        {
+        } else {
             HashSet::new()
         };
 
@@ -180,7 +177,6 @@ impl UiState
         visited[src_id] = true;
         dist[src_id] = 0;
         queue.push_back(src_id);
-
 
 
         while let Some(id) = queue.pop_front()
@@ -214,28 +210,37 @@ impl UiState
                     {
                         let mut path = Vec::new();
 
+                        let mut verts = Vec::new();
+
                         path.push(dest_id);
 
                         let mut cur = dest_id;
                         while let Some(p) = pred[cur]
                         {
+                            verts.extend(create_rectangle(
+                                data.persons[p].position,
+                                data.persons[*path.last().unwrap()].position,
+                                Color3f::new(1.0, 0.0, 0.0),
+                                20.0));
                             path.push(p);
                             cur = p;
                         }
 
                         self.found_path = Some(path);
 
+                        self.path_vbuf = Some(glium::VertexBuffer::new(
+                            display,
+                            &verts).unwrap());
+
                         return;
                     }
                 }
             }
         }
-
-        self.found_path = None;
     }
 }
 
-fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData)
+fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData, display: &Display)
 {
     imgui::Window::new("Graphe")
         .size([400.0, 500.0], imgui::Condition::FirstUseEver)
@@ -313,19 +318,21 @@ fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData)
                         | ui.checkbox("Éviter amis communs", &mut state.path_no_mutual)
                     {
                         state.path_dirty = false;
+                        state.found_path = None;
+                        state.path_vbuf = None;
                         state.path_status = match (state.path_src, state.path_dest)
                         {
                             (Some(x), Some(y)) if x == y => String::from("Source et destination sont identiques"),
                             (None, _) | (_, None) => String::from(""),
                             _ =>
                                 {
-                                    state.do_pathfinding(&data);
+                                    state.do_pathfinding(&data, display);
                                     match state.found_path
                                     {
                                         Some(ref path) => format!("Chemin trouvé, longueur {}", path.len()),
                                         None => String::from("Aucun chemin trouvé"),
                                     }
-                            }
+                                }
                         }
                     }
 
@@ -483,30 +490,34 @@ fn main() {
             platform.handle_event(imgui.io_mut(), window, &ev);
         }
 
+        use glutin::event::Event::*;
+        use glutin::event::WindowEvent::*;
+        use glutin::event::DeviceEvent::*;
+
         match ev {
-            glutin::event::Event::NewEvents(_) =>
+            NewEvents(_) =>
                 {
                     let now = Instant::now();
                     imgui.io_mut().update_delta_time(now - last_frame);
                     last_frame = now;
                 }
-            glutin::event::Event::WindowEvent { event, .. } => match event
+            WindowEvent { event, .. } => match event
             {
-                glutin::event::WindowEvent::CloseRequested => {
+                CloseRequested => {
                     *control_flow = glutin::event_loop::ControlFlow::Exit;
                     return;
                 }
-                glutin::event::WindowEvent::CursorMoved { position, .. } =>
+                CursorMoved { position, .. } =>
                     {
                         mouse = position;
                     }
-                glutin::event::WindowEvent::Resized(size) =>
+                Resized(size) =>
                     {
                         camera.set_window_size(size.width, size.height);
                     }
                 _ => return,
             },
-            glutin::event::Event::DeviceEvent { event, .. } => match event
+            DeviceEvent { event, .. } => match event
             {
                 glutin::event::DeviceEvent::MouseWheel { delta } =>
                     {
@@ -520,7 +531,7 @@ fn main() {
                         };
                         camera.zoom(dy, mouse);
                     }
-                glutin::event::DeviceEvent::Button { state, button, .. } =>
+                Button { state, button, .. } =>
                     {
                         match button {
                             1 => {
@@ -544,7 +555,7 @@ fn main() {
                             _ => return,
                         }
                     }
-                glutin::event::DeviceEvent::MouseMotion { delta } =>
+                MouseMotion { delta } =>
                     {
                         let (dx, dy) = delta;
                         if pressed_left {
@@ -561,7 +572,7 @@ fn main() {
                     }
                 _ => return,
             },
-            glutin::event::Event::MainEventsCleared =>
+            MainEventsCleared =>
                 {
                     let gl_window = display.gl_window();
                     platform
@@ -569,13 +580,13 @@ fn main() {
                         .expect("Failed to prepare frame");
                     gl_window.window().request_redraw();
                 }
-            glutin::event::Event::RedrawRequested(_) =>
+            RedrawRequested(_) =>
                 {
                     let mut ui = imgui.frame();
                     let gl_window = display.gl_window();
                     let window = gl_window.window();
 
-                    draw_ui(&mut ui, &mut ui_state, &data);
+                    draw_ui(&mut ui, &mut ui_state, &data, &display);
 
                     frames += 1;
                     let threshold_ms = 200;
@@ -595,6 +606,13 @@ fn main() {
 
                     target.draw(&vertex_buffer, &indices, &program, &uniforms,
                                 &Default::default()).unwrap();
+
+                    if let Some(ref vbuf) = ui_state.path_vbuf
+                    {
+                        target.draw(vbuf, &indices, &program, &uniforms,
+                                    &Default::default()).unwrap();
+                    }
+
                     platform.prepare_render(&ui, gl_window.window());
                     let draw_data = ui.render();
                     renderer

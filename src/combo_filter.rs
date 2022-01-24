@@ -1,6 +1,8 @@
 use std::ffi::CString;
+
 use imgui::sys::{ImU32, ImVec2};
 use imgui::Ui;
+
 use crate::{FONT_SIZE, ViewerData};
 
 fn add(a: ImVec2, b: ImVec2) -> ImVec2
