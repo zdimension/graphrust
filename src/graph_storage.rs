@@ -3,7 +3,7 @@ use nalgebra::Vector2;
 use simsearch::SimSearch;
 use speedy::Readable;
 
-use crate::{log, ModularityClass, Person, Vertex, ViewerData};
+use crate::{create_rectangle, log, ModularityClass, Person, Vertex, ViewerData};
 use crate::utils::{SliceExt, str_from_null_terminated_utf8};
 
 // 24bpp color structure
@@ -109,9 +109,9 @@ impl Point
         Point { x, y }
     }
 
-    pub fn polar(r: f32, theta: f32) -> Point
+    pub fn polar(theta: f32) -> Point
     {
-        Point { x: r * theta.cos(), y: r * theta.sin() }
+        Point { x: theta.cos(), y: theta.sin() }
     }
 
     pub fn norm(&self) -> f32
@@ -210,23 +210,6 @@ pub struct GraphFile
     pub names_size: u64,
     #[speedy(length = names_size)]
     pub names: Vec<u8>,
-}
-
-pub fn create_rectangle(a: Point, b: Point, color: Color3f, size: f32) -> Vec<Vertex>
-{
-    let ortho = (b - a).ortho().normalized() * size;
-    let v0 = a + ortho;
-    let v1 = a - ortho;
-    let v2 = b - ortho;
-    let v3 = b + ortho;
-    vec![
-        Vertex::new(v0, color),
-        Vertex::new(v1, color),
-        Vertex::new(v2, color),
-        Vertex::new(v2, color),
-        Vertex::new(v3, color),
-        Vertex::new(v0, color),
-    ]
 }
 
 pub fn load_binary<'a>() -> ViewerData<'a>

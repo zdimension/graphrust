@@ -25,11 +25,13 @@ use camera::Camera;
 use graph_storage::*;
 
 use crate::combo_filter::combo_with_filter;
+use crate::geom_draw::{create_circle_tris, create_rectangle};
 
 mod utils;
 mod graph_storage;
 mod camera;
 mod combo_filter;
+mod geom_draw;
 
 const FONT_SIZE: f32 = 14.0;
 
@@ -225,6 +227,14 @@ impl UiState
                             path.push(p);
                             cur = p;
                         }
+
+                        verts.extend(
+                            path.iter()
+                                .flat_map(|&i|
+                                    create_circle_tris(data.persons[i].position, 30.0, Color3f::new(0.0, 0.0, 0.0))
+                                        .into_iter().chain(
+                                        create_circle_tris(data.persons[i].position, 20.0, Color3f::new(1.0, 0.0, 0.0))
+                                    )));
 
                         self.found_path = Some(path);
 
