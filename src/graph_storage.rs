@@ -3,7 +3,7 @@ use nalgebra::Vector2;
 use simsearch::SimSearch;
 use speedy::Readable;
 
-use crate::{create_rectangle, log, ModularityClass, Person, Vertex, ViewerData};
+use crate::{create_rectangle, log, ModularityClass, Person, ViewerData};
 use crate::utils::{SliceExt, str_from_null_terminated_utf8};
 
 // 24bpp color structure
@@ -27,7 +27,7 @@ pub struct Color3f
 
 impl Color3b
 {
-    pub fn to_f32(&self) -> Color3f
+    pub fn to_f32(self) -> Color3f
     {
         Color3f {
             r: self.r as f32 / 255.0,
@@ -75,21 +75,21 @@ pub struct Point
     pub y: f32,
 }
 
-impl Into<Vector2<f32>> for Point
+impl From<Point> for Vector2<f32>
 {
-    fn into(self) -> Vector2<f32>
+    fn from(p: Point) -> Vector2<f32>
     {
-        Vector2::new(self.x, self.y)
+        Vector2::new(p.x, p.y)
     }
 }
 
-impl Into<Point> for Vector2<f32>
+impl From<Vector2<f32>> for Point
 {
-    fn into(self) -> Point
+    fn from(v: Vector2<f32>) -> Point
     {
         Point {
-            x: self.x,
-            y: self.y,
+            x: v.x,
+            y: v.y,
         }
     }
 }
@@ -294,7 +294,7 @@ pub fn load_binary<'a>() -> ViewerData<'a>
     let mut engine: SimSearch<usize> = SimSearch::new();
     for (i, person) in person_data.iter().enumerate()
     {
-        engine.insert(i, &person.name);
+        engine.insert(i, person.name);
     }
 
     log!("Done");

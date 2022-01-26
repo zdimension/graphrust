@@ -126,7 +126,7 @@ pub fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<usi
                     let res = viewer_data.engine.search((*cfdata).pattern.as_str());
                     (*cfdata).item_score_vector = res.iter()
                         .take(100)
-                        .map(|i| (*i, 0 as isize))
+                        .map(|i| (*i, 0_isize))
                         .collect();
                 }
 

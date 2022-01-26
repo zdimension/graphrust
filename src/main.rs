@@ -4,21 +4,9 @@ extern crate imgui;
 extern crate imgui_glium_renderer;
 extern crate speedy;
 
-use std::collections::{HashSet, VecDeque};
-use std::ffi::CString;
-use std::ops::Add;
 use std::time::Instant;
-
-use array_tool::vec::Intersect;
-use chrono;
-use derivative::*;
-use glium::Display;
-use imgui::*;
-use imgui::sys::{ImFontGlyphRangesBuilder, ImGuiDir, ImGuiHoveredFlags_None, ImU32, ImVec2, ImVector_ImWchar, ImWchar};
-use itertools::Itertools;
 use nalgebra::Vector2;
 use simsearch::SimSearch;
-use speedy::Readable;
 use winit::dpi::PhysicalPosition;
 
 use camera::Camera;
@@ -53,11 +41,11 @@ impl<'a> Person<'a>
     fn new(position: Point, size: f32, modularity_class: u16, id: &'a str, name: &'a str) -> Person<'a>
     {
         Person {
-            position: position,
-            size: size,
-            modularity_class: modularity_class,
-            id: id,
-            name: name,
+            position,
+            size,
+            modularity_class,
+            id,
+            name,
             sorted_id: 0,
             neighbors: Vec::new(),
         }
@@ -132,9 +120,9 @@ fn main() {
 
     log!("Loaded");
 
-    use glium::{glutin, Surface};
+    use glium::{Surface};
 
-    use imgui::{Context, FontConfig, FontGlyphRanges, FontSource, Ui};
+    use imgui::{Context, FontConfig, FontGlyphRanges, FontSource};
     use imgui_glium_renderer::Renderer;
     use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
@@ -160,9 +148,9 @@ fn main() {
         platform.attach_window(imgui.io_mut(), window, HiDpiMode::Default);
     }
 
-    let mut g = ImFontGlyphRangesBuilder::default();
+  /*  let mut g = ImFontGlyphRangesBuilder::default();
     let mut ranges = ImVector_ImWchar::default();
-    unsafe {
+    unsafe*/ {
         /*let defrange: [ImWchar; 3] = [0x0020, 0x00FF, 0];
         imgui::sys::ImFontGlyphRangesBuilder_AddRanges(&mut g, defrange.as_ptr());
         imgui::sys::ImFontGlyphRangesBuilder_AddText(&mut g, data.names.as_ptr() as _, data.names.as_ptr().add(data.names.len()) as _);
@@ -226,7 +214,6 @@ fn main() {
             {
                 CloseRequested => {
                     *control_flow = glutin::event_loop::ControlFlow::Exit;
-                    return;
                 }
                 CursorMoved { position, .. } =>
                     {
@@ -236,7 +223,7 @@ fn main() {
                     {
                         camera.set_window_size(size.width, size.height);
                     }
-                _ => return,
+                _ => {},
             },
             DeviceEvent { event, .. } => match event
             {
@@ -273,7 +260,7 @@ fn main() {
                                     pressed_right = None;
                                 }
                             }
-                            _ => return,
+                            _ => {},
                         }
                     }
                 MouseMotion { delta } =>
@@ -291,7 +278,7 @@ fn main() {
                             pressed_right = Some(rot);
                         }
                     }
-                _ => return,
+                _ => {},
             },
             MainEventsCleared =>
                 {
@@ -345,7 +332,7 @@ fn main() {
                 {
                     let gl_window = display.gl_window();
                     let window = gl_window.window();
-                    platform.handle_event(imgui.io_mut(), &window, &event);
+                    platform.handle_event(imgui.io_mut(), window, &event);
                 }
         }
     });

@@ -143,7 +143,7 @@ impl UiState
 
                     if ui.collapsing_header("Chemin le plus court", imgui::TreeNodeFlags::DEFAULT_OPEN)
                     {
-                        let c1 = combo_with_filter(ui, "#path_src", &mut self.path_src, &data);
+                        let c1 = combo_with_filter(ui, "#path_src", &mut self.path_src, data);
                         if c1
                         {
                             self.set_infos_current(self.path_src);
@@ -155,7 +155,7 @@ impl UiState
                             self.found_path = None;
                         }
 
-                        let c2 = combo_with_filter(ui, "#path_dest", &mut self.path_dest, &data);
+                        let c2 = combo_with_filter(ui, "#path_dest", &mut self.path_dest, data);
                         if c2
                         {
                             self.set_infos_current(self.path_dest);
@@ -215,7 +215,7 @@ impl UiState
                                 (None, _) | (_, None) => String::from(""),
                                 _ =>
                                     {
-                                        self.do_pathfinding(&data, display);
+                                        self.do_pathfinding(data, display);
                                         match self.found_path
                                         {
                                             Some(ref path) => format!("Chemin trouvé, longueur {}", path.len()),
@@ -260,7 +260,7 @@ impl UiState
 
                     if ui.collapsing_header("Informations", imgui::TreeNodeFlags::empty())
                     {
-                        combo_with_filter(ui, "#infos_user", &mut self.infos_current, &data);
+                        combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
                         if let Some(id) = self.infos_current
                         {
                             let person = &data.persons[id];
