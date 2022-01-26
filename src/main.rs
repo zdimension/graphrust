@@ -26,12 +26,14 @@ use graph_storage::*;
 
 use crate::combo_filter::combo_with_filter;
 use crate::geom_draw::{create_circle_tris, create_rectangle};
+use crate::ui::UiState;
 
 mod utils;
 mod graph_storage;
 mod camera;
 mod combo_filter;
 mod geom_draw;
+mod ui;
 
 const FONT_SIZE: f32 = 14.0;
 
@@ -125,297 +127,6 @@ pub struct ViewerData<'a>
     pub engine: SimSearch<usize>,
 }
 
-#[derive(Derivative)]
-#[derivative(Default)]
-struct UiState
-{
-    g_show_nodes: bool,
-    #[derivative(Default(value = "true"))]
-    g_show_edges: bool,
-    infos_current: Option<usize>,
-    infos_open: bool,
-    path_src: Option<usize>,
-    path_dest: Option<usize>,
-    found_path: Option<Vec<usize>>,
-    exclude_ids: Vec<usize>,
-    path_dirty: bool,
-    path_no_direct: bool,
-    path_no_mutual: bool,
-    path_status: String,
-    path_vbuf: Option<glium::VertexBuffer<Vertex>>,
-}
-
-impl UiState
-{
-    fn set_infos_current(&mut self, id: Option<usize>)
-    {
-        self.infos_current = id;
-        self.infos_open = id.is_some();
-    }
-
-    fn do_pathfinding(&mut self, data: &ViewerData, display: &Display)
-    {
-        let src_id = self.path_src.unwrap();
-        let dest_id = self.path_dest.unwrap();
-        let src = &data.persons[src_id];
-        let dest = &data.persons[dest_id];
-
-        let intersect = if self.path_no_mutual
-        {
-            let src_friends = src.neighbors.iter().map(|&(i, _)| i).collect_vec();
-            let dest_friends = dest.neighbors.iter().map(|&(i, _)| i).collect_vec();
-            HashSet::from_iter(src_friends.intersect(dest_friends))
-        } else {
-            HashSet::new()
-        };
-
-        let exclude_set: HashSet<usize> = HashSet::from_iter(self.exclude_ids.iter().cloned());
-
-        let mut queue = VecDeque::new();
-        let mut visited = vec![false; data.persons.len()];
-        let mut pred = vec![None; data.persons.len()];
-        let mut dist = vec![i32::MAX; data.persons.len()];
-
-        visited[src_id] = true;
-        dist[src_id] = 0;
-        queue.push_back(src_id);
-
-
-        while let Some(id) = queue.pop_front()
-        {
-            let person = &data.persons[id];
-            for &(i, _) in person.neighbors.iter()
-            {
-                if self.path_no_direct && id == src_id && i == dest_id
-                {
-                    continue;
-                }
-
-                if self.path_no_mutual && intersect.contains(&i)
-                {
-                    continue;
-                }
-
-                if exclude_set.contains(&i)
-                {
-                    continue;
-                }
-
-                if !visited[i]
-                {
-                    visited[i] = true;
-                    dist[i] = dist[id] + 1;
-                    pred[i] = Some(id);
-                    queue.push_back(i);
-
-                    if i == dest_id
-                    {
-                        let mut path = Vec::new();
-
-                        let mut verts = Vec::new();
-
-                        path.push(dest_id);
-
-                        let mut cur = dest_id;
-                        while let Some(p) = pred[cur]
-                        {
-                            verts.extend(create_rectangle(
-                                data.persons[p].position,
-                                data.persons[*path.last().unwrap()].position,
-                                Color3f::new(1.0, 0.0, 0.0),
-                                20.0));
-                            path.push(p);
-                            cur = p;
-                        }
-
-                        verts.extend(
-                            path.iter()
-                                .flat_map(|&i|
-                                    create_circle_tris(data.persons[i].position, 30.0, Color3f::new(0.0, 0.0, 0.0))
-                                        .into_iter().chain(
-                                        create_circle_tris(data.persons[i].position, 20.0, Color3f::new(1.0, 0.0, 0.0))
-                                    )));
-
-                        self.found_path = Some(path);
-
-                        self.path_vbuf = Some(glium::VertexBuffer::new(
-                            display,
-                            &verts).unwrap());
-
-                        return;
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn draw_ui(ui: &mut imgui::Ui, state: &mut UiState, data: &ViewerData, display: &Display)
-{
-    imgui::Window::new("Graphe")
-        .size([400.0, 500.0], imgui::Condition::FirstUseEver)
-        .build(ui, ||
-            {
-                if ui.collapsing_header("Affichage", imgui::TreeNodeFlags::DEFAULT_OPEN)
-                {
-                    ui.checkbox("Afficher les nœuds", &mut state.g_show_nodes);
-                    ui.checkbox("Afficher les liens", &mut state.g_show_edges);
-                }
-
-                if ui.collapsing_header("Chemin le plus court", imgui::TreeNodeFlags::DEFAULT_OPEN)
-                {
-                    let c1 = combo_with_filter(ui, "#path_src", &mut state.path_src, &data);
-                    if c1
-                    {
-                        state.set_infos_current(state.path_src);
-                    }
-                    ui.same_line();
-                    if ui.button("x##src")
-                    {
-                        state.path_src = None;
-                        state.found_path = None;
-                    }
-
-                    let c2 = combo_with_filter(ui, "#path_dest", &mut state.path_dest, &data);
-                    if c2
-                    {
-                        state.set_infos_current(state.path_dest);
-                    }
-                    ui.same_line();
-                    if ui.button("x##dest")
-                    {
-                        state.path_dest = None;
-                        state.found_path = None;
-                    }
-
-                    let exw = ui.calc_item_width();
-                    ui.set_next_item_width(exw);
-                    ui.text("Exclure :");
-                    ui.same_line();
-                    if ui.button("x##exclall")
-                    {
-                        state.exclude_ids.clear();
-                    }
-
-                    {
-                        let mut cur_excl = None;
-                        let mut del_excl = None;
-                        for (i, id) in state.exclude_ids.iter().enumerate()
-                        {
-                            if ui.button_with_size(format!("{}##exclbtn", data.persons[*id].name), [exw, 0.0])
-                            {
-                                cur_excl = Some(*id);
-                            }
-                            ui.same_line();
-                            if ui.button(format!("x##excl{}", i))
-                            {
-                                del_excl = Some(i);
-                            }
-                        }
-                        if let Some(id) = cur_excl
-                        {
-                            state.set_infos_current(Some(id));
-                        }
-                        if let Some(i) = del_excl
-                        {
-                            state.path_dirty = true;
-                            state.exclude_ids.remove(i);
-                        }
-                    }
-
-                    if (state.path_dirty || c1 || c2)
-                        | ui.checkbox("Éviter chemin direct", &mut state.path_no_direct)
-                        | ui.checkbox("Éviter amis communs", &mut state.path_no_mutual)
-                    {
-                        state.path_dirty = false;
-                        state.found_path = None;
-                        state.path_vbuf = None;
-                        state.path_status = match (state.path_src, state.path_dest)
-                        {
-                            (Some(x), Some(y)) if x == y => String::from("Source et destination sont identiques"),
-                            (None, _) | (_, None) => String::from(""),
-                            _ =>
-                                {
-                                    state.do_pathfinding(&data, display);
-                                    match state.found_path
-                                    {
-                                        Some(ref path) => format!("Chemin trouvé, longueur {}", path.len()),
-                                        None => String::from("Aucun chemin trouvé"),
-                                    }
-                                }
-                        }
-                    }
-
-                    ui.text(state.path_status.as_str());
-
-                    let mut del_path = None;
-                    let mut cur_path = None;
-                    if let Some(ref path) = state.found_path
-                    {
-                        for (i, id) in path.iter().enumerate()
-                        {
-                            if ui.button_with_size(format!("{}##pathbtn", data.persons[*id].name), [exw, 0.0])
-                            {
-                                cur_path = Some(*id);
-                            }
-                            if i != 0 && i != path.len() - 1
-                            {
-                                ui.same_line();
-                                if ui.button(format!("x##excl{}", i))
-                                {
-                                    del_path = Some(*id);
-                                }
-                            }
-                        }
-                    }
-                    if let Some(id) = cur_path
-                    {
-                        state.set_infos_current(Some(id));
-                    }
-                    if let Some(i) = del_path
-                    {
-                        state.path_dirty = true;
-                        state.exclude_ids.push(i);
-                    }
-                }
-
-                if ui.collapsing_header("Informations", imgui::TreeNodeFlags::empty())
-                {
-                    combo_with_filter(ui, "#infos_user", &mut state.infos_current, &data);
-                    if let Some(id) = state.infos_current
-                    {
-                        let person = &data.persons[id];
-                        ui.same_line();
-                        if ui.button("Ouvrir")
-                        {
-                            // TODO: crashes on Windows because of a Winit bug
-                            /*if let Err(err) = webbrowser::open(format!("https://facebook.com/{}", person.id).as_str()) {
-                                log!("Couldn't open URL: {}", err);
-                            };*/
-                        }
-
-                        if let Some(_t) = ui.begin_table("#infos", 2)
-                        {
-                            ui.table_next_row();
-                            ui.table_next_column();
-                            ui.text("ID Facebook :");
-                            ui.table_next_column();
-                            ui.text(person.id);
-                            ui.table_next_column();
-                            ui.text("Amis :");
-                            ui.table_next_column();
-                            ui.text(format!("{}", person.neighbors.len()));
-                            ui.table_next_column();
-                            ui.text("Classe :");
-                            ui.table_next_column();
-                            ui.text(format!("{}", person.modularity_class));
-                        }
-                    }
-                }
-            });
-}
-
-
 fn main() {
     let data = load_binary();
 
@@ -477,7 +188,7 @@ fn main() {
     let vertex_buffer = glium::VertexBuffer::new(&display, &data.vertices).unwrap();
     let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-    let program = glium::Program::from_source(&display, include_str!("graph.vert"), include_str!("graph.frag"), None).unwrap();
+    let program = glium::Program::from_source(&display, include_str!("shaders/graph.vert"), include_str!("shaders/graph.frag"), None).unwrap();
 
     let mut camera = Camera::new(500, 500);
 
@@ -596,7 +307,7 @@ fn main() {
                     let gl_window = display.gl_window();
                     let window = gl_window.window();
 
-                    draw_ui(&mut ui, &mut ui_state, &data, &display);
+                    ui_state.draw_ui(&mut ui, &data, &display);
 
                     frames += 1;
                     let threshold_ms = 200;

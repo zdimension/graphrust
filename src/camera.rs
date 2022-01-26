@@ -1,6 +1,7 @@
 use nalgebra::{Matrix4, Orthographic3, Similarity3, Vector3};
 use winit::dpi::PhysicalPosition;
 
+/// 2D planar camera
 pub struct Camera
 {
     transf: Similarity3<f32>,
@@ -18,6 +19,7 @@ impl Camera
         Camera { transf, ortho: Camera::create_orthographic(width, height) }
     }
 
+    /// Computes the 4x4 transformation matrix.
     pub fn get_matrix(&self) -> Matrix4<f32>
     {
         self.ortho.to_homogeneous() * self.transf.to_homogeneous()
@@ -36,6 +38,7 @@ impl Camera
         self.ortho = Camera::create_orthographic(width, height);
     }
 
+    /// Zooms the view in or out around the specified mouse location.
     pub fn zoom(&mut self, dy: f32, mouse: PhysicalPosition<f64>)
     {
         let zoom_speed = 1.1;
@@ -48,6 +51,7 @@ impl Camera
         self.transf.append_translation_mut(&nalgebra::Translation3::new((after.x - before.x) * scale, -(after.y - before.y) * scale, 0.0));
     }
 
+    /// Pans the view.
     pub fn pan(&mut self, dx: f32, dy: f32)
     {
         self.transf.append_translation_mut(&nalgebra::Translation3::new(dx, -dy, 0.0));
@@ -55,7 +59,8 @@ impl Camera
 
     pub fn rotate(&mut self, rot: f32)
     {
-        let center = self.transf.inverse_transform_point(&nalgebra::Point3::new(0.0, 0.0, 0.0));
+        // TODO: fuck quaternions all my homies uses euler angles
+        //let center = self.transf.inverse_transform_point(&nalgebra::Point3::new(0.0, 0.0, 0.0));
         self.transf.append_rotation_wrt_center_mut(&nalgebra::UnitQuaternion::from_euler_angles(0.0, 0.0, rot));
     }
 }

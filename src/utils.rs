@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::ffi::CStr;
 
+/// Logs a message to the console prefixed with the current time and caller code location.
 #[macro_export]
 macro_rules! log
 {
@@ -17,6 +18,7 @@ pub unsafe fn str_from_null_terminated_utf8<'a>(s: *const u8) -> &'a str {
 pub trait SliceExt {
     type Item;
 
+    /// Creates mutable references to two items in a slice.
     fn get_two_mut(&mut self, index0: usize, index1: usize) -> (&mut Self::Item, &mut Self::Item);
 }
 

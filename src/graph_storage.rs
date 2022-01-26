@@ -66,7 +66,7 @@ unsafe impl glium::vertex::Attribute for Color3f
     }
 }
 
-
+/// 2D point/vector.
 #[derive(Copy, Clone)]
 #[derive(Readable)]
 pub struct Point
@@ -109,21 +109,25 @@ impl Point
         Point { x, y }
     }
 
+    /// Returns the unit vector with angle theta.
     pub fn polar(theta: f32) -> Point
     {
         Point { x: theta.cos(), y: theta.sin() }
     }
 
+    /// Returns the distance between the point and the origin.
     pub fn norm(&self) -> f32
     {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 
+    /// Returns the canonical orthogonal vector.
     pub fn ortho(&self) -> Point
     {
         Point { x: -self.y, y: self.x }
     }
 
+    /// Normalizes the vector.
     pub fn normalized(&self) -> Point
     {
         *self / self.norm()
@@ -286,7 +290,7 @@ pub fn load_binary<'a>() -> ViewerData<'a>
         p2.neighbors.push((edge.a.0 as usize, i));
     }
 
-    log!("Creating search engine");
+    log!("Initializing search engine");
     let mut engine: SimSearch<usize> = SimSearch::new();
     for (i, person) in person_data.iter().enumerate()
     {

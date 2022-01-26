@@ -1,3 +1,6 @@
+// Ugly unsafe code ahead
+// here be dragons
+
 use std::ffi::CString;
 
 use imgui::sys::{ImU32, ImVec2};
@@ -10,6 +13,7 @@ fn add(a: ImVec2, b: ImVec2) -> ImVec2
     ImVec2 { x: a.x + b.x, y: a.y + b.y }
 }
 
+/// Rust port of ImGui's RenderArrow function
 unsafe fn render_arrow(draw_list: *mut imgui::sys::ImDrawList, pos: ImVec2, col: ImU32, scale: f32)
 {
     let h = FONT_SIZE * 1.0;
@@ -23,6 +27,7 @@ unsafe fn render_arrow(draw_list: *mut imgui::sys::ImDrawList, pos: ImVec2, col:
     imgui::sys::ImDrawList_AddTriangleFilled(draw_list, add(center, a), add(center, b), add(center, c), col);
 }
 
+/// Drop-down combobox with filtering
 pub fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<usize>, viewer_data: &ViewerData<'a>) -> bool
 {
     unsafe {
