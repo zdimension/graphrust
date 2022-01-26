@@ -642,6 +642,7 @@ dependencies = [
  "nalgebra",
  "simsearch",
  "speedy",
+ "wasm-bindgen",
  "webbrowser",
  "winit",
 ]
@@ -700,6 +701,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if 1.0.0",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -1694,7 +1698,9 @@ dependencies = [
  "raw-window-handle 0.3.4",
  "scopeguard",
  "smithay-client-toolkit",
+ "wasm-bindgen",
  "wayland-client",
+ "web-sys",
  "winapi",
  "x11-dl",
 ]
