@@ -186,7 +186,7 @@ impl UiState
                                     cur_excl = Some(*id);
                                 }
                                 ui.same_line();
-                                if ui.button(format!("x##excl{}", i))
+                                if ui.button(format!("x##delexcl{}", i))
                                 {
                                     del_excl = Some(i);
                                 }
@@ -240,7 +240,7 @@ impl UiState
                                 if i != 0 && i != path.len() - 1
                                 {
                                     ui.same_line();
-                                    if ui.button(format!("x##excl{}", i))
+                                    if ui.button(format!("x##addexcl{}", i))
                                     {
                                         del_path = Some(*id);
                                     }

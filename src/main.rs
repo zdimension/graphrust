@@ -3,6 +3,7 @@ extern crate glium;
 extern crate imgui;
 extern crate imgui_glium_renderer;
 extern crate speedy;
+extern crate glutin;
 
 use std::time::Instant;
 use nalgebra::Vector2;

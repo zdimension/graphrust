@@ -20,19 +20,14 @@ itertools = "0.10.3"
 nalgebra = "0.30.1"
 simsearch = "0.2.3"
 speedy = "0.8.1"
-wasm-bindgen = { version = "0.2.79", optional = true }
 webbrowser = "0.5.5"
+winit = { version = "0.25.0" }
+
+[patch.crates-io]
+glutin = { path = "../glutin/glutin" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+chrono = { version = "0.4.19", features=["wasmbind"] }
+js-sys = "0.3.56"
+web-sys = "0.3.56"
 winit = { version = "0.25.0", features=["web-sys"] }
-
-[features]
-web = ["wasm-bindgen", "winit/web-sys"]
-
-[lib]
-name = "web"
-crate-type = ["cdylib", "rlib"]
-path = "src/web.rs"
-required-features = ["web"]
-
-[[bin]]
-name = "graphrust"
-path = "src/main.rs"
