@@ -5,7 +5,7 @@ extern crate imgui_glium_renderer;
 extern crate speedy;
 extern crate glutin;
 
-use std::time::Instant;
+use instant::Instant;
 use nalgebra::Vector2;
 use simsearch::SimSearch;
 use winit::dpi::PhysicalPosition;
@@ -186,11 +186,11 @@ fn main() {
     let mut mouse: PhysicalPosition<f64> = Default::default();
 
     let mut frames = 0;
-    let mut start = std::time::Instant::now();
+    let mut start = Instant::now();
     let mut last_frame = Instant::now();
     let mut ui_state = UiState::default();
     event_loop.run(move |ev, _, control_flow| {
-        let next_frame_time = std::time::Instant::now() +
+        let next_frame_time = Instant::now() +
             std::time::Duration::from_nanos(16_666_667);
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
@@ -200,9 +200,9 @@ fn main() {
             platform.handle_event(imgui.io_mut(), window, &ev);
         }
 
-        use glutin::event::Event::*;
-        use glutin::event::WindowEvent::*;
-        use glutin::event::DeviceEvent::*;
+        use winit::event::Event::*;
+        use winit::event::WindowEvent::*;
+        use winit::event::DeviceEvent::*;
 
         match ev {
             NewEvents(_) =>
@@ -301,7 +301,7 @@ fn main() {
                     let threshold_ms = 200;
                     if start.elapsed().as_millis() >= threshold_ms {
                         window.set_title(&format!("Graphe - {:.0} fps", frames as f64 / start.elapsed().as_millis() as f64 * 1000.0));
-                        start = std::time::Instant::now();
+                        start = Instant::now();
                         frames = 0;
                     }
 
@@ -323,7 +323,7 @@ fn main() {
                     }
 
                     platform.prepare_render(&ui, gl_window.window());
-                    let draw_data = ui.render();
+                    let draw_data = imgui.render();
                     renderer
                         .render(&mut target, draw_data)
                         .expect("Rendering failed");

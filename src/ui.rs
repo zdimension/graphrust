@@ -131,9 +131,9 @@ impl UiState
 
     pub fn draw_ui(&mut self, ui: &mut imgui::Ui, data: &ViewerData, display: &Display)
     {
-        imgui::Window::new("Graphe")
+        ui.window("Graphe")
             .size([400.0, 500.0], imgui::Condition::FirstUseEver)
-            .build(ui, ||
+            .build(||
                 {
                     if ui.collapsing_header("Affichage", imgui::TreeNodeFlags::DEFAULT_OPEN)
                     {
