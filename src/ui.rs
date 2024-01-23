@@ -3,8 +3,6 @@ use array_tool::vec::Intersect;
 use itertools::Itertools;
 use crate::{Color3f, combo_with_filter, create_circle_tris, create_rectangle, Vertex, ViewerData};
 use derivative::*;
-use imgui_glium_renderer::glium::backend::Facade;
-use imgui_glium_renderer::glium::VertexBuffer;
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -23,7 +21,7 @@ pub struct UiState
     path_no_direct: bool,
     path_no_mutual: bool,
     path_status: String,
-    pub path_vbuf: Option<VertexBuffer<Vertex>>,
+    //pub path_vbuf: Option<VertexBuffer<Vertex>>,
 }
 
 
@@ -35,7 +33,7 @@ impl UiState
         self.infos_open = id.is_some();
     }
 
-    fn do_pathfinding(&mut self, data: &ViewerData, display: &impl Facade)
+    fn do_pathfinding(&mut self, data: &ViewerData, display: ())
     {
         let src_id = self.path_src.unwrap();
         let dest_id = self.path_dest.unwrap();
@@ -120,9 +118,9 @@ impl UiState
 
                         self.found_path = Some(path);
 
-                        self.path_vbuf = Some(VertexBuffer::new(
+                        /*self.path_vbuf = Some(VertexBuffer::new(
                             display,
-                            &verts).unwrap());
+                            &verts).unwrap());*/
 
                         return;
                     }
@@ -131,7 +129,7 @@ impl UiState
         }
     }
 
-    pub fn draw_ui(&mut self, ui: &mut imgui::Ui, data: &ViewerData, display: &impl Facade)
+    pub fn draw_ui(&mut self, ui: &mut imgui::Ui, data: &ViewerData, display: ())
     {
         ui.window("Graphe")
             .size([400.0, 500.0], imgui::Condition::FirstUseEver)
@@ -210,7 +208,7 @@ impl UiState
                         {
                             self.path_dirty = false;
                             self.found_path = None;
-                            self.path_vbuf = None;
+                            //self.path_vbuf = None;
                             self.path_status = match (self.path_src, self.path_dest)
                             {
                                 (Some(x), Some(y)) if x == y => String::from("Source et destination sont identiques"),

@@ -6,7 +6,6 @@ use speedy::Readable;
 use crate::{create_rectangle, log, ModularityClass, Person, ViewerData};
 use crate::utils::{SliceExt, str_from_null_terminated_utf8};
 
-use imgui_glium_renderer::glium;
 
 // 24bpp color structure
 #[derive(Copy, Clone)]
@@ -59,14 +58,14 @@ impl Color3f
         }
     }
 }
-
+/*
 unsafe impl glium::vertex::Attribute for Color3f
 {
     fn get_type() -> glium::vertex::AttributeType
     {
         glium::vertex::AttributeType::F32F32F32
     }
-}
+}*/
 
 /// 2D point/vector.
 #[derive(Copy, Clone)]
@@ -95,7 +94,7 @@ impl From<Vector2<f32>> for Point
         }
     }
 }
-
+/*
 unsafe impl glium::vertex::Attribute for Point
 {
     fn get_type() -> glium::vertex::AttributeType
@@ -103,7 +102,7 @@ unsafe impl glium::vertex::Attribute for Point
         glium::vertex::AttributeType::F32F32
     }
 }
-
+*/
 impl Point
 {
     pub fn new(x: f32, y: f32) -> Point

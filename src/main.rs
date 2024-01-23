@@ -1,13 +1,12 @@
-use imgui_glium_renderer::glium;
-use imgui_glium_renderer::glium::{implement_vertex, uniform};
-
+use imgui_wgpu::{Renderer, RendererConfig};
 use instant::Instant;
 use nalgebra::Vector2;
 use simsearch::SimSearch;
 use imgui_winit_support::winit;
+use imgui_winit_support::winit::event::{Event, WindowEvent};
 use imgui_winit_support::winit::event_loop::ControlFlow;
 use winit::dpi::PhysicalPosition;
-
+use pollster::block_on;
 use camera::Camera;
 use graph_storage::*;
 
@@ -58,7 +57,7 @@ pub struct Vertex
     pub color: Color3f,
 }
 
-implement_vertex!(Vertex, position, color);
+//implement_vertex!(Vertex, position, color);
 
 impl Vertex
 {
@@ -114,38 +113,83 @@ pub struct ViewerData<'a>
     pub engine: SimSearch<usize>,
 }
 
-fn main() {
+pub fn main() {
     let data = load_binary();
 
     log!("Loaded");
 
-    use glium::{Surface};
-
     use imgui::{Context, FontConfig, FontGlyphRanges, FontSource};
-    use imgui_glium_renderer::Renderer;
-    use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
     let event_loop = winit::event_loop::EventLoop::new();
-    let wb = winit::window::WindowBuilder::new()
+
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::PRIMARY,
+        ..Default::default()
+    });
+
+    let builder = winit::window::WindowBuilder::new()
         .with_title("Graphe")
         .with_inner_size(winit::dpi::LogicalSize::new(500f64, 500f64));
-    let cb = glium::glutin::ContextBuilder::new()
-        .with_multisampling(4)
-        .with_vsync(true)
-        ;
 
-    let display = glium::Display::new(wb, cb, &event_loop).expect("Failed to initialize display");
+    #[cfg(web_platform)]
+        let builder = {
+        use winit::platform::web::WindowBuilderExtWebSys;
+        builder.with_append(true)
+    };
+    let window = builder.build(&event_loop).unwrap();
+
+    #[cfg(web_platform)]
+    wasm::insert_canvas(&window);
+
+    let surface = unsafe { instance.create_surface(&window) }.unwrap();
+
+    let hidpi_factor = window.scale_factor();
+
+    let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: Some(&surface),
+        force_fallback_adapter: false,
+    }))
+        .unwrap();
+
+    let (device, queue) =
+        block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)).unwrap();
+
+    let size = window.inner_size();
+
+    // Set up swap chain
+    let surface_desc = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+        width: size.width,
+        height: size.height,
+        present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        view_formats: vec![wgpu::TextureFormat::Bgra8Unorm],
+    };
+
+    surface.configure(&device, &surface_desc);
 
     let mut imgui = Context::create();
+    let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
+    platform.attach_window(
+        imgui.io_mut(),
+        &window,
+        imgui_winit_support::HiDpiMode::Default,
+    );
     imgui.set_ini_filename(None);
 
-    let mut platform = WinitPlatform::init(&mut imgui);
-    {
-        let gl_window = display.gl_window();
-        let window = gl_window.window();
+    let font_size = (13.0 * hidpi_factor) as f32;
+    imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
 
-        platform.attach_window(imgui.io_mut(), window, HiDpiMode::Default);
-    }
+    imgui.fonts().add_font(&[FontSource::DefaultFontData {
+        config: Some(imgui::FontConfig {
+            oversample_h: 1,
+            pixel_snap_h: true,
+            size_pixels: font_size,
+            ..Default::default()
+        }),
+    }]);
 
   /*  let mut g = ImFontGlyphRangesBuilder::default();
     let mut ranges = ImVector_ImWchar::default();
@@ -154,7 +198,7 @@ fn main() {
         imgui::sys::ImFontGlyphRangesBuilder_AddRanges(&mut g, defrange.as_ptr());
         imgui::sys::ImFontGlyphRangesBuilder_AddText(&mut g, data.names.as_ptr() as _, data.names.as_ptr().add(data.names.len()) as _);
         imgui::sys::ImFontGlyphRangesBuilder_BuildRanges(&mut g, &mut ranges);*/
-
+/*
         imgui.fonts().add_font(&[
             FontSource::TtfData {
                 data: include_bytes!("../Roboto-Medium.ttf"),
@@ -167,16 +211,28 @@ fn main() {
                     glyph_ranges: FontGlyphRanges::from_slice(&[0x0020, 0xFFFF, 0]),
                     ..FontConfig::default()
                 }),
-            }]);
+            }]);*/
     }
 
-    let mut renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize imgui renderer");
+    let clear_color = wgpu::Color {
+        r: 0.1,
+        g: 0.2,
+        b: 0.3,
+        a: 1.0,
+    };
 
-    let vertex_buffer = glium::VertexBuffer::new(&display, &data.vertices).unwrap();
+    let renderer_config = RendererConfig {
+        texture_format: surface_desc.format,
+        ..Default::default()
+    };
+
+    let mut renderer = Renderer::new(&mut imgui, &device, &queue, renderer_config);
+
+    /*let vertex_buffer = glium::VertexBuffer::new(&display, &data.vertices).unwrap();
     log!("Vertex buffer size: {}", vertex_buffer.len());
     let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-    let program = glium::Program::from_source(&display, include_str!("shaders/graph.vert"), include_str!("shaders/graph.frag"), None).unwrap();
+    let program = glium::Program::from_source(&display, include_str!("shaders/graph.vert"), include_str!("shaders/graph.frag"), None).unwrap();*/
 
     let mut camera = Camera::new(500, 500);
 
@@ -188,32 +244,19 @@ fn main() {
     let mut start = Instant::now();
     let mut last_frame = Instant::now();
     let mut ui_state = UiState::default();
+    let mut last_cursor = None;
     event_loop.run(move |ev, _, control_flow| {
-        let next_frame_time = Instant::now() +
-            std::time::Duration::from_nanos(16_666_667);
-        *control_flow = winit::event_loop::ControlFlow::WaitUntil(next_frame_time);
-
-        {
-            let gl_window = display.gl_window();
-            let window = gl_window.window();
-            platform.handle_event(imgui.io_mut(), window, &ev);
-        }
+        *control_flow = winit::event_loop::ControlFlow::Poll;
 
         use winit::event::Event::*;
         use winit::event::WindowEvent::*;
         use winit::event::DeviceEvent::*;
 
-        match ev {
-            NewEvents(_) =>
-                {
-                    let now = Instant::now();
-                    imgui.io_mut().update_delta_time(now - last_frame);
-                    last_frame = now;
-                }
-            WindowEvent { event, .. } => match event
+        match &ev {
+            WindowEvent { event, .. } => match *event
             {
                 CloseRequested => {
-                    *control_flow = ControlFlow::ExitWithCode(0);
+                    *control_flow = ControlFlow::Exit;
                 }
                 CursorMoved { position, .. } =>
                     {
@@ -221,11 +264,22 @@ fn main() {
                     }
                 Resized(size) =>
                     {
+                        let surface_desc = wgpu::SurfaceConfiguration {
+                            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                            width: size.width,
+                            height: size.height,
+                            present_mode: wgpu::PresentMode::Fifo,
+                            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                            view_formats: vec![wgpu::TextureFormat::Bgra8Unorm],
+                        };
+
+                        surface.configure(&device, &surface_desc);
                         camera.set_window_size(size.width, size.height);
                     }
                 _ => {},
             },
-            DeviceEvent { event, .. } => match event
+            DeviceEvent { event, .. } => match *event
             {
                 winit::event::DeviceEvent::MouseWheel { delta } =>
                     {
@@ -251,8 +305,6 @@ fn main() {
                             }
                             3 => {
                                 if state == winit::event::ElementState::Pressed && !imgui.io().want_capture_mouse {
-                                    let gl_window = display.gl_window();
-                                    let window = gl_window.window();
                                     let inner_size = window.inner_size();
                                     let size_vec2 = Vector2::new(inner_size.width as f32 / 2.0, inner_size.height as f32 / 2.0);
                                     pressed_right = Some((-(mouse.y as f32 - size_vec2.y)).atan2(mouse.x as f32 - size_vec2.x));
@@ -269,8 +321,6 @@ fn main() {
                         if pressed_left {
                             camera.pan(dx as f32, dy as f32);
                         } else if let Some(vec) = pressed_right {
-                            let gl_window = display.gl_window();
-                            let window = gl_window.window();
                             let inner_size = window.inner_size();
                             let size_vec2 = Vector2::new(inner_size.width as f32 / 2.0, inner_size.height as f32 / 2.0);
                             let rot = (-(mouse.y as f32 - size_vec2.y)).atan2(mouse.x as f32 - size_vec2.x);
@@ -280,21 +330,64 @@ fn main() {
                     }
                 _ => {},
             },
-            MainEventsCleared =>
-                {
-                    let gl_window = display.gl_window();
-                    platform
-                        .prepare_frame(imgui.io_mut(), gl_window.window())
-                        .expect("Failed to prepare frame");
-                    gl_window.window().request_redraw();
-                }
+            MainEventsCleared => window.request_redraw(),
             RedrawRequested(_) =>
                 {
-                    let mut ui = imgui.frame();
-                    let gl_window = display.gl_window();
-                    let window = gl_window.window();
+                    let delta_s = last_frame.elapsed();
+                    let now = Instant::now();
+                    imgui.io_mut().update_delta_time(now - last_frame);
+                    last_frame = now;
 
-                    ui_state.draw_ui(&mut ui, &data, &display);
+                    let frame = match surface.get_current_texture() {
+                        Ok(frame) => frame,
+                        Err(e) => {
+                            eprintln!("dropped frame: {e:?}");
+                            return;
+                        }
+                    };
+                    platform
+                        .prepare_frame(imgui.io_mut(), &window)
+                        .expect("Failed to prepare frame");
+
+                    let ui = imgui.frame();
+                    ui_state.draw_ui(ui, &data, ());
+
+                    let mut encoder: wgpu::CommandEncoder =
+                        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                    if last_cursor != Some(ui.mouse_cursor()) {
+                        last_cursor = Some(ui.mouse_cursor());
+                        platform.prepare_render(ui, &window);
+                    }
+
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: None,
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(clear_color),
+                                store: true,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                    });
+
+                    renderer
+                        .render(imgui.render(), &queue, &device, &mut rpass)
+                        .expect("Rendering failed");
+
+                    drop(rpass);
+
+                    queue.submit(Some(encoder.finish()));
+
+                    frame.present();
+
+                    /*let window = gl_window.window();
+
 
                     frames += 1;
                     let threshold_ms = 200;
@@ -326,14 +419,82 @@ fn main() {
                     renderer
                         .render(&mut target, draw_data)
                         .expect("Rendering failed");
-                    target.finish().expect("Failed to swap buffers");
+                    target.finish().expect("Failed to swap buffers");*/
                 }
-            event =>
-                {
-                    let gl_window = display.gl_window();
-                    let window = gl_window.window();
-                    platform.handle_event(imgui.io_mut(), window, &event);
-                }
+            _ => {}
         }
+
+        platform.handle_event(imgui.io_mut(), &window, &ev);
     });
+}
+
+#[cfg(web_platform)]
+mod wasm {
+    use std::num::NonZeroU32;
+
+    use softbuffer::{Surface, SurfaceExtWeb};
+    use wasm_bindgen::prelude::*;
+    use winit::{
+        event::{Event, WindowEvent},
+        window::Window,
+    };
+
+    #[wasm_bindgen(start)]
+    pub fn run() {
+        console_log::init_with_level(log::Level::Debug).expect("error initializing logger");
+
+        #[allow(clippy::main_recursion)]
+            let _ = super::main();
+    }
+
+    pub fn insert_canvas(window: &Window) {
+        use winit::platform::web::WindowExtWebSys;
+
+        let canvas = window.canvas().unwrap();
+        let mut surface = Surface::from_canvas(canvas.clone()).unwrap();
+        surface
+            .resize(
+                NonZeroU32::new(canvas.width()).unwrap(),
+                NonZeroU32::new(canvas.height()).unwrap(),
+            )
+            .unwrap();
+        let mut buffer = surface.buffer_mut().unwrap();
+        buffer.fill(0xFFF0000);
+        buffer.present().unwrap();
+    }
+
+    pub fn log_event(log_list: &web_sys::Element, event: &Event<()>) {
+        log::debug!("{:?}", event);
+
+        // Getting access to browser logs requires a lot of setup on mobile devices.
+        // So we implement this basic logging system into the page to give developers an easy alternative.
+        // As a bonus its also kind of handy on desktop.
+        let event = match event {
+            Event::WindowEvent {
+                event: WindowEvent::RedrawRequested,
+                ..
+            } => None,
+            Event::WindowEvent { event, .. } => Some(format!("{event:?}")),
+            Event::Resumed | Event::Suspended => Some(format!("{event:?}")),
+            _ => None,
+        };
+        if let Some(event) = event {
+            let window = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            let log = document.create_element("li").unwrap();
+
+            let date = js_sys::Date::new_0();
+            log.set_text_content(Some(&format!(
+                "{:02}:{:02}:{:02}.{:03}: {event}",
+                date.get_hours(),
+                date.get_minutes(),
+                date.get_seconds(),
+                date.get_milliseconds(),
+            )));
+
+            log_list
+                .insert_before(&log, log_list.first_child().as_ref())
+                .unwrap();
+        }
+    }
 }

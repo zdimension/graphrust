@@ -9,21 +9,68 @@ edition = "2021"
 array_tool = "1.0.3"
 chrono = "0.4"
 derivative = "2.2.0"
-glium = { version = "*", features = ["glutin"]}
-imgui = { version = "0.11.0", features = ["tables-api"] }
-imgui-glium-renderer = "0.11.0"
-imgui-winit-support = "0.11.0"
+egui = "0.25.0"
 instant = "0.1.12"
 itertools = "0.12.0"
 nalgebra = "0.32.3"
+pollster = "0.3.0"
 simsearch = "0.2.4"
 speedy = "0.8.7"
+wgpu = "0.17"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
 chrono = { version = "0.4", features=["wasmbind"] }
-js-sys = "0.3"
-web-sys = "0.3"
+log = "0.4.17"
 
+[target.'cfg(target_family = "wasm")'.dependencies.web_sys]
+package = "web-sys"
+version = "0.3.64"
+features = [
+    'AbortController',
+    'AbortSignal',
+    'Blob',
+    'console',
+    'CssStyleDeclaration',
+    'Document',
+    'DomException',
+    'DomRect',
+    'DomRectReadOnly',
+    'Element',
+    'Event',
+    'EventTarget',
+    'FocusEvent',
+    'HtmlCanvasElement',
+    'HtmlElement',
+    'HtmlImageElement',
+    'ImageBitmap',
+    'ImageBitmapOptions',
+    'ImageBitmapRenderingContext',
+    'ImageData',
+    'IntersectionObserver',
+    'IntersectionObserverEntry',
+    'KeyboardEvent',
+    'MediaQueryList',
+    'MessageChannel',
+    'MessagePort',
+    'Node',
+    'PageTransitionEvent',
+    'PointerEvent',
+    'PremultiplyAlpha',
+    'ResizeObserver',
+    'ResizeObserverBoxOptions',
+    'ResizeObserverEntry',
+    'ResizeObserverOptions',
+    'ResizeObserverSize',
+    'VisibilityState',
+    'Window',
+    'WheelEvent',
+    'Url',
+]
 
 [profile.release]
 debug = 1
+
+[workspace]
+members = [
+    "run-wasm",
+]
