@@ -32,7 +32,7 @@ pub fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<usi
 {
     unsafe {
         let storage = imgui::sys::igGetStateStorage();
-        let id = imgui::sys::igGetIDStr(label.as_ptr() as _);
+        let id = imgui::sys::igGetID_Str(label.as_ptr() as _);
 
         struct ComboFilterData
         {
@@ -84,7 +84,7 @@ pub fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<usi
         let mut content_min = imgui::sys::ImVec2 { x: 0.0, y: 0.0 };
         imgui::sys::igGetItemRectMin(&mut content_min);
         let pos = add(content_min, imgui::sys::ImVec2 { x: expected_w - sz, y: 0.0 });
-        let text_col = imgui::sys::igGetColorU32Col(imgui::sys::ImGuiCol_Text as i32, 1.0);
+        let text_col = imgui::sys::igGetColorU32_Col(imgui::sys::ImGuiCol_Text as i32, 1.0);
         render_arrow(
             imgui::sys::igGetWindowDrawList(),
             add(pos, ImVec2 { x: 0f32.max((size.x - FONT_SIZE) * 0.5), y: 0f32.max((size.y - FONT_SIZE) * 0.5) }),
@@ -104,8 +104,8 @@ pub fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<usi
             imgui::sys::ImGuiCond_None as i32);
         ui.popup(name_popup, ||
             {
-                imgui::sys::igPushStyleColorVec4(imgui::sys::ImGuiCol_FrameBg as i32, imgui::sys::ImVec4 { x: 240.0 / 255.0, y: 240.0 / 255.0, z: 240.0 / 255.0, w: 255.0 });
-                imgui::sys::igPushStyleColorVec4(imgui::sys::ImGuiCol_Text as i32, imgui::sys::ImVec4 { x: 0.0, y: 0.0, z: 0.0, w: 255.0 });
+                imgui::sys::igPushStyleColor_Vec4(imgui::sys::ImGuiCol_FrameBg as i32, imgui::sys::ImVec4 { x: 240.0 / 255.0, y: 240.0 / 255.0, z: 240.0 / 255.0, w: 255.0 });
+                imgui::sys::igPushStyleColor_Vec4(imgui::sys::ImGuiCol_Text as i32, imgui::sys::ImVec4 { x: 0.0, y: 0.0, z: 0.0, w: 255.0 });
                 imgui::sys::igPushItemWidth(-f32::MIN_POSITIVE);
 
                 if is_new_open
@@ -144,10 +144,10 @@ pub fn combo_with_filter<'a>(ui: &Ui, label: &str, current_item: &mut Option<usi
                         } else {
                             i
                         };
-                        imgui::sys::igPushIDInt(idx as i32);
+                        imgui::sys::igPushID_Int(idx as i32);
                         let item_selected = Some(idx) == *current_item;
                         let item_text = CString::new(viewer_data.persons[idx].name).expect("What");
-                        if imgui::sys::igSelectableBool(item_text.as_ptr(), item_selected, 0, ImVec2 { x: 0.0, y: 0.0 })
+                        if imgui::sys::igSelectable_Bool(item_text.as_ptr(), item_selected, 0, ImVec2 { x: 0.0, y: 0.0 })
                         {
                             value_changed = true;
                             *current_item = Some(idx);

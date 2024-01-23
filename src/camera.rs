@@ -1,5 +1,5 @@
 use nalgebra::{Matrix4, Orthographic3, Similarity3, Vector3};
-use winit::dpi::PhysicalPosition;
+use imgui_winit_support::winit::dpi::PhysicalPosition;
 
 /// 2D planar camera
 pub struct Camera

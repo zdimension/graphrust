@@ -9,39 +9,15 @@ edition = "2021"
 array_tool = "1.0.3"
 chrono = "0.4"
 derivative = "2.2.0"
-glium = "0.32.1"
-glutin = "0.29"
-imgui = { version = "0.9.0", features = ["tables-api"] }
-imgui-glium-renderer = "0.9.0"
-imgui-winit-support = "0.9.0"
+glium = { version = "*", features = ["glutin"]}
+imgui = { version = "0.11.0", features = ["tables-api"] }
+imgui-glium-renderer = "0.11.0"
+imgui-winit-support = "0.11.0"
 instant = "0.1.12"
-itertools = "0.10.5"
-nalgebra = "0.31.4"
-simsearch = "0.2.3"
-speedy = "0.8.5"
-winit = "0.27.5"
-#array_tool = "1.0"
-#chrono = "0.4"
-#derivative = "2.2"
-#gl = "0.14"
-#glfw = "0.44"
-#glium = "0.32"
-#glutin = "0.29"
-#imgui = { version = "0.9.0", features=["tables-api"] }
-#imgui-glium-renderer = "0.9"
-#imgui-winit-support = { version = "0.9" }
-#itertools = "0.10"
-#nalgebra = "0.31"
-#simsearch = "0.2"
-#speedy = "0.8"
-#webbrowser = "0.5"
-#winit = { version = "0.27" }
-
-#[patch.crates-io]
-#glutin = { path = "../glutin/glutin" }
-
-[patch.crates-io]
-glutin = { git = 'https://github.com/zdimension/glutin' }
+itertools = "0.12.0"
+nalgebra = "0.32.3"
+simsearch = "0.2.4"
+speedy = "0.8.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 chrono = { version = "0.4", features=["wasmbind"] }

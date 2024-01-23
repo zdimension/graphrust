@@ -1,9 +1,11 @@
 use std::collections::{HashSet, VecDeque};
 use array_tool::vec::Intersect;
-use glium::Display;
 use itertools::Itertools;
 use crate::{Color3f, combo_with_filter, create_circle_tris, create_rectangle, Vertex, ViewerData};
 use derivative::*;
+use imgui_glium_renderer::glium::backend::Facade;
+use imgui_glium_renderer::glium::VertexBuffer;
+
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct UiState
@@ -21,7 +23,7 @@ pub struct UiState
     path_no_direct: bool,
     path_no_mutual: bool,
     path_status: String,
-    pub path_vbuf: Option<glium::VertexBuffer<Vertex>>,
+    pub path_vbuf: Option<VertexBuffer<Vertex>>,
 }
 
 
@@ -33,7 +35,7 @@ impl UiState
         self.infos_open = id.is_some();
     }
 
-    fn do_pathfinding(&mut self, data: &ViewerData, display: &Display)
+    fn do_pathfinding(&mut self, data: &ViewerData, display: &impl Facade)
     {
         let src_id = self.path_src.unwrap();
         let dest_id = self.path_dest.unwrap();
@@ -118,7 +120,7 @@ impl UiState
 
                         self.found_path = Some(path);
 
-                        self.path_vbuf = Some(glium::VertexBuffer::new(
+                        self.path_vbuf = Some(VertexBuffer::new(
                             display,
                             &verts).unwrap());
 
@@ -129,7 +131,7 @@ impl UiState
         }
     }
 
-    pub fn draw_ui(&mut self, ui: &mut imgui::Ui, data: &ViewerData, display: &Display)
+    pub fn draw_ui(&mut self, ui: &mut imgui::Ui, data: &ViewerData, display: &impl Facade)
     {
         ui.window("Graphe")
             .size([400.0, 500.0], imgui::Condition::FirstUseEver)

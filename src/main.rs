@@ -1,13 +1,11 @@
-#[macro_use]
-extern crate glium;
-extern crate imgui;
-extern crate imgui_glium_renderer;
-extern crate speedy;
-extern crate glutin;
+use imgui_glium_renderer::glium;
+use imgui_glium_renderer::glium::{implement_vertex, uniform};
 
 use instant::Instant;
 use nalgebra::Vector2;
 use simsearch::SimSearch;
+use imgui_winit_support::winit;
+use imgui_winit_support::winit::event_loop::ControlFlow;
 use winit::dpi::PhysicalPosition;
 
 use camera::Camera;
@@ -127,19 +125,19 @@ fn main() {
     use imgui_glium_renderer::Renderer;
     use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
-    let event_loop = glutin::event_loop::EventLoop::new();
-    let wb = glutin::window::WindowBuilder::new()
+    let event_loop = winit::event_loop::EventLoop::new();
+    let wb = winit::window::WindowBuilder::new()
         .with_title("Graphe")
-        .with_inner_size(glium::glutin::dpi::LogicalSize::new(500f64, 500f64));
-    let cb = glutin::ContextBuilder::new()
+        .with_inner_size(winit::dpi::LogicalSize::new(500f64, 500f64));
+    let cb = glium::glutin::ContextBuilder::new()
         .with_multisampling(4)
         .with_vsync(true)
         ;
+
     let display = glium::Display::new(wb, cb, &event_loop).expect("Failed to initialize display");
 
     let mut imgui = Context::create();
     imgui.set_ini_filename(None);
-
 
     let mut platform = WinitPlatform::init(&mut imgui);
     {
@@ -175,6 +173,7 @@ fn main() {
     let mut renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize imgui renderer");
 
     let vertex_buffer = glium::VertexBuffer::new(&display, &data.vertices).unwrap();
+    log!("Vertex buffer size: {}", vertex_buffer.len());
     let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
     let program = glium::Program::from_source(&display, include_str!("shaders/graph.vert"), include_str!("shaders/graph.frag"), None).unwrap();
@@ -192,7 +191,7 @@ fn main() {
     event_loop.run(move |ev, _, control_flow| {
         let next_frame_time = Instant::now() +
             std::time::Duration::from_nanos(16_666_667);
-        *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
+        *control_flow = winit::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
         {
             let gl_window = display.gl_window();
@@ -214,7 +213,7 @@ fn main() {
             WindowEvent { event, .. } => match event
             {
                 CloseRequested => {
-                    *control_flow = glutin::event_loop::ControlFlow::Exit;
+                    *control_flow = ControlFlow::ExitWithCode(0);
                 }
                 CursorMoved { position, .. } =>
                     {
@@ -228,15 +227,15 @@ fn main() {
             },
             DeviceEvent { event, .. } => match event
             {
-                glutin::event::DeviceEvent::MouseWheel { delta } =>
+                winit::event::DeviceEvent::MouseWheel { delta } =>
                     {
                         if imgui.io().want_capture_mouse {
                             return;
                         }
                         let dy = match delta
                         {
-                            glutin::event::MouseScrollDelta::LineDelta(_dx, dy) => dy,
-                            glutin::event::MouseScrollDelta::PixelDelta(glutin::dpi::PhysicalPosition { y, .. }) => y as f32,
+                            winit::event::MouseScrollDelta::LineDelta(_dx, dy) => dy,
+                            winit::event::MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition { y, .. }) => y as f32,
                         };
                         camera.zoom(dy, mouse);
                     }

@@ -6,6 +6,8 @@ use speedy::Readable;
 use crate::{create_rectangle, log, ModularityClass, Person, ViewerData};
 use crate::utils::{SliceExt, str_from_null_terminated_utf8};
 
+use imgui_glium_renderer::glium;
+
 // 24bpp color structure
 #[derive(Copy, Clone)]
 #[derive(Readable)]
@@ -219,7 +221,7 @@ pub struct GraphFile
 pub fn load_binary<'a>() -> ViewerData<'a>
 {
     log!("Loading binary");
-    let content: GraphFile = GraphFile::read_from_file("graph2.bin").unwrap();
+    let content: GraphFile = GraphFile::read_from_file("graph2_4.bin").unwrap();
     log!("Binary content loaded");
     log!("Class count: {}", content.class_count);
     log!("Node count: {}", content.node_count);
