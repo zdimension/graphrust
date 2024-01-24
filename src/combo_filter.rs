@@ -1,25 +1,22 @@
 // Ugly unsafe code ahead
 // here be dragons
 
-
-
+use crate::app::ViewerData;
+use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
+use eframe::epaint;
+use eframe::epaint::{Shape, Stroke};
+use egui::style::WidgetVisuals;
+use egui::text::LayoutJob;
+use egui::{
+    AboveOrBelow, Align, ComboBox, FontId, Id, Layout, Painter, Response, RichText, ScrollArea,
+    SelectableLabel, Sense, TextEdit, TextStyle, Ui, Widget, WidgetText,
+};
 use std::cell::RefCell;
 use std::ops::DerefMut;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use eframe::emath::{Align2, NumExt, Rect, vec2, Vec2};
-use eframe::epaint;
-use eframe::epaint::{Shape, Stroke};
-use egui::{AboveOrBelow, Align, ComboBox, FontId, Id, Layout, Painter, Response, RichText, ScrollArea, SelectableLabel, Sense, TextEdit, TextStyle, Ui, Widget, WidgetText};
-use egui::style::WidgetVisuals;
-use egui::text::LayoutJob;
-use crate::app::ViewerData;
 
-fn paint_icon(
-    painter: &Painter,
-    rect: Rect,
-    visuals: &WidgetVisuals,
-) {
+fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
     let rect = Rect::from_center_size(
         rect.center(),
         vec2(rect.width() * 0.7, rect.height() * 0.45),
@@ -80,17 +77,18 @@ fn button_frame(
 }
 
 /// Drop-down combobox with filtering
-pub fn combo_with_filter(ui: &mut Ui, label: &str, current_item: &mut Option<usize>, viewer_data: &ViewerData<'_>) -> Response
-{
+pub fn combo_with_filter(
+    ui: &mut Ui,
+    label: &str,
+    current_item: &mut Option<usize>,
+    viewer_data: &ViewerData<'_>,
+) -> Response {
     #[derive(Default, Clone)]
-    struct ComboFilterState
-    {
+    struct ComboFilterState {
         item_score_vector: Vec<(usize, isize)>,
         pattern: String,
         first_open: bool,
     }
-
-
 
     type StateType = Arc<Mutex<ComboFilterState>>;
     let id = Id::new(label).with("combo_with_filter");
@@ -121,8 +119,7 @@ pub fn combo_with_filter(ui: &mut Ui, label: &str, current_item: &mut Option<usi
             f32::INFINITY
         };
 
-        let selected_text = WidgetText::from(match current_item
-        {
+        let selected_text = WidgetText::from(match current_item {
             Some(value) => viewer_data.persons[*value].name,
             None => "",
         });
@@ -157,11 +154,7 @@ pub fn combo_with_filter(ui: &mut Ui, label: &str, current_item: &mut Option<usi
                 ui.style().interact(&response)
             };
 
-            paint_icon(
-                ui.painter(),
-                icon_rect.expand(visuals.expansion),
-                visuals,
-            );
+            paint_icon(ui.painter(), icon_rect.expand(visuals.expansion), visuals);
 
             let text_rect = Align2::LEFT_CENTER.align_size_within_rect(galley.size(), rect);
             ui.painter()
@@ -176,65 +169,75 @@ pub fn combo_with_filter(ui: &mut Ui, label: &str, current_item: &mut Option<usi
     //let total_rect = button_response.rect.set_height(button_response.rect + )
 
     let mut sel_changed = false;
-    let inner = egui::popup::popup_below_widget(
-        ui,
-        popup_id,
-        &button_response,
-        |ui| {
-            ui.vertical(|ui| {
-                let binding = ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
-                let mut state = binding.lock().unwrap();
+    let inner = egui::popup::popup_below_widget(ui, popup_id, &button_response, |ui| {
+        ui.vertical(|ui| {
+            let binding =
+                ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
+            let mut state = binding.lock().unwrap();
 
-                let txt = ui.add_sized(ui.available_size() * vec2(1.0, 0.0), TextEdit::singleline(&mut state.pattern));
-                if !state.first_open {
-                    state.first_open = true;
-                    ui.memory_mut(|m| m.request_focus(txt.id));
-                }
-                let changed = txt.changed();
-                let mut is_need_filter = false;
+            let txt = ui.add_sized(
+                ui.available_size() * vec2(1.0, 0.0),
+                TextEdit::singleline(&mut state.pattern),
+            );
+            if !state.first_open {
+                state.first_open = true;
+                ui.memory_mut(|m| m.request_focus(txt.id));
+            }
+            let changed = txt.changed();
+            let mut is_need_filter = false;
 
-                if !state.pattern.is_empty()
-                {
-                    is_need_filter = true;
-                }
+            if !state.pattern.is_empty() {
+                is_need_filter = true;
+            }
 
-                if changed && is_need_filter
-                {
-                    let res = viewer_data.engine.search(state.pattern.as_str());
-                    state.item_score_vector = res.iter()
-                        .take(100)
-                        .map(|i| (*i, 0_isize))
-                        .collect();
-                }
+            if changed && is_need_filter {
+                let res = viewer_data.engine.search(state.pattern.as_str());
+                state.item_score_vector = res.iter().take(100).map(|i| (*i, 0_isize)).collect();
+            }
 
-                let show_count = 100.min(if is_need_filter { state.item_score_vector.len() } else { viewer_data.persons.len() });
+            let show_count = 100.min(if is_need_filter {
+                state.item_score_vector.len()
+            } else {
+                viewer_data.persons.len()
+            });
 
-                ScrollArea::vertical().max_height(ui.spacing().combo_height).show(ui, |ui| {
-                    for i in 0..show_count
-                    {
+            ScrollArea::vertical()
+                .max_height(ui.spacing().combo_height)
+                .show(ui, |ui| {
+                    for i in 0..show_count {
                         let idx = if is_need_filter {
                             state.item_score_vector[i].0
                         } else {
                             i
                         };
 
-                        if ui.allocate_ui_with_layout(
-                            ui.available_size() * vec2(1.0, 0.0),
-                            Layout::centered_and_justified(ui.layout().main_dir()).with_cross_align(Align::LEFT),
-                            |ui| ui.add(SelectableLabel::new(
-                                *current_item == Some(idx),
-                                viewer_data.persons[idx].name,
-                            ))).inner.clicked() {
+                        if ui
+                            .allocate_ui_with_layout(
+                                ui.available_size() * vec2(1.0, 0.0),
+                                Layout::centered_and_justified(ui.layout().main_dir())
+                                    .with_cross_align(Align::LEFT),
+                                |ui| {
+                                    ui.add(SelectableLabel::new(
+                                        *current_item == Some(idx),
+                                        viewer_data.persons[idx].name,
+                                    ))
+                                },
+                            )
+                            .inner
+                            .clicked()
+                        {
                             *current_item = Some(idx);
                             sel_changed = true;
                         }
                     }
                 });
-            })
-        },
-    );
+        })
+    });
     if let Some(frame_r) = inner {
-        if !sel_changed && !frame_r.response.clicked_elsewhere() && button_response.clicked_elsewhere() {
+        if !sel_changed
+            && !frame_r.response.clicked_elsewhere()
+            && button_response.clicked_elsewhere()
+        {
             ui.memory_mut(|mem| mem.open_popup(popup_id));
         }
     }

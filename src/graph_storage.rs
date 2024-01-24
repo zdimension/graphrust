@@ -1,21 +1,19 @@
+use crate::app::{ModularityClass, Person, ViewerData};
+use crate::geom_draw::create_rectangle;
+use crate::log;
 use itertools::Itertools;
 use nalgebra::Vector2;
 use simsearch::SimSearch;
 use speedy::Readable;
-use crate::app::{ModularityClass, Person, ViewerData};
-use crate::geom_draw::create_rectangle;
-use crate::log;
 
-use crate::utils::{SliceExt, str_from_null_terminated_utf8};
+use crate::utils::{str_from_null_terminated_utf8, SliceExt};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 // 24bpp color structure
-#[derive(Copy, Clone)]
-#[derive(Readable)]
-pub struct Color3b
-{
+#[derive(Copy, Clone, Readable)]
+pub struct Color3b {
     r: u8,
     g: u8,
     b: u8,
@@ -23,17 +21,14 @@ pub struct Color3b
 
 // same but f32
 #[derive(Copy, Clone)]
-pub struct Color3f
-{
+pub struct Color3f {
     pub r: f32,
     pub g: f32,
     pub b: f32,
 }
 
-impl Color3b
-{
-    pub fn to_f32(self) -> Color3f
-    {
+impl Color3b {
+    pub fn to_f32(self) -> Color3f {
         Color3f {
             r: self.r as f32 / 255.0,
             g: self.g as f32 / 255.0,
@@ -42,19 +37,12 @@ impl Color3b
     }
 }
 
-impl Color3f
-{
-    pub fn new(r: f32, g: f32, b: f32) -> Color3f
-    {
-        Color3f {
-            r,
-            g,
-            b,
-        }
+impl Color3f {
+    pub fn new(r: f32, g: f32, b: f32) -> Color3f {
+        Color3f { r, g, b }
     }
 
-    pub fn average(&self, other: Color3f) -> Color3f
-    {
+    pub fn average(&self, other: Color3f) -> Color3f {
         Color3f {
             r: (self.r + other.r) / 2.0,
             g: (self.g + other.g) / 2.0,
@@ -72,30 +60,21 @@ unsafe impl glium::vertex::Attribute for Color3f
 }*/
 
 /// 2D point/vector.
-#[derive(Copy, Clone)]
-#[derive(Readable)]
-pub struct Point
-{
+#[derive(Copy, Clone, Readable)]
+pub struct Point {
     pub x: f32,
     pub y: f32,
 }
 
-impl From<Point> for Vector2<f32>
-{
-    fn from(p: Point) -> Vector2<f32>
-    {
+impl From<Point> for Vector2<f32> {
+    fn from(p: Point) -> Vector2<f32> {
         Vector2::new(p.x, p.y)
     }
 }
 
-impl From<Vector2<f32>> for Point
-{
-    fn from(v: Vector2<f32>) -> Point
-    {
-        Point {
-            x: v.x,
-            y: v.y,
-        }
+impl From<Vector2<f32>> for Point {
+    fn from(v: Vector2<f32>) -> Point {
+        Point { x: v.x, y: v.y }
     }
 }
 /*
@@ -107,82 +86,84 @@ unsafe impl glium::vertex::Attribute for Point
     }
 }
 */
-impl Point
-{
-    pub fn new(x: f32, y: f32) -> Point
-    {
+impl Point {
+    pub fn new(x: f32, y: f32) -> Point {
         Point { x, y }
     }
 
     /// Returns the unit vector with angle theta.
-    pub fn polar(theta: f32) -> Point
-    {
-        Point { x: theta.cos(), y: theta.sin() }
+    pub fn polar(theta: f32) -> Point {
+        Point {
+            x: theta.cos(),
+            y: theta.sin(),
+        }
     }
 
     /// Returns the distance between the point and the origin.
-    pub fn norm(&self) -> f32
-    {
+    pub fn norm(&self) -> f32 {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 
     /// Returns the canonical orthogonal vector.
-    pub fn ortho(&self) -> Point
-    {
-        Point { x: -self.y, y: self.x }
+    pub fn ortho(&self) -> Point {
+        Point {
+            x: -self.y,
+            y: self.x,
+        }
     }
 
     /// Normalizes the vector.
-    pub fn normalized(&self) -> Point
-    {
+    pub fn normalized(&self) -> Point {
         *self / self.norm()
     }
 }
 
-impl std::ops::Add for Point
-{
+impl std::ops::Add for Point {
     type Output = Point;
 
-    fn add(self, other: Point) -> Point
-    {
-        Point { x: self.x + other.x, y: self.y + other.y }
+    fn add(self, other: Point) -> Point {
+        Point {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
     }
 }
 
-impl std::ops::Sub for Point
-{
+impl std::ops::Sub for Point {
     type Output = Point;
 
-    fn sub(self, other: Point) -> Point
-    {
-        Point { x: self.x - other.x, y: self.y - other.y }
+    fn sub(self, other: Point) -> Point {
+        Point {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
     }
 }
 
-impl std::ops::Mul<f32> for Point
-{
+impl std::ops::Mul<f32> for Point {
     type Output = Point;
 
-    fn mul(self, other: f32) -> Point
-    {
-        Point { x: self.x * other, y: self.y * other }
+    fn mul(self, other: f32) -> Point {
+        Point {
+            x: self.x * other,
+            y: self.y * other,
+        }
     }
 }
 
-impl std::ops::Div<f32> for Point
-{
+impl std::ops::Div<f32> for Point {
     type Output = Point;
 
-    fn div(self, other: f32) -> Point
-    {
-        Point { x: self.x / other, y: self.y / other }
+    fn div(self, other: f32) -> Point {
+        Point {
+            x: self.x / other,
+            y: self.y / other,
+        }
     }
 }
-
 
 #[derive(Readable)]
-pub struct NodeStore
-{
+pub struct NodeStore {
     pub position: Point,
     pub size: f32,
     pub class: u16,
@@ -191,15 +172,13 @@ pub struct NodeStore
 }
 
 #[derive(Readable)]
-pub struct EdgeStore
-{
+pub struct EdgeStore {
     pub a: u32,
     pub b: u32,
 }
 
 #[derive(Readable)]
-pub struct GraphFile
-{
+pub struct GraphFile {
     pub class_count: u16,
     #[speedy(length = class_count)]
     pub classes: Vec<Color3b>,
@@ -253,8 +232,7 @@ fn load_file() -> GraphFile {
     panic!("Cannot load graph file");
 }
 
-pub fn load_binary<'a>() -> ViewerData<'a>
-{
+pub fn load_binary<'a>() -> ViewerData<'a> {
     log!("Loading binary");
     let content: GraphFile = load_file();
     log!("Binary content loaded");
@@ -264,13 +242,14 @@ pub fn load_binary<'a>() -> ViewerData<'a>
 
     log!("Processing modularity classes");
 
-    let modularity_classes = content.classes
-        .iter().enumerate()
+    let modularity_classes = content
+        .classes
+        .iter()
+        .enumerate()
         .map(|(id, color)| ModularityClass::new(color.to_f32(), id as u16))
         .collect_vec();
 
-    struct VertexInter
-    {
+    struct VertexInter {
         a: (u32, Point),
         b: (u32, Point),
         dist: f32,
@@ -279,16 +258,23 @@ pub fn load_binary<'a>() -> ViewerData<'a>
 
     log!("Processing edges");
 
-    let mut edge_data = content.edges
+    let mut edge_data = content
+        .edges
         .iter()
-        .map(|edge|
-            {
-                let a = &content.nodes[edge.a as usize];
-                let b = &content.nodes[edge.b as usize];
-                let dist = (a.position - b.position).norm();
-                let color = modularity_classes[a.class as usize].color.average(modularity_classes[b.class as usize].color);
-                VertexInter { a: (edge.a, a.position), b: (edge.b, b.position), dist, color }
-            })
+        .map(|edge| {
+            let a = &content.nodes[edge.a as usize];
+            let b = &content.nodes[edge.b as usize];
+            let dist = (a.position - b.position).norm();
+            let color = modularity_classes[a.class as usize]
+                .color
+                .average(modularity_classes[b.class as usize].color);
+            VertexInter {
+                a: (edge.a, a.position),
+                b: (edge.b, b.position),
+                dist,
+                color,
+            }
+        })
         .collect_vec();
 
     log!("Sorting edges");
@@ -296,34 +282,35 @@ pub fn load_binary<'a>() -> ViewerData<'a>
 
     log!("Drawing edges");
 
-    let edge_vertices = edge_data.iter()
-        .flat_map(|edge|
-            {
-                create_rectangle(edge.a.1, edge.b.1, edge.color, 1.0)
-            })
+    let edge_vertices = edge_data
+        .iter()
+        .flat_map(|edge| create_rectangle(edge.a.1, edge.b.1, edge.color, 1.0))
         .collect_vec();
 
     let edge_sizes = edge_data.iter().map(|edge| edge.dist).collect_vec();
 
     log!("Processing nodes");
 
-    let mut person_data = content.nodes.iter()
-        .map(|node|
-            unsafe {
-                Person::new(node.position, node.size, node.class as u16,
-                            str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)),
-                            str_from_null_terminated_utf8(content.names.as_ptr().offset(node.offset_name as isize)),
-                )
-            }
-        )
+    let mut person_data = content
+        .nodes
+        .iter()
+        .map(|node| unsafe {
+            Person::new(
+                node.position,
+                node.size,
+                node.class as u16,
+                str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)),
+                str_from_null_terminated_utf8(
+                    content.names.as_ptr().offset(node.offset_name as isize),
+                ),
+            )
+        })
         .collect_vec();
 
     log!("Generating neighbor lists");
 
-    for (i, edge) in edge_data.iter().enumerate()
-    {
-        if edge.a.0 == edge.b.0
-        {
+    for (i, edge) in edge_data.iter().enumerate() {
+        if edge.a.0 == edge.b.0 {
             continue;
         }
         let (p1, p2) = person_data.get_two_mut(edge.a.0 as usize, edge.b.0 as usize);
@@ -333,8 +320,7 @@ pub fn load_binary<'a>() -> ViewerData<'a>
 
     log!("Initializing search engine");
     let mut engine: SimSearch<usize> = SimSearch::new();
-    for (i, person) in person_data.iter().enumerate()
-    {
+    for (i, person) in person_data.iter().enumerate() {
         engine.insert(i, person.name);
     }
 
@@ -347,6 +333,6 @@ pub fn load_binary<'a>() -> ViewerData<'a>
         vertices: edge_vertices,
         modularity_classes,
         edge_sizes,
-        engine
+        engine,
     }
 }
