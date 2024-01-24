@@ -1,2 +1,3 @@
 /target
-graph2.bin
+*.bin
+dist/

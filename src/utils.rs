@@ -7,7 +7,7 @@ macro_rules! log
 {
     ($($arg:tt)*) =>
     {
-        println!("[{}] [{}:{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), file!(), line!(), format_args!($($arg)*));
+        log::info!("[{}] [{}:{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), file!(), line!(), format_args!($($arg)*));
     }
 }
 
@@ -43,4 +43,3 @@ impl<T> SliceExt for [T] {
         }
     }
 }
-

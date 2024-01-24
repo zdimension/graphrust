@@ -2,10 +2,14 @@ use itertools::Itertools;
 use nalgebra::Vector2;
 use simsearch::SimSearch;
 use speedy::Readable;
+use crate::app::{ModularityClass, Person, ViewerData};
+use crate::geom_draw::create_rectangle;
+use crate::log;
 
-use crate::{create_rectangle, log, ModularityClass, Person, ViewerData};
 use crate::utils::{SliceExt, str_from_null_terminated_utf8};
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 // 24bpp color structure
 #[derive(Copy, Clone)]
@@ -217,10 +221,42 @@ pub struct GraphFile
     pub names: Vec<u8>,
 }
 
+const GRAPH_NAME: &str = "graph2_4.bin";
+
+#[cfg(not(target_arch = "wasm32"))]
+fn load_file() -> GraphFile {
+    GraphFile::read_from_file(GRAPH_NAME).unwrap()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn sleep(ms: i32) -> js_sys::Promise {
+    js_sys::Promise::new(&mut |resolve, _| {
+        eframe::web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms)
+            .unwrap();
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+fn load_file() -> GraphFile {
+    let wnd = eframe::web_sys::window().unwrap();
+    let resp = wnd.get("graph");
+    if let Some(val) = resp {
+        if !val.is_undefined() {
+            let u8a = js_sys::Uint8Array::new(&val);
+            let bytes = u8a.to_vec();
+            return GraphFile::read_from_buffer(bytes.as_slice()).unwrap();
+        }
+    }
+    panic!("Cannot load graph file");
+}
+
 pub fn load_binary<'a>() -> ViewerData<'a>
 {
     log!("Loading binary");
-    let content: GraphFile = GraphFile::read_from_file("graph2_4.bin").unwrap();
+    let content: GraphFile = load_file();
     log!("Binary content loaded");
     log!("Class count: {}", content.class_count);
     log!("Node count: {}", content.node_count);

@@ -1,4 +1,5 @@
-use crate::{Color3f, Point, Vertex};
+use crate::app::Vertex;
+use crate::graph_storage::{Color3f, Point};
 
 /// Draws a line between a and b with the specified thickness and color.
 /// Result is a list of vertices to be used as a GL TriangleList.

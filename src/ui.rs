@@ -1,26 +1,32 @@
 use std::collections::{HashSet, VecDeque};
+use std::sync::{Arc, Mutex};
 use array_tool::vec::Intersect;
 use itertools::Itertools;
-use crate::{Color3f, combo_with_filter, create_circle_tris, create_rectangle, Vertex, ViewerData};
 use derivative::*;
+use eframe::{egui_glow, glow};
+use egui::{CollapsingHeader, Hyperlink, OpenUrl, Vec2};
+use crate::app::ViewerData;
+use crate::combo_filter::combo_with_filter;
+use crate::geom_draw::{create_circle_tris, create_rectangle};
+use crate::graph_storage::Color3f;
 
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct UiState
 {
-    g_show_nodes: bool,
+    pub g_show_nodes: bool,
     #[derivative(Default(value = "true"))]
-    g_show_edges: bool,
-    infos_current: Option<usize>,
-    infos_open: bool,
-    path_src: Option<usize>,
-    path_dest: Option<usize>,
-    found_path: Option<Vec<usize>>,
-    exclude_ids: Vec<usize>,
-    path_dirty: bool,
-    path_no_direct: bool,
-    path_no_mutual: bool,
-    path_status: String,
+    pub g_show_edges: bool,
+    pub infos_current: Option<usize>,
+    pub infos_open: bool,
+    pub path_src: Option<usize>,
+    pub path_dest: Option<usize>,
+    pub found_path: Option<Vec<usize>>,
+    pub exclude_ids: Vec<usize>,
+    pub path_dirty: bool,
+    pub path_no_direct: bool,
+    pub path_no_mutual: bool,
+    pub path_status: String,
     //pub path_vbuf: Option<VertexBuffer<Vertex>>,
 }
 
@@ -33,7 +39,7 @@ impl UiState
         self.infos_open = id.is_some();
     }
 
-    fn do_pathfinding(&mut self, data: &ViewerData, display: ())
+    fn do_pathfinding(&mut self, data: &ViewerData, _display: ())
     {
         let src_id = self.path_src.unwrap();
         let dest_id = self.path_dest.unwrap();
@@ -129,169 +135,173 @@ impl UiState
         }
     }
 
-    pub fn draw_ui(&mut self, ui: &mut imgui::Ui, data: &ViewerData, display: ())
+    pub fn draw_ui(&mut self, egui: &egui::Context, _frame: &mut eframe::Frame, data: &ViewerData<'_>, display: ())
     {
-        ui.window("Graphe")
-            .size([400.0, 500.0], imgui::Condition::FirstUseEver)
-            .build(||
+        egui::SidePanel::left("settings")
+            .resizable(false)
+            //.max_size([400.0, f32::INFINITY])
+            .show(egui, |ui|
                 {
-                    if ui.collapsing_header("Affichage", imgui::TreeNodeFlags::DEFAULT_OPEN)
-                    {
-                        ui.checkbox("Afficher les nœuds", &mut self.g_show_nodes);
-                        ui.checkbox("Afficher les liens", &mut self.g_show_edges);
-                    }
+                    CollapsingHeader::new("Affichage").default_open(true).show(ui, |ui|
+                        {
+                            ui.checkbox(&mut self.g_show_nodes, "Afficher les nœuds");
+                            ui.checkbox(&mut self.g_show_edges, "Afficher les liens");
+                        });
 
-                    if ui.collapsing_header("Chemin le plus court", imgui::TreeNodeFlags::DEFAULT_OPEN)
-                    {
-                        let c1 = combo_with_filter(ui, "#path_src", &mut self.path_src, data);
-                        if c1
+                    CollapsingHeader::new("Chemin le plus court").default_open(true).show(ui, |ui|
                         {
-                            self.set_infos_current(self.path_src);
-                        }
-                        ui.same_line();
-                        if ui.button("x##src")
-                        {
-                            self.path_src = None;
-                            self.found_path = None;
-                        }
-
-                        let c2 = combo_with_filter(ui, "#path_dest", &mut self.path_dest, data);
-                        if c2
-                        {
-                            self.set_infos_current(self.path_dest);
-                        }
-                        ui.same_line();
-                        if ui.button("x##dest")
-                        {
-                            self.path_dest = None;
-                            self.found_path = None;
-                        }
-
-                        let exw = ui.calc_item_width();
-                        ui.set_next_item_width(exw);
-                        ui.text("Exclure :");
-                        ui.same_line();
-                        if ui.button("x##exclall")
-                        {
-                            self.exclude_ids.clear();
-                        }
-
-                        {
-                            let mut cur_excl = None;
-                            let mut del_excl = None;
-                            for (i, id) in self.exclude_ids.iter().enumerate()
-                            {
-                                if ui.button_with_size(format!("{}##exclbtn", data.persons[*id].name), [exw, 0.0])
+                            let c1 = ui.horizontal(|ui| {
+                                let c = combo_with_filter(ui, "#path_src", &mut self.path_src, data);
+                                if c.changed()
                                 {
-                                    cur_excl = Some(*id);
+                                    self.set_infos_current(self.path_src);
                                 }
-                                ui.same_line();
-                                if ui.button(format!("x##delexcl{}", i))
+                                if ui.button("x").clicked()
                                 {
-                                    del_excl = Some(i);
+                                    self.path_src = None;
+                                    self.found_path = None;
+                                }
+                                c
+                            }).inner;
+
+                            let c2 = ui.horizontal(|ui| {
+                                let c = combo_with_filter(ui, "#path_dest", &mut self.path_dest, data);
+                                if c.changed()
+                                {
+                                    self.set_infos_current(self.path_dest);
+                                }
+                                if ui.button("x").clicked()
+                                {
+                                    self.path_dest = None;
+                                    self.found_path = None;
+                                }
+                                c
+                            }).inner;
+
+                            //let exw = ui.calc_item_width();
+                            //ui.set_next_item_width(exw);
+                            ui.horizontal(|ui| {
+                                ui.label("Exclure :");
+                                if ui.button("x").clicked()
+                                {
+                                    self.exclude_ids.clear();
+                                }
+                            });
+
+                            {
+                                let mut cur_excl = None;
+                                let mut del_excl = None;
+                                for (i, id) in self.exclude_ids.iter().enumerate()
+                                {
+                                    ui.horizontal(|ui| {
+                                        if ui.button(data.persons[*id].name).clicked()
+                                        {
+                                            cur_excl = Some(*id);
+                                        }
+                                        if ui.button("x").clicked()
+                                        {
+                                            del_excl = Some(i);
+                                        }
+                                    });
+                                }
+                                if let Some(id) = cur_excl
+                                {
+                                    self.set_infos_current(Some(id));
+                                }
+                                if let Some(i) = del_excl
+                                {
+                                    self.path_dirty = true;
+                                    self.exclude_ids.remove(i);
                                 }
                             }
-                            if let Some(id) = cur_excl
+
+                            if (self.path_dirty || c1.changed() || c2.changed())
+                                | ui.checkbox(&mut self.path_no_direct, "Éviter chemin direct").changed()
+                                | ui.checkbox(&mut self.path_no_mutual, "Éviter amis communs").changed()
+                            {
+                                self.path_dirty = false;
+                                self.found_path = None;
+                                //self.path_vbuf = None;
+                                self.path_status = match (self.path_src, self.path_dest)
+                                {
+                                    (Some(x), Some(y)) if x == y => String::from("Source et destination sont identiques"),
+                                    (None, _) | (_, None) => String::from(""),
+                                    _ =>
+                                        {
+                                            self.do_pathfinding(data, display);
+                                            match self.found_path
+                                            {
+                                                Some(ref path) => format!("Chemin trouvé, longueur {}", path.len()),
+                                                None => String::from("Aucun chemin trouvé"),
+                                            }
+                                        }
+                                }
+                            }
+
+                            ui.label(self.path_status.as_str());
+
+                            let mut del_path = None;
+                            let mut cur_path = None;
+                            if let Some(ref path) = self.found_path
+                            {
+                                for (i, id) in path.iter().enumerate()
+                                {
+                                    ui.horizontal(|ui| {
+                                        if ui.button(data.persons[*id].name).clicked()
+                                        {
+                                            cur_path = Some(*id);
+                                        }
+                                        if i != 0 && i != path.len() - 1
+                                        {
+                                            if ui.button("x").clicked()
+                                            {
+                                                del_path = Some(*id);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                            if let Some(id) = cur_path
                             {
                                 self.set_infos_current(Some(id));
                             }
-                            if let Some(i) = del_excl
+                            if let Some(i) = del_path
                             {
                                 self.path_dirty = true;
-                                self.exclude_ids.remove(i);
+                                self.exclude_ids.push(i);
                             }
-                        }
+                        });
 
-                        if (self.path_dirty || c1 || c2)
-                            | ui.checkbox("Éviter chemin direct", &mut self.path_no_direct)
-                            | ui.checkbox("Éviter amis communs", &mut self.path_no_mutual)
+                    CollapsingHeader::new("Informations").default_open(true).show(ui, |ui|
                         {
-                            self.path_dirty = false;
-                            self.found_path = None;
-                            //self.path_vbuf = None;
-                            self.path_status = match (self.path_src, self.path_dest)
+                            combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
+                            if let Some(id) = self.infos_current
                             {
-                                (Some(x), Some(y)) if x == y => String::from("Source et destination sont identiques"),
-                                (None, _) | (_, None) => String::from(""),
-                                _ =>
-                                    {
-                                        self.do_pathfinding(data, display);
-                                        match self.found_path
-                                        {
-                                            Some(ref path) => format!("Chemin trouvé, longueur {}", path.len()),
-                                            None => String::from("Aucun chemin trouvé"),
-                                        }
-                                    }
-                            }
-                        }
-
-                        ui.text(self.path_status.as_str());
-
-                        let mut del_path = None;
-                        let mut cur_path = None;
-                        if let Some(ref path) = self.found_path
-                        {
-                            for (i, id) in path.iter().enumerate()
-                            {
-                                if ui.button_with_size(format!("{}##pathbtn", data.persons[*id].name), [exw, 0.0])
+                                let person = &data.persons[id];
+                                ui.same_line();
+                                if ui.button("Ouvrir").clicked()
                                 {
-                                    cur_path = Some(*id);
+                                    ui.ctx().open_url(OpenUrl {
+                                        url: format!("https://facebook.com/{}", person.id),
+                                        new_tab: true
+                                    });
                                 }
-                                if i != 0 && i != path.len() - 1
-                                {
-                                    ui.same_line();
-                                    if ui.button(format!("x##addexcl{}", i))
+
+                                egui::Grid::new("#infos").show(ui, |ui|
                                     {
-                                        del_path = Some(*id);
-                                    }
-                                }
+                                        ui.label("ID Facebook :");
+                                        ui.add(Hyperlink::from_label_and_url(person.id, format!("https://facebook.com/{}", person.id)).open_in_new_tab(true));
+                                        ui.end_row();
+                                        ui.label("Amis :");
+                                        ui.label(format!("{}", person.neighbors.len()));
+                                        ui.end_row();
+                                        ui.label("Classe :");
+                                        ui.label(format!("{}", person.modularity_class));
+                                        ui.end_row();
+                                    });
                             }
-                        }
-                        if let Some(id) = cur_path
-                        {
-                            self.set_infos_current(Some(id));
-                        }
-                        if let Some(i) = del_path
-                        {
-                            self.path_dirty = true;
-                            self.exclude_ids.push(i);
-                        }
-                    }
-
-                    if ui.collapsing_header("Informations", imgui::TreeNodeFlags::empty())
-                    {
-                        combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
-                        if let Some(id) = self.infos_current
-                        {
-                            let person = &data.persons[id];
-                            ui.same_line();
-                            if ui.button("Ouvrir")
-                            {
-                                // TODO: crashes on Windows because of a Winit bug
-                                /*if let Err(err) = webbrowser::open(format!("https://facebook.com/{}", person.id).as_str()) {
-                                    log!("Couldn't open URL: {}", err);
-                                };*/
-                            }
-
-                            if let Some(_t) = ui.begin_table("#infos", 2)
-                            {
-                                ui.table_next_row();
-                                ui.table_next_column();
-                                ui.text("ID Facebook :");
-                                ui.table_next_column();
-                                ui.text(person.id);
-                                ui.table_next_column();
-                                ui.text("Amis :");
-                                ui.table_next_column();
-                                ui.text(format!("{}", person.neighbors.len()));
-                                ui.table_next_column();
-                                ui.text("Classe :");
-                                ui.table_next_column();
-                                ui.text(format!("{}", person.modularity_class));
-                            }
-                        }
-                    }
+                        });
                 });
     }
-
 }
+

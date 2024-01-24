@@ -1,22 +1,24 @@
+use egui::{Pos2, Vec2, vec2};
 use nalgebra::{Matrix4, Orthographic3, Similarity3, Vector3};
-use imgui_winit_support::winit::dpi::PhysicalPosition;
+use crate::log;
 
 /// 2D planar camera
 pub struct Camera
 {
-    transf: Similarity3<f32>,
-    ortho: Orthographic3<f32>,
+    pub transf: Similarity3<f32>,
+    pub ortho: Orthographic3<f32>,
+    pub size: Vec2
 }
 
 impl Camera
 {
-    pub fn new(width: u32, height: u32) -> Camera
+    pub fn new() -> Camera
     {
         let transf = Similarity3::new(
             Vector3::new(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 0.0),
             1.0);
-        Camera { transf, ortho: Camera::create_orthographic(width, height) }
+        Camera { transf, ortho: Camera::create_orthographic(1, 1), size: vec2(1.0, 1.0) }
     }
 
     /// Computes the 4x4 transformation matrix.
@@ -33,13 +35,15 @@ impl Camera
             -hw, hw, -hh, hh, -1.0, 1.0)
     }
 
-    pub fn set_window_size(&mut self, width: u32, height: u32)
+    pub fn set_window_size(&mut self, size: Vec2)
     {
-        self.ortho = Camera::create_orthographic(width, height);
+        log!("New screen size: {}x{}", size.x, size.y);
+        self.size = size;
+        self.ortho = Camera::create_orthographic(size.x as u32, size.y as u32);
     }
 
     /// Zooms the view in or out around the specified mouse location.
-    pub fn zoom(&mut self, dy: f32, mouse: PhysicalPosition<f64>)
+    pub fn zoom(&mut self, dy: f32, mouse: Pos2)
     {
         let zoom_speed = 1.1;
         let s = if dy > 0.0 { zoom_speed } else { 1.0 / zoom_speed };
