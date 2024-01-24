@@ -35,7 +35,6 @@ impl Camera {
     }
 
     pub fn set_window_size(&mut self, size: Vec2) {
-        log!("New screen size: {}x{}", size.x, size.y);
         self.size = size;
         self.ortho = Camera::create_orthographic(size.x as u32, size.y as u32);
     }

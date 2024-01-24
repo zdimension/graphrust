@@ -4,11 +4,15 @@
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info")
+    }
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1600.0, 900.0]),
         renderer: eframe::Renderer::Glow,
+        multisampling: 2,
         ..Default::default()
     };
     eframe::run_native(
@@ -26,6 +30,7 @@ fn main() {
     wasm_logger::init(wasm_logger::Config::default());
 }
 
+use std::env;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 

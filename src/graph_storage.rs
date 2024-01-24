@@ -200,26 +200,15 @@ pub struct GraphFile {
     pub names: Vec<u8>,
 }
 
-const GRAPH_NAME: &str = "graph2_4.bin";
+const GRAPH_NAME: &str = "graph2.bin";
 
 #[cfg(not(target_arch = "wasm32"))]
-fn load_file() -> GraphFile {
+pub fn load_file() -> GraphFile {
     GraphFile::read_from_file(GRAPH_NAME).unwrap()
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn sleep(ms: i32) -> js_sys::Promise {
-    js_sys::Promise::new(&mut |resolve, _| {
-        eframe::web_sys::window()
-            .unwrap()
-            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms)
-            .unwrap();
-    })
-}
-
-#[cfg(target_arch = "wasm32")]
-fn load_file() -> GraphFile {
+pub fn load_file() -> GraphFile {
     let wnd = eframe::web_sys::window().unwrap();
     let resp = wnd.get("graph");
     if let Some(val) = resp {
@@ -232,7 +221,12 @@ fn load_file() -> GraphFile {
     panic!("Cannot load graph file");
 }
 
-pub fn load_binary<'a>() -> ViewerData<'a> {
+pub struct ProcessedData<'a> {
+    pub viewer: ViewerData<'a>,
+    pub edges: Vec<EdgeStore>,
+}
+
+pub fn load_binary<'a>() -> ProcessedData<'a> {
     log!("Loading binary");
     let content: GraphFile = load_file();
     log!("Binary content loaded");
@@ -248,46 +242,6 @@ pub fn load_binary<'a>() -> ViewerData<'a> {
         .enumerate()
         .map(|(id, color)| ModularityClass::new(color.to_f32(), id as u16))
         .collect_vec();
-
-    struct VertexInter {
-        a: (u32, Point),
-        b: (u32, Point),
-        dist: f32,
-        color: Color3f,
-    }
-
-    log!("Processing edges");
-
-    let mut edge_data = content
-        .edges
-        .iter()
-        .map(|edge| {
-            let a = &content.nodes[edge.a as usize];
-            let b = &content.nodes[edge.b as usize];
-            let dist = (a.position - b.position).norm();
-            let color = modularity_classes[a.class as usize]
-                .color
-                .average(modularity_classes[b.class as usize].color);
-            VertexInter {
-                a: (edge.a, a.position),
-                b: (edge.b, b.position),
-                dist,
-                color,
-            }
-        })
-        .collect_vec();
-
-    log!("Sorting edges");
-    edge_data.sort_by(|a, b| b.dist.partial_cmp(&a.dist).unwrap());
-
-    log!("Drawing edges");
-
-    let edge_vertices = edge_data
-        .iter()
-        .flat_map(|edge| create_rectangle(edge.a.1, edge.b.1, edge.color, 1.0))
-        .collect_vec();
-
-    let edge_sizes = edge_data.iter().map(|edge| edge.dist).collect_vec();
 
     log!("Processing nodes");
 
@@ -309,13 +263,14 @@ pub fn load_binary<'a>() -> ViewerData<'a> {
 
     log!("Generating neighbor lists");
 
-    for (i, edge) in edge_data.iter().enumerate() {
-        if edge.a.0 == edge.b.0 {
+    for (i, edge) in content.edges.iter().enumerate() {
+        if edge.a == edge.b {
+            //panic!("Self edge detected"); TODO
             continue;
         }
-        let (p1, p2) = person_data.get_two_mut(edge.a.0 as usize, edge.b.0 as usize);
-        p1.neighbors.push((edge.b.0 as usize, i));
-        p2.neighbors.push((edge.a.0 as usize, i));
+        let (p1, p2) = person_data.get_two_mut(edge.a as usize, edge.b as usize);
+        p1.neighbors.push((edge.b as usize, i));
+        p2.neighbors.push((edge.a as usize, i));
     }
 
     log!("Initializing search engine");
@@ -326,13 +281,14 @@ pub fn load_binary<'a>() -> ViewerData<'a> {
 
     log!("Done");
 
-    ViewerData {
-        ids: content.ids,
-        names: content.names,
-        persons: person_data,
-        vertices: edge_vertices,
-        modularity_classes,
-        edge_sizes,
-        engine,
+    ProcessedData {
+        viewer: ViewerData {
+            ids: content.ids,
+            names: content.names,
+            persons: person_data,
+            modularity_classes,
+            engine,
+        },
+        edges: content.edges,
     }
 }

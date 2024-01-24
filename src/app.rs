@@ -1,8 +1,10 @@
 use crate::camera::Camera;
-use crate::graph_storage::{load_binary, Color3f, Point};
+use crate::geom_draw::create_rectangle;
+use crate::graph_storage::{load_binary, load_file, Color3f, EdgeStore, Point, ProcessedData};
 use crate::log;
 use crate::ui::UiState;
 use eframe::{egui_glow, glow};
+use egui::{Id, Vec2};
 use itertools::Itertools;
 use nalgebra::Matrix4;
 use simsearch::SimSearch;
@@ -90,9 +92,7 @@ pub struct ViewerData<'a> {
     pub ids: Vec<u8>,
     pub names: Vec<u8>,
     pub persons: Vec<Person<'a>>,
-    pub vertices: Vec<Vertex>,
     pub modularity_classes: Vec<ModularityClass<'a>>,
-    pub edge_sizes: Vec<f32>,
     pub engine: SimSearch<usize>,
 }
 
@@ -101,6 +101,7 @@ pub struct GraphViewApp<'a> {
     viewer_data: ViewerData<'a>,
     rendered_graph: Arc<Mutex<RenderedGraph>>,
     camera: Camera,
+    cam_animating: Option<Vec2>,
 }
 
 impl<'a> GraphViewApp<'a> {
@@ -111,20 +112,38 @@ impl<'a> GraphViewApp<'a> {
             .as_ref()
             .expect("You need to run eframe with the glow backend");
         let data = load_binary();
-        Self {
+        let res = Self {
             ui_state: UiState::default(),
             rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
-            viewer_data: data,
+            viewer_data: data.viewer,
             camera: Camera::new(),
+            cam_animating: None,
+        };
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+
+            // set #center_text.innerHTML to ""
+            eframe::web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("center_text")
+                .unwrap()
+                .dyn_ref::<eframe::web_sys::HtmlElement>()
+                .unwrap()
+                .set_inner_html("");
         }
+        res
     }
 }
 
 impl<'a> eframe::App for GraphViewApp<'a> {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.ui_state.draw_ui(ctx, frame, &self.viewer_data, ());
+        let cid = Id::from("camera");
 
+        self.ui_state.draw_ui(ctx, frame, &self.viewer_data);
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
@@ -137,9 +156,25 @@ impl<'a> eframe::App for GraphViewApp<'a> {
 
                 let response =
                     ui.interact(rect, id, egui::Sense::click().union(egui::Sense::drag()));
+
+                if !response.is_pointer_button_down_on() {
+                    if let Some(v) = self.cam_animating {
+                        let anim = ctx.animate_bool_with_time(cid, false, 0.5);
+                        if anim == 0.0 {
+                            self.cam_animating = None;
+                        } else {
+                            let v = v * anim;
+                            self.camera.pan(v.x, v.y);
+                        }
+                    }
+                }
+
                 if response.dragged() {
                     self.camera
                         .pan(response.drag_delta().x, response.drag_delta().y);
+
+                    ctx.animate_bool_with_time(cid, true, 0.0);
+                    self.cam_animating = Some(response.drag_delta());
                 }
                 if let Some(pos) = response.hover_pos() {
                     let scroll_delta = ui.input(|is| is.scroll_delta);
@@ -151,6 +186,11 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                 let graph = self.rendered_graph.clone();
                 let edges = self.ui_state.g_show_edges;
                 let nodes = self.ui_state.g_show_nodes;
+
+                if let Some(path) = self.ui_state.path_vbuf.take() {
+                    graph.lock().unwrap().new_path = Some(path);
+                }
+
                 let callback = egui::PaintCallback {
                     rect,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
@@ -164,16 +204,20 @@ impl<'a> eframe::App for GraphViewApp<'a> {
     }
 }
 
-struct RenderedGraph {
+pub struct RenderedGraph {
     program: glow::Program,
     nodes_buffer: glow::Buffer,
     nodes_count: usize,
     nodes_array: glow::VertexArray,
     edges_count: usize,
+    path_array: glow::VertexArray,
+    path_buffer: glow::Buffer,
+    path_count: usize,
+    new_path: Option<Vec<Vertex>>,
 }
 
 impl RenderedGraph {
-    fn new(gl: &glow::Context, data: &ViewerData<'_>) -> Self {
+    fn new(gl: &glow::Context, data: &ProcessedData<'_>) -> Self {
         use glow::HasContext as _;
 
         let shader_version = if cfg!(target_arch = "wasm32") {
@@ -221,16 +265,27 @@ impl RenderedGraph {
             }
 
             let mut vertices = data
+                .viewer
                 .persons
                 .iter()
                 .map(|p| {
                     Vertex::new(
                         p.position,
-                        data.modularity_classes[p.modularity_class as usize].color,
+                        data.viewer.modularity_classes[p.modularity_class as usize].color,
                     )
                 })
+                .chain(data.edges.iter().flat_map(|e| {
+                    let pa = &data.viewer.persons[e.a as usize];
+                    let pb = &data.viewer.persons[e.b as usize];
+                    create_rectangle(
+                        pa.position,
+                        pb.position,
+                        data.viewer.modularity_classes[pa.modularity_class as usize].color,
+                        data.viewer.modularity_classes[pb.modularity_class as usize].color,
+                        3.0,
+                    )
+                }))
                 .collect_vec();
-            vertices.extend(&data.vertices);
             let vertices_array = gl
                 .create_vertex_array()
                 .expect("Cannot create vertex array");
@@ -266,12 +321,43 @@ impl RenderedGraph {
             );
             gl.enable_vertex_attrib_array(1);
 
+            let path_array = gl
+                .create_vertex_array()
+                .expect("Cannot create vertex array");
+            let path_buffer = gl.create_buffer().expect("Cannot create buffer");
+
+            gl.bind_vertex_array(Some(path_array));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(path_buffer));
+
+            gl.vertex_attrib_pointer_f32(
+                0,
+                2,
+                glow::FLOAT,
+                false,
+                std::mem::size_of::<Vertex>() as i32,
+                0,
+            );
+            gl.enable_vertex_attrib_array(0);
+            gl.vertex_attrib_pointer_f32(
+                1,
+                3,
+                glow::FLOAT,
+                false,
+                std::mem::size_of::<Vertex>() as i32,
+                std::mem::size_of::<Point>() as i32,
+            );
+            gl.enable_vertex_attrib_array(1);
+
             Self {
                 program,
                 nodes_buffer: vertices_buffer,
-                nodes_count: data.persons.len(),
+                nodes_count: data.viewer.persons.len(),
                 nodes_array: vertices_array,
-                edges_count: data.edge_sizes.len(),
+                edges_count: data.edges.len(),
+                path_array: path_array,
+                path_buffer: path_buffer,
+                path_count: 0,
+                new_path: None,
             }
         }
     }
@@ -282,12 +368,15 @@ impl RenderedGraph {
             gl.delete_program(self.program);
             gl.delete_buffer(self.nodes_buffer);
             gl.delete_vertex_array(self.nodes_array);
+            gl.delete_buffer(self.path_buffer);
+            gl.delete_vertex_array(self.path_array);
         }
     }
 
-    fn paint(&self, gl: &glow::Context, cam: Matrix4<f32>, edges: bool, nodes: bool) {
+    fn paint(&mut self, gl: &glow::Context, cam: Matrix4<f32>, edges: bool, nodes: bool) {
         use glow::HasContext as _;
         unsafe {
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
             gl.use_program(Some(self.program));
             gl.uniform_matrix_4_f32_slice(
                 Some(
@@ -308,6 +397,29 @@ impl RenderedGraph {
                     self.nodes_count as i32,
                     2 * self.edges_count as i32,
                 );
+            }
+
+            gl.bind_vertex_array(Some(self.path_array));
+            gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.path_buffer));
+            if let Some(path) = self.new_path.take() {
+                log!("Buffering {} path vertices", path.len());
+                if path.is_empty() {
+                    self.path_count = 0;
+                } else {
+                    gl.buffer_data_u8_slice(
+                        glow::ARRAY_BUFFER,
+                        std::slice::from_raw_parts(
+                            path.as_ptr() as *const u8,
+                            path.len() * std::mem::size_of::<Vertex>(),
+                        ),
+                        glow::STATIC_DRAW,
+                    );
+                    self.path_count = path.len();
+                }
+            }
+
+            if self.path_count > 0 {
+                gl.draw_arrays(glow::TRIANGLES, 0, self.path_count as i32);
             }
         }
     }

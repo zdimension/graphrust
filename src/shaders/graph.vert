@@ -9,5 +9,5 @@ void main()
 {
     v_color = color;
     gl_Position = u_projection * vec4(position, 0.0, 1.0);
-    gl_PointSize = 30.0;
+    gl_PointSize = 2.0;
 }

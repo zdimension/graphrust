@@ -7,7 +7,7 @@
 
 <head>
     <!-- change this to your project name -->
-    <title>eframe template</title>
+    <title>network5</title>
 
     <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
     <link data-trunk rel="rust" data-wasm-opt="2" />
@@ -17,7 +17,7 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
 
-    <link data-trunk rel="copy-file" href="graph2_4.bin" />
+    <link data-trunk rel="copy-file" href="graph2.bin" />
 
     <style>
         html {
@@ -111,10 +111,16 @@
 <!-- The WASM code will resize the canvas dynamically -->
 <!-- the id is hardcoded in main.rs . so, make sure both match. -->
 <canvas id="the_canvas_id"></canvas>
+<div class="centered" id="center_text">
+    <p style="font-size:16px" id="center_message">
+        Loading…
+    </p>
+    <div class="lds-dual-ring"></div>
+</div>
 
 <script>
     // fetch graph2_4.bin from the server
-    fetch("graph2_4.bin")
+    fetch("graph2.bin")
         .then((response) => response.arrayBuffer())
         .then((bytes) => {
             window.graph = bytes;

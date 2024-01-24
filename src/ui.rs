@@ -1,4 +1,4 @@
-use crate::app::ViewerData;
+use crate::app::{RenderedGraph, Vertex, ViewerData};
 use crate::combo_filter::combo_with_filter;
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::graph_storage::Color3f;
@@ -26,7 +26,7 @@ pub struct UiState {
     pub path_no_direct: bool,
     pub path_no_mutual: bool,
     pub path_status: String,
-    //pub path_vbuf: Option<VertexBuffer<Vertex>>,
+    pub path_vbuf: Option<Vec<Vertex>>,
 }
 
 impl UiState {
@@ -35,7 +35,7 @@ impl UiState {
         self.infos_open = id.is_some();
     }
 
-    fn do_pathfinding(&mut self, data: &ViewerData, _display: ()) {
+    fn do_pathfinding(&mut self, data: &ViewerData) {
         let src_id = self.path_src.unwrap();
         let dest_id = self.path_dest.unwrap();
         let src = &data.persons[src_id];
@@ -94,6 +94,7 @@ impl UiState {
                                 data.persons[p].position,
                                 data.persons[*path.last().unwrap()].position,
                                 Color3f::new(1.0, 0.0, 0.0),
+                                Color3f::new(1.0, 0.0, 0.0),
                                 20.0,
                             ));
                             path.push(p);
@@ -116,9 +117,7 @@ impl UiState {
 
                         self.found_path = Some(path);
 
-                        /*self.path_vbuf = Some(VertexBuffer::new(
-                        display,
-                        &verts).unwrap());*/
+                        self.path_vbuf = Some(verts);
 
                         return;
                     }
@@ -132,7 +131,6 @@ impl UiState {
         egui: &egui::Context,
         _frame: &mut eframe::Frame,
         data: &ViewerData<'_>,
-        display: (),
     ) {
         egui::SidePanel::left("settings")
             .resizable(false)
@@ -158,6 +156,7 @@ impl UiState {
                                 if ui.button("x").clicked() {
                                     self.path_src = None;
                                     self.found_path = None;
+                                    self.path_vbuf = Some(vec![]);
                                 }
                                 c
                             })
@@ -173,6 +172,7 @@ impl UiState {
                                 if ui.button("x").clicked() {
                                     self.path_dest = None;
                                     self.found_path = None;
+                                    self.path_vbuf = Some(vec![]);
                                 }
                                 c
                             })
@@ -217,14 +217,14 @@ impl UiState {
                         {
                             self.path_dirty = false;
                             self.found_path = None;
-                            //self.path_vbuf = None;
+                            self.path_vbuf = Some(vec![]);
                             self.path_status = match (self.path_src, self.path_dest) {
                                 (Some(x), Some(y)) if x == y => {
                                     String::from("Source et destination sont identiques")
                                 }
                                 (None, _) | (_, None) => String::from(""),
                                 _ => {
-                                    self.do_pathfinding(data, display);
+                                    self.do_pathfinding(data);
                                     match self.found_path {
                                         Some(ref path) => {
                                             format!("Chemin trouvé, longueur {}", path.len())

@@ -3,19 +3,25 @@ use crate::graph_storage::{Color3f, Point};
 
 /// Draws a line between a and b with the specified thickness and color.
 /// Result is a list of vertices to be used as a GL TriangleList.
-pub fn create_rectangle(a: Point, b: Point, color: Color3f, size: f32) -> Vec<Vertex> {
+pub fn create_rectangle(
+    a: Point,
+    b: Point,
+    color_a: Color3f,
+    color_b: Color3f,
+    size: f32,
+) -> Vec<Vertex> {
     let ortho = (b - a).ortho().normalized() * size;
     let v0 = a + ortho;
     let v1 = a - ortho;
     let v2 = b - ortho;
     let v3 = b + ortho;
     vec![
-        Vertex::new(v0, color),
-        Vertex::new(v1, color),
-        Vertex::new(v2, color),
-        Vertex::new(v2, color),
-        Vertex::new(v3, color),
-        Vertex::new(v0, color),
+        Vertex::new(v0, color_a),
+        Vertex::new(v1, color_a),
+        Vertex::new(v2, color_b),
+        Vertex::new(v2, color_b),
+        Vertex::new(v3, color_b),
+        Vertex::new(v0, color_a),
     ]
 }
 
@@ -41,7 +47,7 @@ pub fn create_circle_tris(center: Point, radius: f32, color: Color3f) -> Vec<Ver
     let verts = create_circle_fan(center, radius, color);
 
     (0..NUM_SEGMENTS)
-        .flat_map(|i| vec![verts[0], verts[i], verts[i + 1]])
-        .chain(vec![verts[0], verts[NUM_SEGMENTS], verts[1]])
+        .flat_map(|i| [verts[0], verts[i], verts[i + 1]])
+        .chain([verts[0], verts[NUM_SEGMENTS], verts[1]])
         .collect()
 }

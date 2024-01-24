@@ -8,6 +8,27 @@ macro_rules! log
     ($($arg:tt)*) =>
     {
         log::info!("[{}] [{}:{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), file!(), line!(), format_args!($($arg)*));
+        //$crate::utils::add_loading_text(&format!("{}", format_args!($($arg)*)));
+    }
+}
+
+pub fn add_loading_text(text: &str) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen::JsCast;
+
+        let elem = eframe::web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .get_element_by_id("center_message")
+            .unwrap();
+        let elem = elem.dyn_ref::<eframe::web_sys::HtmlElement>().unwrap();
+
+        let orig_text = elem.text_content().unwrap();
+        let new_text = format!("{}\n{}", orig_text, text);
+
+        elem.set_text_content(Some(&new_text));
     }
 }
 

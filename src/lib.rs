@@ -6,6 +6,6 @@ mod combo_filter;
 mod geom_draw;
 mod graph_storage;
 mod ui;
-mod utils;
+pub mod utils;
 
 pub use app::GraphViewApp;
