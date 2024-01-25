@@ -1,5 +1,5 @@
 use crate::app::Vertex;
-use crate::graph_storage::{Color3f, Point};
+use graph_format::{Color3f, Point};
 
 /// Draws a line between a and b with the specified thickness and color.
 /// Result is a list of vertices to be used as a GL TriangleList.
@@ -9,13 +9,13 @@ pub fn create_rectangle(
     color_a: Color3f,
     color_b: Color3f,
     size: f32,
-) -> Vec<Vertex> {
+) -> [Vertex; 6] {
     let ortho = (b - a).ortho().normalized() * size;
     let v0 = a + ortho;
     let v1 = a - ortho;
     let v2 = b - ortho;
     let v3 = b + ortho;
-    vec![
+    [
         Vertex::new(v0, color_a),
         Vertex::new(v1, color_a),
         Vertex::new(v2, color_b),

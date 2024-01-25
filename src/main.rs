@@ -7,7 +7,19 @@ fn main() -> eframe::Result<()> {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info")
     }
-    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+    env_logger::builder()
+        .format(|buf, record| {
+            use io::Write;
+            writeln!(
+                buf,
+                "[{}] [{}:{}] {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
+        .init();
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1600.0, 900.0]),
@@ -30,7 +42,7 @@ fn main() {
     wasm_logger::init(wasm_logger::Config::default());
 }
 
-use std::env;
+use std::{env, io};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -39,7 +51,7 @@ use wasm_bindgen::prelude::*;
 pub fn start() {
     use graphrust::log;
 
-    log!("Start called");
+    log::info!("Start called");
     let web_options = eframe::WebOptions::default();
 
     wasm_bindgen_futures::spawn_local(async {

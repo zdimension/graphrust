@@ -2,17 +2,18 @@ use std::cmp::Ordering;
 use std::ffi::CStr;
 
 /// Logs a message to the console prefixed with the current time and caller code location.
-#[macro_export]
+/*#[macro_export]
 macro_rules! log
 {
     ($($arg:tt)*) =>
     {
-        log::info!("[{}] [{}:{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), file!(), line!(), format_args!($($arg)*));
+        //log::info!("[{}] [{}:{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), file!(), line!(), format_args!($($arg)*));
+        log::info!($($arg)*);
         //$crate::utils::add_loading_text(&format!("{}", format_args!($($arg)*)));
     }
 }
-
-pub fn add_loading_text(text: &str) {
+*/
+pub fn add_loading_text(_text: &str) {
     #[cfg(target_arch = "wasm32")]
     {
         use wasm_bindgen::JsCast;

@@ -6,14 +6,12 @@ use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
 use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
 use egui::style::WidgetVisuals;
-use egui::text::LayoutJob;
+
 use egui::{
-    AboveOrBelow, Align, ComboBox, FontId, Id, Layout, Painter, Response, RichText, ScrollArea,
-    SelectableLabel, Sense, TextEdit, TextStyle, Ui, Widget, WidgetText,
+    Align, Id, Layout, Painter, Response, ScrollArea, SelectableLabel, Sense, TextEdit, TextStyle,
+    Ui, WidgetText,
 };
-use std::cell::RefCell;
-use std::ops::DerefMut;
-use std::rc::Rc;
+
 use std::sync::{Arc, Mutex};
 
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
@@ -76,6 +74,8 @@ fn button_frame(
     response
 }
 
+pub const COMBO_WIDTH: f32 = 300.0;
+
 /// Drop-down combobox with filtering
 pub fn combo_with_filter(
     ui: &mut Ui,
@@ -95,7 +95,7 @@ pub fn combo_with_filter(
 
     let popup_id = id.with("popup");
     let wrap_enabled = false;
-    let width = Some(300.0);
+    let width = Some(COMBO_WIDTH);
     let is_popup_open = ui.memory(|m| m.is_popup_open(popup_id));
 
     let margin = ui.spacing().button_padding;

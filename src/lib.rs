@@ -4,7 +4,7 @@ mod app;
 mod camera;
 mod combo_filter;
 mod geom_draw;
-mod graph_storage;
+pub mod graph_storage;
 mod ui;
 pub mod utils;
 

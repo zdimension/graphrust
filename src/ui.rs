@@ -1,14 +1,14 @@
-use crate::app::{RenderedGraph, Vertex, ViewerData};
-use crate::combo_filter::combo_with_filter;
+use crate::app::{Vertex, ViewerData};
+use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
-use crate::graph_storage::Color3f;
 use array_tool::vec::Intersect;
 use derivative::*;
-use eframe::{egui_glow, glow};
-use egui::{CollapsingHeader, Hyperlink, OpenUrl, Vec2};
+
+use egui::{vec2, CollapsingHeader, Hyperlink};
+use graph_format::Color3f;
 use itertools::Itertools;
 use std::collections::{HashSet, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::ops::{Range, RangeInclusive};
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -27,6 +27,10 @@ pub struct UiState {
     pub path_no_mutual: bool,
     pub path_status: String,
     pub path_vbuf: Option<Vec<Vertex>>,
+    #[derivative(Default(value = "(0, u16::MAX)"))]
+    pub deg_filter: (u16, u16),
+    pub deg_filter_changed: bool,
+    pub node_count: usize,
 }
 
 impl UiState {
@@ -126,6 +130,17 @@ impl UiState {
         }
     }
 
+    fn refresh_node_count(&mut self, data: &ViewerData<'_>) {
+        self.node_count = data
+            .persons
+            .iter()
+            .filter(|p| {
+                let deg = p.neighbors.len() as u16;
+                deg >= self.deg_filter.0 && deg <= self.deg_filter.1
+            })
+            .count();
+    }
+
     pub fn draw_ui(
         &mut self,
         egui: &egui::Context,
@@ -134,13 +149,38 @@ impl UiState {
     ) {
         egui::SidePanel::left("settings")
             .resizable(false)
-            //.max_size([400.0, f32::INFINITY])
             .show(egui, |ui| {
                 CollapsingHeader::new("Affichage")
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.checkbox(&mut self.g_show_nodes, "Afficher les nœuds");
                         ui.checkbox(&mut self.g_show_edges, "Afficher les liens");
+
+                        let start = ui
+                            .add(
+                                egui::DragValue::new(&mut self.deg_filter.0)
+                                    .speed(1)
+                                    .clamp_range(1..=u16::MAX)
+                                    .prefix("Degré minimum : "),
+                            )
+                            .changed();
+                        let end = ui
+                            .add(
+                                egui::DragValue::new(&mut self.deg_filter.1)
+                                    .speed(1)
+                                    .clamp_range(1..=u16::MAX)
+                                    .prefix("Degré maximum : "),
+                            )
+                            .changed();
+                        if start || end {
+                            self.deg_filter_changed = true;
+                            self.refresh_node_count(data);
+                        }
+
+                        ui.horizontal(|ui| {
+                            ui.label("Nœuds affichés :");
+                            ui.label(format!("{}", self.node_count));
+                        })
                     });
 
                 CollapsingHeader::new("Chemin le plus court")
@@ -192,7 +232,13 @@ impl UiState {
                             let mut del_excl = None;
                             for (i, id) in self.exclude_ids.iter().enumerate() {
                                 ui.horizontal(|ui| {
-                                    if ui.button(data.persons[*id].name).clicked() {
+                                    if ui
+                                        .add(
+                                            egui::Button::new(data.persons[*id].name)
+                                                .min_size(vec2(COMBO_WIDTH, 0.0)),
+                                        )
+                                        .clicked()
+                                    {
                                         cur_excl = Some(*id);
                                     }
                                     if ui.button("x").clicked() {
@@ -242,7 +288,13 @@ impl UiState {
                         if let Some(ref path) = self.found_path {
                             for (i, id) in path.iter().enumerate() {
                                 ui.horizontal(|ui| {
-                                    if ui.button(data.persons[*id].name).clicked() {
+                                    if ui
+                                        .add(
+                                            egui::Button::new(data.persons[*id].name)
+                                                .min_size(vec2(COMBO_WIDTH, 0.0)),
+                                        )
+                                        .clicked()
+                                    {
                                         cur_path = Some(*id);
                                     }
                                     if i != 0 && i != path.len() - 1 {

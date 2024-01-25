@@ -1,4 +1,3 @@
-use crate::log;
 use egui::{vec2, Pos2, Vec2};
 use nalgebra::{Matrix4, Orthographic3, Similarity3, Vector3};
 
