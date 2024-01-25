@@ -43,7 +43,7 @@ impl Color3f {
 }
 
 /// 2D point/vector.
-#[derive(Copy, Clone, Readable, Writable)]
+#[derive(Copy, Clone, Readable, Writable, Debug)]
 #[repr(C)]
 pub struct Point {
     pub x: f32,

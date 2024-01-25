@@ -6,7 +6,7 @@ use eframe::{egui_glow, glow};
 use egui::{Id, Vec2};
 use graph_format::{Color3f, Point};
 use itertools::Itertools;
-use nalgebra::Matrix4;
+use nalgebra::{Matrix4, Vector4};
 use simsearch::SimSearch;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
@@ -148,6 +148,7 @@ impl<'a> GraphViewApp<'a> {
                 y: a.y.max(b.y),
             })
             .unwrap();
+        log::info!("min: {:?}, max: {:?}", min, max);
         let center = min + (max - min) / 2.0;
         let mut res = Self {
             ui_state: UiState {
@@ -217,13 +218,25 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                     ctx.animate_bool_with_time(cid, true, 0.0);
                     self.cam_animating = Some(response.drag_delta());
                 }
+
                 if let Some(pos) = response.hover_pos() {
+                    let zero_pos = (pos - rect.min).to_pos2();
+                    let centered_pos = (pos - rect.center()) / rect.size();
+                    self.ui_state.mouse_pos = Some(centered_pos.to_pos2());
+                    self.ui_state.mouse_pos_world = Some(
+                        (self.camera.get_inverse_matrix()
+                            * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
+                        .xy(),
+                    );
                     let scroll_delta = ui.input(|is| is.scroll_delta);
                     if scroll_delta.y != 0.0 {
-                        self.camera.zoom(scroll_delta.y, (pos - rect.min).to_pos2());
+                        self.camera.zoom(scroll_delta.y, zero_pos);
                     }
+                } else {
+                    self.ui_state.mouse_pos = None;
+                    self.ui_state.mouse_pos_world = None;
                 }
-                let cam = self.camera.get_matrix();
+
                 let graph = self.rendered_graph.clone();
                 let edges = self.ui_state.g_show_edges;
                 let nodes = self.ui_state.g_show_nodes;
@@ -237,6 +250,7 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                     self.ui_state.deg_filter_changed = false;
                 }
 
+                let cam = self.camera.get_matrix();
                 let callback = egui::PaintCallback {
                     rect,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(

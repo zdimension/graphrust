@@ -13,7 +13,7 @@ impl Camera {
         let transf = Similarity3::new(
             Vector3::new(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 0.0),
-            0.05,
+            1.0,
         );
         Camera {
             transf,
@@ -25,6 +25,10 @@ impl Camera {
     /// Computes the 4x4 transformation matrix.
     pub fn get_matrix(&self) -> Matrix4<f32> {
         self.ortho.to_homogeneous() * self.transf.to_homogeneous()
+    }
+
+    pub fn get_inverse_matrix(&self) -> Matrix4<f32> {
+        self.get_matrix().try_inverse().unwrap()
     }
 
     fn create_orthographic(width: u32, height: u32) -> Orthographic3<f32> {

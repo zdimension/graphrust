@@ -4,9 +4,10 @@ use crate::geom_draw::{create_circle_tris, create_rectangle};
 use array_tool::vec::Intersect;
 use derivative::*;
 
-use egui::{vec2, CollapsingHeader, Hyperlink};
+use egui::{vec2, CollapsingHeader, Hyperlink, Pos2};
 use graph_format::Color3f;
 use itertools::Itertools;
+use nalgebra::Vector2;
 use std::collections::{HashSet, VecDeque};
 use std::ops::{Range, RangeInclusive};
 
@@ -31,6 +32,8 @@ pub struct UiState {
     pub deg_filter: (u16, u16),
     pub deg_filter_changed: bool,
     pub node_count: usize,
+    pub mouse_pos: Option<Pos2>,
+    pub mouse_pos_world: Option<Vector2<f32>>,
 }
 
 impl UiState {
@@ -339,6 +342,19 @@ impl UiState {
                                 ui.end_row();
                             });
                         }
+                    });
+
+                CollapsingHeader::new("Détails")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        egui::Grid::new("#mouse_pos").show(ui, |ui| {
+                            ui.label("Position :");
+                            ui.label(format!("{:?}", self.mouse_pos));
+                            ui.end_row();
+                            ui.label("Position (monde) :");
+                            ui.label(format!("{:?}", self.mouse_pos_world));
+                            ui.end_row();
+                        });
                     });
             });
     }
