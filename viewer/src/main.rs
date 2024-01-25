@@ -1,12 +1,13 @@
 #![warn(clippy::all, rust_2018_idioms)]
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+//#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
     if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "info")
+        env::set_var("RUST_LOG", "info");
     }
+    env::set_var("RUST_LOG", "debug");
     env_logger::builder()
         .format(|buf, record| {
             use io::Write;
