@@ -12,11 +12,11 @@ use std::sync::Mutex;
 #[derive(Deserialize, Derivative)]
 #[derivative(Default)]
 struct Config {
-    #[derivative(Default(value = "\"127.0.0.1:7687\""))]
+    #[derivative(Default(value = "\"127.0.0.1:7687\".to_string()"))]
     uri: String,
-    #[derivative(Default(value = "\"neo4j\""))]
+    #[derivative(Default(value = "\"neo4j\".to_string()"))]
     user: String,
-    #[derivative(Default(value = "\"password\""))]
+    #[derivative(Default(value = "\"password\".to_string()"))]
     pass: String,
     #[derivative(Default(value = "5"))]
     min_degree: u32,
