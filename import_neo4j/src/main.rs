@@ -11,6 +11,7 @@ use std::sync::Mutex;
 
 #[derive(Deserialize, Derivative)]
 #[derivative(Default)]
+#[serde(default)]
 struct Config {
     #[derivative(Default(value = "\"127.0.0.1:7687\".to_string()"))]
     uri: String,
