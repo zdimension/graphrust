@@ -30,7 +30,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "eframe template",
         native_options,
-        Box::new(|cc| Box::new(graphrust::GraphViewApp::new(cc))),
+        Box::new(|cc| Box::new(viewer::GraphViewApp::new(cc))),
     )
 }
 
@@ -59,7 +59,7 @@ pub fn start() {
             .start(
                 "the_canvas_id", // hardcode it
                 web_options,
-                Box::new(|cc| Box::new(graphrust::GraphViewApp::new(cc))),
+                Box::new(|cc| Box::new(viewer::GraphViewApp::new(cc))),
             )
             .await
             .expect("failed to start eframe");

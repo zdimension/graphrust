@@ -1,37 +1,5 @@
-[package]
-name = "graphrust"
-version = "0.1.0"
-edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-array_tool = "1.0.3"
-chrono = "0.4"
-derivative = "2.2.0"
-eframe = { version = "0.25.0", default-features = false, features = [
-    "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-] }
-egui = "0.25.0"
-instant = "0.1.12"
-itertools = "0.12.0"
-nalgebra = "0.32.3"
-pollster = "0.3.0"
-simsearch = "0.2.4"
-speedy = "0.8.7"
-log = "0.4"
-graph_format = { path = "./graph_format" }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-env_logger = "0.10"
-
-# web:
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = "0.4"
-wasm-bindgen = "*"
-js-sys = "*"
-wasm-logger = "0.2.0"
 
 [profile.release]
 debug = 1
@@ -44,5 +12,7 @@ opt-level = 2
 [workspace]
 members = [
     "import_neo4j",
-    "graph_format"
+    "graph_format",
+    "viewer"
 ]
+resolver = "2"

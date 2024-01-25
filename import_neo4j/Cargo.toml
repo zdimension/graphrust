@@ -12,3 +12,6 @@ forceatlas2 = { version = "0.5.0", features = ["barnes_hut", "parallel"] }
 ahash = "0.8.7"
 rayon = "1.8.1"
 chrono = "0.4.32"
+serde = { version = "1.0.195", features = ["derive"] }
+figment = { version = "0.10.14", features = ["env", "toml"] }
+derivative = "2.2.0"

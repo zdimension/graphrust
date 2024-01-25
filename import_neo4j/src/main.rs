@@ -1,9 +1,32 @@
 use ahash::AHashMap;
+use derivative::Derivative;
+use figment::providers::{Env, Format, Toml};
+use figment::Figment;
 use forceatlas2::{Layout, Nodes, Settings};
 use graph_format::{Color3b, EdgeStore, GraphFile, LenType, NodeStore, Point};
 use neo4rs::{query, ConfigBuilder, Graph};
+use serde::Deserialize;
 use speedy::Writable;
 use std::sync::Mutex;
+
+#[derive(Deserialize, Derivative)]
+#[derivative(Default)]
+struct Config {
+    #[derivative(Default(value = "\"127.0.0.1:7687\""))]
+    uri: String,
+    #[derivative(Default(value = "\"neo4j\""))]
+    user: String,
+    #[derivative(Default(value = "\"password\""))]
+    pass: String,
+    #[derivative(Default(value = "5"))]
+    min_degree: u32,
+    #[derivative(Default(value = "100"))]
+    layout_iterations: usize,
+    #[derivative(Default(value = "8"))]
+    threads: usize,
+    #[derivative(Default(value = "1024"))]
+    chunk_size: usize,
+}
 
 static LAST_LOG_TIME: Mutex<std::time::Instant> =
     Mutex::new(unsafe { std::mem::transmute([0u8; std::mem::size_of::<std::time::Instant>()]) });
@@ -27,25 +50,28 @@ macro_rules! log
 #[tokio::main]
 async fn main() {
     *LAST_LOG_TIME.lock().unwrap() = std::time::Instant::now();
-    const MIN_DEGREE: u32 = 15;
-    let uri = "127.0.0.1:7687";
-    let user = "neo4j";
-    let pass = "password";
-    let config = ConfigBuilder::default()
-        .uri(uri)
-        .user(user)
-        .password(pass)
+
+    let config: Config = Figment::new()
+        .merge(Toml::file("import.toml"))
+        .merge(Env::prefixed("IMPORT_"))
+        .extract()
+        .unwrap();
+
+    let n4j_config = ConfigBuilder::default()
+        .uri(config.uri)
+        .user(config.user)
+        .password(config.pass)
         .fetch_size(1048576)
         .build()
         .unwrap();
     log!("Connecting");
-    let graph = Graph::connect(config).await.unwrap();
+    let graph = Graph::connect(n4j_config).await.unwrap();
     log!("Start");
     let mut file = GraphFile::default();
     let mut nodes = graph
         .execute(
             query("match (n) where count { (n)--() } > $mind return n.uid, n.name")
-                .param("mind", MIN_DEGREE),
+                .param("mind", config.min_degree),
         )
         .await
         .unwrap();
@@ -73,7 +99,7 @@ async fn main() {
     let mut edges_q = graph
         .execute(query(
             "match (n)-->(m) where count { (n)--() } > $mind and count { (m)--() } > $mind return n.uid, m.uid",
-        ).param("mind", MIN_DEGREE))
+        ).param("mind", config.min_degree))
         .await
         .unwrap();
 
@@ -93,7 +119,7 @@ async fn main() {
     log!("{} edges", edges.len());
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(8)
+        .num_threads(config.threads)
         .build_global()
         .ok();
 
@@ -105,7 +131,7 @@ async fn main() {
         Settings {
             //barnes_hut: Some(1.2),
             barnes_hut: None,
-            chunk_size: Some(1024),
+            chunk_size: Some(config.chunk_size),
             dimensions: 2,
             dissuade_hubs: false,
             ka: 0.01,
@@ -118,7 +144,7 @@ async fn main() {
         },
     );
 
-    const IT_COUNT: usize = 1000;
+    const IT_COUNT: usize = 100;
     for i in 0..IT_COUNT {
         layout.iteration();
         if i % (IT_COUNT / 10) == 0 {
