@@ -1,5 +1,6 @@
 use nalgebra::Vector2;
 pub use speedy::{Readable, Writable};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 
 // 24bpp color structure
 #[derive(Copy, Clone, Readable, Writable)]
@@ -38,6 +39,14 @@ impl Color3f {
             r: (self.r + other.r) / 2.0,
             g: (self.g + other.g) / 2.0,
             b: (self.b + other.b) / 2.0,
+        }
+    }
+
+    pub fn to_u8(self) -> Color3b {
+        Color3b {
+            r: (self.r * 255.0) as u8,
+            g: (self.g * 255.0) as u8,
+            b: (self.b * 255.0) as u8,
         }
     }
 }
@@ -181,4 +190,19 @@ pub struct GraphFile {
     pub names_size: LenType,
     #[speedy(length = names_size)]
     pub names: Vec<u8>,
+}
+
+impl GraphFile {
+    pub fn get_adjacency(&self) -> Vec<Vec<u32>> {
+        let mut persons: Vec<_> = self.nodes.iter().map(|_| Vec::new()).collect();
+        for edge in self.edges.iter() {
+            if edge.a == edge.b {
+                panic!("Self edge detected"); // TODO
+                continue;
+            }
+            persons[edge.a as usize].push(edge.b);
+            persons[edge.b as usize].push(edge.a);
+        }
+        persons
+    }
 }

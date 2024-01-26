@@ -4,8 +4,8 @@ use crate::geom_draw::{create_circle_tris, create_rectangle};
 use array_tool::vec::Intersect;
 use derivative::*;
 
-use egui::{vec2, CollapsingHeader, Hyperlink, Pos2};
-use graph_format::Color3f;
+use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Vec2};
+use graph_format::{Color3b, Color3f};
 use itertools::Itertools;
 use nalgebra::Vector2;
 use std::collections::{HashSet, VecDeque};
@@ -340,6 +340,25 @@ impl UiState {
                                 ui.label("Classe :");
                                 ui.label(format!("{}", person.modularity_class));
                                 ui.end_row();
+                            });
+                        }
+                    });
+
+                CollapsingHeader::new("Classes")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        for cl in &data.modularity_classes {
+                            let rad = 5.0;
+                            let size = Vec2::splat(2.0 * rad + 5.0);
+                            ui.horizontal(|ui| {
+                                let (rect, _) = ui.allocate_at_least(size, Sense::hover());
+                                let Color3b { r, g, b } = cl.color.to_u8();
+                                ui.painter().circle_filled(
+                                    rect.center(),
+                                    rad,
+                                    Color32::from_rgb(r / 2, g / 2, b / 2),
+                                );
+                                ui.label(format!("{}", cl.id));
                             });
                         }
                     });

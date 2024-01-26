@@ -1,4 +1,7 @@
+mod louvain;
+
 use ahash::AHashMap;
+use colourado::{ColorPalette, PaletteType};
 use derivative::Derivative;
 use figment::providers::{Env, Format, Toml};
 use figment::Figment;
@@ -31,12 +34,13 @@ struct Config {
 static LAST_LOG_TIME: Mutex<std::time::Instant> =
     Mutex::new(unsafe { std::mem::transmute([0u8; std::mem::size_of::<std::time::Instant>()]) });
 
+#[macro_export]
 macro_rules! log
 {
     ($($arg:tt)*) =>
     {
         {
-            let mut last_log_time = LAST_LOG_TIME.lock().unwrap();
+            let mut last_log_time = $crate::LAST_LOG_TIME.lock().unwrap();
             let now = std::time::Instant::now();
             let elapsed = now - *last_log_time;
             *last_log_time = now;
@@ -123,7 +127,7 @@ async fn main() {
         .build_global()
         .ok();
 
-    let mut layout = Layout::<f32>::from_graph(
+    /* let mut layout = Layout::<f32>::from_graph(
         edges,
         Nodes::Degree(file.nodes.len()),
         None,
@@ -152,13 +156,33 @@ async fn main() {
         }
     }
 
-    log!("Fetching positins");
+    log!("Writing positions");
     for (i, p) in layout.points.iter().enumerate() {
         file.nodes[i].position = Point { x: p[0], y: p[1] };
+    }*/
+
+    log!("Computing adjacency matrix");
+    let adj = file.get_adjacency();
+    log!("Running Louvain algorithm");
+    let louvain = louvain::Graph::new(adj).louvain();
+    log!("Creating color palette");
+    let palette = ColorPalette::new(louvain.nodes.len() as u32, PaletteType::Random, false);
+    file.classes.push(Color3b { r: 255, g: 0, b: 0 });
+    for (i, (comm, color)) in louvain.nodes.iter().zip(palette.colors).enumerate() {
+        for user in comm.payload.as_ref().unwrap() {
+            file.nodes[user.0].class = (i + 1) as u16;
+        }
+        file.classes.push(Color3b {
+            r: (color.red * 255.0) as u8,
+            g: (color.green * 255.0) as u8,
+            b: (color.blue * 255.0) as u8,
+        });
+    }
+    for node in &file.nodes {
+        assert!(node.class != 0);
     }
 
     log!("Writing metadata");
-    file.classes.push(Color3b { r: 255, g: 0, b: 0 });
 
     file.class_count = file.classes.len() as u16;
     file.node_count = file.nodes.len() as LenType;

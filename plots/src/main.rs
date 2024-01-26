@@ -6,11 +6,7 @@ use std::collections::hash_map::Entry::{Occupied, Vacant};
 fn main() {
     let file = GraphFile::read_from_file("graph_n4j.bin").unwrap();
     let mut degrees = AHashMap::new();
-    let mut persons: Vec<_> = file.nodes.iter().map(|n| Vec::new()).collect();
-    for edge in file.edges {
-        persons[edge.a as usize].push(edge.b);
-        persons[edge.b as usize].push(edge.a);
-    }
+    let persons = file.get_adjacency();
     for pers in persons {
         match degrees.entry(pers.len()) {
             Occupied(mut e) => {

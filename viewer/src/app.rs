@@ -353,7 +353,7 @@ impl RenderedGraph {
                     let pb = &data.viewer.persons[e.b as usize];
                     let a = pa.position;
                     let b = pb.position;
-                    let ortho = (b - a).ortho().normalized() * 3.0;
+                    let ortho = (b - a).ortho().normalized() * 1.0;
                     let v0 = a + ortho;
                     let v1 = a - ortho;
                     let v2 = b - ortho;
@@ -523,15 +523,15 @@ impl RenderedGraph {
             );
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
-            if nodes {
-                gl.draw_arrays(glow::POINTS, 0, self.nodes_count as i32);
-            }
             if edges {
                 gl.draw_arrays(
                     glow::TRIANGLES,
                     self.nodes_count as i32,
-                    2 * self.edges_count as i32,
+                    2 * 3 * self.edges_count as i32,
                 );
+            }
+            if nodes {
+                gl.draw_arrays(glow::POINTS, 0, self.nodes_count as i32);
             }
 
             gl.use_program(Some(self.program_node));
