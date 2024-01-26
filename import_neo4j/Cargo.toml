@@ -7,7 +7,6 @@ edition = "2021"
 neo4rs = "0.7.1"
 tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
 graph_format = { path = "../graph_format" }
-speedy = "0.8.7"
 forceatlas2 = { version = "0.5.0", features = ["barnes_hut", "parallel"] }
 ahash = "0.8.7"
 rayon = "1.8.1"

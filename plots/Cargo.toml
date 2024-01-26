@@ -1,0 +1,9 @@
+[package]
+name = "plots"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ahash = "0.8.7"
+graph_format = { path = "../graph_format" }
+inline-python = "0.12.0"

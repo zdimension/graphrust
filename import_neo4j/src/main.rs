@@ -3,10 +3,9 @@ use derivative::Derivative;
 use figment::providers::{Env, Format, Toml};
 use figment::Figment;
 use forceatlas2::{Layout, Nodes, Settings};
-use graph_format::{Color3b, EdgeStore, GraphFile, LenType, NodeStore, Point};
+use graph_format::*;
 use neo4rs::{query, ConfigBuilder, Graph};
 use serde::Deserialize;
-use speedy::Writable;
 use std::sync::Mutex;
 
 #[derive(Deserialize, Derivative)]

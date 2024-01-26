@@ -1,5 +1,5 @@
 use nalgebra::Vector2;
-use speedy::{Readable, Writable};
+pub use speedy::{Readable, Writable};
 
 // 24bpp color structure
 #[derive(Copy, Clone, Readable, Writable)]

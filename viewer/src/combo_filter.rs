@@ -12,6 +12,7 @@ use egui::{
     Ui, WidgetText,
 };
 
+use egui::text::{CCursor, CCursorRange};
 use std::sync::{Arc, Mutex};
 
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
@@ -97,6 +98,12 @@ pub fn combo_with_filter(
     let wrap_enabled = false;
     let width = Some(COMBO_WIDTH);
     let is_popup_open = ui.memory(|m| m.is_popup_open(popup_id));
+    if !is_popup_open {
+        ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone())
+            .lock()
+            .unwrap()
+            .first_open = false;
+    }
 
     let margin = ui.spacing().button_padding;
     let mut button_response = button_frame(ui, id, is_popup_open, Sense::click(), |ui| {
@@ -175,13 +182,24 @@ pub fn combo_with_filter(
                 ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
             let mut state = binding.lock().unwrap();
 
-            let txt = ui.add_sized(
-                ui.available_size() * vec2(1.0, 0.0),
-                TextEdit::singleline(&mut state.pattern),
-            );
+            let layout = Layout::centered_and_justified(ui.layout().main_dir());
+            let mut txt_resp = ui
+                .allocate_ui_with_layout(
+                    (ui.available_size() * vec2(1.0, 0.0)).into(),
+                    layout,
+                    |ui| TextEdit::singleline(&mut state.pattern).show(ui),
+                )
+                .inner;
+            let txt = &txt_resp.response;
             if !state.first_open {
                 state.first_open = true;
+                state.pattern.clear();
                 ui.memory_mut(|m| m.request_focus(txt.id));
+                // TODO: doesn't work so we just clear the pattern
+                txt_resp.state.set_ccursor_range(Some(CCursorRange::two(
+                    CCursor::new(0),
+                    CCursor::new(state.pattern.len()),
+                )));
             }
             let changed = txt.changed();
             let mut is_need_filter = false;
