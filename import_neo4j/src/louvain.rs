@@ -12,7 +12,7 @@ pub struct Graph {
     pub total_links: usize,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct PersonId(pub usize);
 #[derive(Copy, Clone)]
 pub struct CommunityId(pub usize);

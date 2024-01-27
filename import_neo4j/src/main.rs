@@ -1,5 +1,8 @@
+mod gephi;
 mod louvain;
 
+use crate::gephi::Modularity;
+use crate::louvain::PersonId;
 use ahash::AHashMap;
 use colourado::{ColorPalette, PaletteType};
 use derivative::Derivative;
@@ -8,6 +11,7 @@ use figment::Figment;
 use forceatlas2::{Layout, Nodes, Settings};
 use graph_format::*;
 use neo4rs::{query, ConfigBuilder, Graph};
+use petgraph::graph::NodeIndex;
 use serde::Deserialize;
 use std::sync::Mutex;
 
@@ -127,14 +131,14 @@ async fn main() {
         .build_global()
         .ok();
 
-    /* let mut layout = Layout::<f32>::from_graph(
+    let mut layout = Layout::<f32>::from_graph(
         edges,
         Nodes::Degree(file.nodes.len()),
         None,
         None,
         Settings {
-            //barnes_hut: Some(1.2),
-            barnes_hut: None,
+            barnes_hut: Some(1.2),
+            //barnes_hut: None,
             chunk_size: Some(config.chunk_size),
             dimensions: 2,
             dissuade_hubs: false,
@@ -159,12 +163,57 @@ async fn main() {
     log!("Writing positions");
     for (i, p) in layout.points.iter().enumerate() {
         file.nodes[i].position = Point { x: p[0], y: p[1] };
-    }*/
+    }
 
     log!("Computing adjacency matrix");
     let adj = file.get_adjacency();
-    log!("Running Louvain algorithm");
+
+    log!("Running Louvain algorithm2");
+    let mut pet = petgraph::Graph::new_undirected();
+    let mut inv_map: AHashMap<usize, NodeIndex> = AHashMap::new();
+    for i in 0..adj.len() {
+        inv_map.insert(i, pet.add_node(()));
+    }
+    for (i, pers) in adj.iter().enumerate() {
+        for &j in pers {
+            let i = *inv_map.get(&i).unwrap();
+            let j = *inv_map.get(&(j as usize)).unwrap();
+            pet.add_edge(i, j, 1.0);
+        }
+    }
+    log!("p {} {}", pet.edge_count(), pet.node_count());
+    let resolution = 1.0;
+    let noise = 1;
+    let mut modularity = Modularity::new(resolution, noise);
+    log!("Running clusterization");
+    let results = modularity.execute(&pet);
+    log!("Done");
+    let num_of_communities = *modularity.communityByNode.iter().max().unwrap_or(&0) as usize + 2; // Parent Community included
+    println!(
+        "Number of Clusters: {} -  with resolution {}",
+        num_of_communities - 1,
+        resolution
+    );
+    println!("Final Modularity: {:?}", results);
+
+    log!("Creating color palette");
+    let palette = ColorPalette::new(num_of_communities as u32, PaletteType::Random, false);
+    file.classes.push(Color3b { r: 255, g: 0, b: 0 });
+
+    for (i, color) in palette.colors.iter().enumerate() {
+        file.classes.push(Color3b {
+            r: (color.red * 255.0) as u8,
+            g: (color.green * 255.0) as u8,
+            b: (color.blue * 255.0) as u8,
+        });
+    }
+
+    for (i, comm) in modularity.communityByNode.iter().enumerate() {
+        file.nodes[i].class = *comm as u16 + 1;
+    }
+    /*log!("Running Louvain algorithm");
     let louvain = louvain::Graph::new(adj).louvain();
+
     log!("Creating color palette");
     let palette = ColorPalette::new(louvain.nodes.len() as u32, PaletteType::Random, false);
     file.classes.push(Color3b { r: 255, g: 0, b: 0 });
@@ -180,7 +229,7 @@ async fn main() {
     }
     for node in &file.nodes {
         assert!(node.class != 0);
-    }
+    }*/
 
     log!("Writing metadata");
 
