@@ -7,7 +7,7 @@ use derivative::*;
 use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Vec2};
 use graph_format::{Color3b, Color3f};
 use itertools::Itertools;
-use nalgebra::Vector2;
+use nalgebra::{Matrix4, Vector2};
 use std::collections::{HashSet, VecDeque};
 use std::ops::{Range, RangeInclusive};
 
@@ -32,8 +32,10 @@ pub struct UiState {
     pub deg_filter: (u16, u16),
     pub deg_filter_changed: bool,
     pub node_count: usize,
+    pub node_count_classes: Vec<(usize, usize)>,
     pub mouse_pos: Option<Pos2>,
     pub mouse_pos_world: Option<Vector2<f32>>,
+    pub camera: Matrix4<f32>,
 }
 
 impl UiState {
@@ -134,14 +136,31 @@ impl UiState {
     }
 
     fn refresh_node_count(&mut self, data: &ViewerData<'_>) {
-        self.node_count = data
-            .persons
+        let mut count_classes = vec![0; data.modularity_classes.len()];
+        /*self.node_count = data
+        .persons
+        .iter()
+        .filter(|p| {
+            let deg = p.neighbors.len() as u16;
+            deg >= self.deg_filter.0 && deg <= self.deg_filter.1
+        })
+        .inspect(|p| todo!())
+        .count();*/
+        self.node_count = 0;
+        for p in &data.persons {
+            let deg = p.neighbors.len() as u16;
+            if deg >= self.deg_filter.0 && deg <= self.deg_filter.1 {
+                self.node_count += 1;
+                count_classes[p.modularity_class as usize] += 1;
+            }
+        }
+        self.node_count_classes = count_classes
             .iter()
-            .filter(|p| {
-                let deg = p.neighbors.len() as u16;
-                deg >= self.deg_filter.0 && deg <= self.deg_filter.1
-            })
-            .count();
+            .enumerate()
+            .filter(|(_, &c)| c != 0)
+            .sorted_by_key(|(_, &c)| std::cmp::Reverse(c))
+            .map(|(i, &c)| (i, c))
+            .collect_vec();
     }
 
     pub fn draw_ui(
@@ -347,7 +366,8 @@ impl UiState {
                 CollapsingHeader::new("Classes")
                     .default_open(false)
                     .show(ui, |ui| {
-                        for cl in &data.modularity_classes {
+                        for &(clid, count) in &self.node_count_classes {
+                            let cl = &data.modularity_classes[clid];
                             let rad = 5.0;
                             let size = Vec2::splat(2.0 * rad + 5.0);
                             ui.horizontal(|ui| {
@@ -359,6 +379,7 @@ impl UiState {
                                     Color32::from_rgb(r / 2, g / 2, b / 2),
                                 );
                                 ui.label(format!("{}", cl.id));
+                                ui.label(format!("{}", count));
                             });
                         }
                     });
@@ -373,6 +394,15 @@ impl UiState {
                             ui.label("Position (monde) :");
                             ui.label(format!("{:?}", self.mouse_pos_world));
                             ui.end_row();
+                        });
+                        egui::Grid::new("#cammatrix").show(ui, |ui| {
+                            for i in 0..4 {
+                                for j in 0..4 {
+                                    // format fixed width
+                                    ui.label(format!("{:.3}", self.camera[(i, j)]));
+                                }
+                                ui.end_row();
+                            }
                         });
                     });
             });

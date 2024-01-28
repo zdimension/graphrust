@@ -2,8 +2,9 @@ use crate::camera::Camera;
 
 use crate::graph_storage::{load_binary, ProcessedData};
 use crate::ui::UiState;
+use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{Id, Vec2};
+use egui::{Color32, Id, Vec2};
 use graph_format::{Color3f, Point};
 use itertools::Itertools;
 use nalgebra::{Matrix4, Vector4};
@@ -127,8 +128,11 @@ impl<'a> GraphViewApp<'a> {
             .gl
             .as_ref()
             .expect("You need to run eframe with the glow backend");
+        unsafe {
+            gl.enable(glow::PROGRAM_POINT_SIZE);
+        }
         let data = load_binary();
-        let min = data
+        /*let min = data
             .viewer
             .persons
             .iter()
@@ -149,7 +153,16 @@ impl<'a> GraphViewApp<'a> {
             })
             .unwrap();
         log::info!("min: {:?}, max: {:?}", min, max);
-        let center = min + (max - min) / 2.0;
+        let center = min + (max - min) / 2.0;*/
+        log::info!("Computing center");
+        let center = data
+            .viewer
+            .persons
+            .iter()
+            .map(|p| p.position)
+            .sum::<Point>()
+            / data.viewer.persons.len() as f32;
+        log::info!("Center: {:?}", center);
         let mut res = Self {
             ui_state: UiState {
                 node_count: data.viewer.persons.len(),
@@ -157,10 +170,9 @@ impl<'a> GraphViewApp<'a> {
             },
             rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
             viewer_data: data.viewer,
-            camera: Camera::new(),
+            camera: Camera::new(center.into()),
             cam_animating: None,
         };
-        //res.camera.pan(-center.x, -center.y);
         #[cfg(target_arch = "wasm32")]
         {
             use wasm_bindgen::JsCast;
@@ -187,7 +199,10 @@ impl<'a> eframe::App for GraphViewApp<'a> {
 
         self.ui_state.draw_ui(ctx, frame, &self.viewer_data);
         egui::CentralPanel::default()
-            .frame(egui::Frame::none())
+            .frame(egui::Frame {
+                fill: Color32::WHITE,
+                ..Default::default()
+            })
             .show(ctx, |ui| {
                 let (id, rect) = ui.allocate_space(ui.available_size());
 
@@ -251,6 +266,7 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                 }
 
                 let cam = self.camera.get_matrix();
+                self.ui_state.camera = cam;
                 let callback = egui::PaintCallback {
                     rect,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
@@ -266,7 +282,8 @@ impl<'a> eframe::App for GraphViewApp<'a> {
 
 pub struct RenderedGraph {
     program_node: glow::Program,
-    program_person: glow::Program,
+    program_basic: glow::Program,
+    program_edge: glow::Program,
     nodes_buffer: glow::Buffer,
     nodes_count: usize,
     nodes_array: glow::VertexArray,
@@ -291,16 +308,23 @@ impl RenderedGraph {
         unsafe {
             let programs = [
                 [
-                    (glow::VERTEX_SHADER, include_str!("shaders/graph.vert")),
-                    (glow::FRAGMENT_SHADER, include_str!("shaders/graph.frag")),
+                    (glow::VERTEX_SHADER, include_str!("shaders/basic.vert")),
+                    (glow::FRAGMENT_SHADER, include_str!("shaders/basic.frag")),
                 ],
                 [
-                    (glow::VERTEX_SHADER, include_str!("shaders/person.vert")),
-                    (glow::FRAGMENT_SHADER, include_str!("shaders/graph.frag")),
+                    (glow::VERTEX_SHADER, include_str!("shaders/graph.vert")),
+                    (glow::FRAGMENT_SHADER, include_str!("shaders/basic.frag")),
+                ],
+                [
+                    (glow::VERTEX_SHADER, include_str!("shaders/graph.vert")),
+                    (
+                        glow::FRAGMENT_SHADER,
+                        include_str!("shaders/graph_node.frag"),
+                    ),
                 ],
             ];
 
-            let [program_node, program_person] = programs.map(|shader_sources| {
+            let [program_basic, program_edge, program_node] = programs.map(|shader_sources| {
                 let program = gl.create_program().expect("Cannot create program");
 
                 let shaders: Vec<_> = shader_sources
@@ -353,7 +377,7 @@ impl RenderedGraph {
                     let pb = &data.viewer.persons[e.b as usize];
                     let a = pa.position;
                     let b = pb.position;
-                    let ortho = (b - a).ortho().normalized() * 1.0;
+                    let ortho = (b - a).ortho().normalized() * 0.75;
                     let v0 = a + ortho;
                     let v1 = a - ortho;
                     let v2 = b - ortho;
@@ -474,8 +498,9 @@ impl RenderedGraph {
             gl.enable_vertex_attrib_array(1);
 
             Self {
+                program_basic,
+                program_edge,
                 program_node,
-                program_person,
                 nodes_buffer: vertices_buffer,
                 nodes_count: data.viewer.persons.len(),
                 nodes_array: vertices_array,
@@ -492,8 +517,9 @@ impl RenderedGraph {
     fn destroy(&self, gl: &glow::Context) {
         use glow::HasContext as _;
         unsafe {
+            gl.delete_program(self.program_basic);
+            gl.delete_program(self.program_edge);
             gl.delete_program(self.program_node);
-            gl.delete_program(self.program_person);
             gl.delete_buffer(self.nodes_buffer);
             gl.delete_vertex_array(self.nodes_array);
             gl.delete_buffer(self.path_buffer);
@@ -505,25 +531,26 @@ impl RenderedGraph {
         use glow::HasContext as _;
         unsafe {
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-            gl.use_program(Some(self.program_person));
-            gl.uniform_matrix_4_f32_slice(
-                Some(
-                    &gl.get_uniform_location(self.program_person, "u_projection")
-                        .unwrap(),
-                ),
-                false,
-                &cam.as_slice(),
-            );
-            gl.uniform_1_u32(
-                Some(
-                    &gl.get_uniform_location(self.program_person, "u_degfilter")
-                        .unwrap(),
-                ),
-                ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32),
-            );
+
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
             if edges {
+                gl.use_program(Some(self.program_edge));
+                gl.uniform_matrix_4_f32_slice(
+                    Some(
+                        &gl.get_uniform_location(self.program_edge, "u_projection")
+                            .unwrap(),
+                    ),
+                    false,
+                    &cam.as_slice(),
+                );
+                gl.uniform_1_u32(
+                    Some(
+                        &gl.get_uniform_location(self.program_edge, "u_degfilter")
+                            .unwrap(),
+                    ),
+                    ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32),
+                );
                 gl.draw_arrays(
                     glow::TRIANGLES,
                     self.nodes_count as i32,
@@ -531,10 +558,26 @@ impl RenderedGraph {
                 );
             }
             if nodes {
+                gl.use_program(Some(self.program_node));
+                gl.uniform_matrix_4_f32_slice(
+                    Some(
+                        &gl.get_uniform_location(self.program_node, "u_projection")
+                            .unwrap(),
+                    ),
+                    false,
+                    &cam.as_slice(),
+                );
+                gl.uniform_1_u32(
+                    Some(
+                        &gl.get_uniform_location(self.program_edge, "u_degfilter")
+                            .unwrap(),
+                    ),
+                    ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32),
+                );
                 gl.draw_arrays(glow::POINTS, 0, self.nodes_count as i32);
             }
 
-            gl.use_program(Some(self.program_node));
+            gl.use_program(Some(self.program_basic));
             gl.uniform_matrix_4_f32_slice(
                 Some(
                     &gl.get_uniform_location(self.program_node, "u_projection")

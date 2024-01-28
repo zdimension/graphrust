@@ -1,6 +1,6 @@
 use crate::app::{ModularityClass, Person, ViewerData};
 
-use graph_format::{EdgeStore, GraphFile};
+use graph_format::{EdgeStore, GraphFile, Point};
 use itertools::Itertools;
 use nalgebra::Vector2;
 use simsearch::SimSearch;
@@ -62,7 +62,7 @@ pub fn load_binary<'a>() -> ProcessedData<'a> {
         .iter()
         .map(|node| unsafe {
             Person::new(
-                node.position,
+                node.position + Point::new(0.0, 3000.0),
                 node.size,
                 node.class as u16,
                 str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)),

@@ -1,6 +1,7 @@
 use nalgebra::Vector2;
 pub use speedy::{Readable, Writable};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::iter::Sum;
 
 // 24bpp color structure
 #[derive(Copy, Clone, Readable, Writable)]
@@ -57,6 +58,12 @@ impl Color3f {
 pub struct Point {
     pub x: f32,
     pub y: f32,
+}
+
+impl Sum for Point {
+    fn sum<I: Iterator<Item = Point>>(iter: I) -> Point {
+        iter.fold(Point::new(0.0, 0.0), |a, b| a + b)
+    }
 }
 
 impl From<Point> for Vector2<f32> {

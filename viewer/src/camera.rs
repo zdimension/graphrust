@@ -1,4 +1,5 @@
 use egui::{vec2, Pos2, Vec2};
+use graph_format::Point;
 use nalgebra::{Matrix4, Orthographic3, Similarity3, Vector3};
 
 /// 2D planar camera
@@ -9,12 +10,13 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new() -> Camera {
+    pub fn new(center: Point) -> Camera {
         let transf = Similarity3::new(
+            Vector3::new(-center.x, -center.y, 0.0),
             Vector3::new(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 0.0, 0.0),
-            0.05,
-        );
+            1.0,
+        )
+        .append_scaling(0.1);
         Camera {
             transf,
             ortho: Camera::create_orthographic(1, 1),
