@@ -132,28 +132,6 @@ impl<'a> GraphViewApp<'a> {
             gl.enable(glow::PROGRAM_POINT_SIZE);
         }
         let data = load_binary();
-        /*let min = data
-            .viewer
-            .persons
-            .iter()
-            .map(|p| p.position)
-            .reduce(|a, b| Point {
-                x: a.x.min(b.x),
-                y: a.y.min(b.y),
-            })
-            .unwrap();
-        let max = data
-            .viewer
-            .persons
-            .iter()
-            .map(|p| p.position)
-            .reduce(|a, b| Point {
-                x: a.x.max(b.x),
-                y: a.y.max(b.y),
-            })
-            .unwrap();
-        log::info!("min: {:?}, max: {:?}", min, max);
-        let center = min + (max - min) / 2.0;*/
         log::info!("Computing center");
         let center = data
             .viewer
