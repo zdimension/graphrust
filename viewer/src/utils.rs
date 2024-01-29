@@ -13,7 +13,7 @@ macro_rules! log
     }
 }
 */
-pub fn add_loading_text(_text: &str) {
+/*pub fn add_loading_text(_text: &str) {
     #[cfg(target_arch = "wasm32")]
     {
         use wasm_bindgen::JsCast;
@@ -31,7 +31,11 @@ pub fn add_loading_text(_text: &str) {
 
         elem.set_text_content(Some(&new_text));
     }
-}
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        println!("{}", text);
+    }
+}*/
 
 pub unsafe fn str_from_null_terminated_utf8<'a>(s: *const u8) -> &'a str {
     CStr::from_ptr(s as *const _).to_str().unwrap()

@@ -558,7 +558,7 @@ impl RenderedGraph {
             gl.use_program(Some(self.program_basic));
             gl.uniform_matrix_4_f32_slice(
                 Some(
-                    &gl.get_uniform_location(self.program_node, "u_projection")
+                    &gl.get_uniform_location(self.program_basic, "u_projection")
                         .unwrap(),
                 ),
                 false,

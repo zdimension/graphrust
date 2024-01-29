@@ -50,8 +50,6 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn start() {
-    use graphrust::log;
-
     log::info!("Start called");
     let web_options = eframe::WebOptions::default();
 

@@ -16,14 +16,14 @@ use serde::Deserialize;
 use std::sync::Mutex;
 
 #[derive(Deserialize, Derivative)]
-#[derivative(Default)]
+#[derivative(Default, Debug)]
 #[serde(default)]
 struct Config {
     #[derivative(Default(value = "\"127.0.0.1:7687\".to_string()"))]
     uri: String,
     #[derivative(Default(value = "\"neo4j\".to_string()"))]
     user: String,
-    #[derivative(Default(value = "\"password\".to_string()"))]
+    #[derivative(Default(value = "\"password\".to_string()"), Debug = "ignore")]
     pass: String,
     #[derivative(Default(value = "5"))]
     min_degree: u32,
@@ -64,6 +64,8 @@ async fn main() {
         .merge(Env::prefixed("IMPORT_"))
         .extract()
         .unwrap();
+
+    log!("Using config: {:#?}", config);
 
     let n4j_config = ConfigBuilder::default()
         .uri(config.uri)
@@ -137,14 +139,14 @@ async fn main() {
         None,
         None,
         Settings {
-            barnes_hut: Some(1.2),
-            //barnes_hut: None,
+            //barnes_hut: Some(1.2),
+            barnes_hut: None,
             chunk_size: Some(config.chunk_size),
             dimensions: 2,
             dissuade_hubs: false,
-            ka: 0.01,
-            kg: 0.001,
-            kr: 0.002,
+            ka: 0.1,
+            kg: 0.1,
+            kr: 0.02,
             lin_log: false,
             speed: 1.0,
             prevent_overlapping: None,
@@ -152,13 +154,19 @@ async fn main() {
         },
     );
 
-    const IT_COUNT: usize = 100;
-    for i in 0..IT_COUNT {
+    let start = std::time::Instant::now();
+    log!("Running layout");
+    for i in 0..config.layout_iterations {
         layout.iteration();
-        if i % (IT_COUNT / 10) == 0 {
+        if i % (config.layout_iterations / 10) == 0 {
             log!("Iteration {}", i);
         }
     }
+    log!(
+        "{} iterations in {:?}",
+        config.layout_iterations,
+        start.elapsed()
+    );
 
     log!("Writing positions");
     for (i, p) in layout.points.iter().enumerate() {
