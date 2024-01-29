@@ -5,6 +5,7 @@ use array_tool::vec::Intersect;
 use derivative::*;
 
 use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Vec2};
+use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f};
 use itertools::Itertools;
 use nalgebra::{Matrix4, Vector2};
@@ -172,239 +173,260 @@ impl UiState {
         egui::SidePanel::left("settings")
             .resizable(false)
             .show(egui, |ui| {
-                CollapsingHeader::new("Affichage")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        ui.checkbox(&mut self.g_show_nodes, "Afficher les nœuds");
-                        ui.checkbox(&mut self.g_show_edges, "Afficher les liens");
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    CollapsingHeader::new("Affichage")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            ui.checkbox(&mut self.g_show_nodes, "Afficher les nœuds");
+                            ui.checkbox(&mut self.g_show_edges, "Afficher les liens");
 
-                        let start = ui
-                            .add(
-                                egui::DragValue::new(&mut self.deg_filter.0)
-                                    .speed(1)
-                                    .clamp_range(1..=u16::MAX)
-                                    .prefix("Degré minimum : "),
-                            )
-                            .changed();
-                        let end = ui
-                            .add(
-                                egui::DragValue::new(&mut self.deg_filter.1)
-                                    .speed(1)
-                                    .clamp_range(1..=u16::MAX)
-                                    .prefix("Degré maximum : "),
-                            )
-                            .changed();
-                        if start || end {
-                            self.deg_filter_changed = true;
-                            self.refresh_node_count(data);
-                        }
-
-                        ui.horizontal(|ui| {
-                            ui.label("Nœuds affichés :");
-                            ui.label(format!("{}", self.node_count));
-                        })
-                    });
-
-                CollapsingHeader::new("Chemin le plus court")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        let c1 = ui
-                            .horizontal(|ui| {
-                                let c =
-                                    combo_with_filter(ui, "#path_src", &mut self.path_src, data);
-                                if c.changed() {
-                                    self.set_infos_current(self.path_src);
-                                }
-                                if ui.button("x").clicked() {
-                                    self.path_src = None;
-                                    self.found_path = None;
-                                    self.path_vbuf = Some(vec![]);
-                                }
-                                c
-                            })
-                            .inner;
-
-                        let c2 = ui
-                            .horizontal(|ui| {
-                                let c =
-                                    combo_with_filter(ui, "#path_dest", &mut self.path_dest, data);
-                                if c.changed() {
-                                    self.set_infos_current(self.path_dest);
-                                }
-                                if ui.button("x").clicked() {
-                                    self.path_dest = None;
-                                    self.found_path = None;
-                                    self.path_vbuf = Some(vec![]);
-                                }
-                                c
-                            })
-                            .inner;
-
-                        //let exw = ui.calc_item_width();
-                        //ui.set_next_item_width(exw);
-                        ui.horizontal(|ui| {
-                            ui.label("Exclure :");
-                            if ui.button("x").clicked() {
-                                self.exclude_ids.clear();
+                            let start = ui
+                                .add(
+                                    egui::DragValue::new(&mut self.deg_filter.0)
+                                        .speed(1)
+                                        .clamp_range(1..=u16::MAX)
+                                        .prefix("Degré minimum : "),
+                                )
+                                .changed();
+                            let end = ui
+                                .add(
+                                    egui::DragValue::new(&mut self.deg_filter.1)
+                                        .speed(1)
+                                        .clamp_range(1..=u16::MAX)
+                                        .prefix("Degré maximum : "),
+                                )
+                                .changed();
+                            if start || end {
+                                self.deg_filter_changed = true;
+                                self.refresh_node_count(data);
                             }
+
+                            ui.horizontal(|ui| {
+                                ui.label("Nœuds affichés :");
+                                ui.label(format!("{}", self.node_count));
+                            })
                         });
 
-                        {
-                            let mut cur_excl = None;
-                            let mut del_excl = None;
-                            for (i, id) in self.exclude_ids.iter().enumerate() {
-                                ui.horizontal(|ui| {
-                                    if ui
-                                        .add(
-                                            egui::Button::new(data.persons[*id].name)
-                                                .min_size(vec2(COMBO_WIDTH, 0.0)),
-                                        )
-                                        .clicked()
-                                    {
-                                        cur_excl = Some(*id);
+                    CollapsingHeader::new("Chemin le plus court")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            let c1 = ui
+                                .horizontal(|ui| {
+                                    let c = combo_with_filter(
+                                        ui,
+                                        "#path_src",
+                                        &mut self.path_src,
+                                        data,
+                                    );
+                                    if c.changed() {
+                                        self.set_infos_current(self.path_src);
                                     }
                                     if ui.button("x").clicked() {
-                                        del_excl = Some(i);
+                                        self.path_src = None;
+                                        self.found_path = None;
+                                        self.path_vbuf = Some(vec![]);
                                     }
-                                });
+                                    c
+                                })
+                                .inner;
+
+                            let c2 = ui
+                                .horizontal(|ui| {
+                                    let c = combo_with_filter(
+                                        ui,
+                                        "#path_dest",
+                                        &mut self.path_dest,
+                                        data,
+                                    );
+                                    if c.changed() {
+                                        self.set_infos_current(self.path_dest);
+                                    }
+                                    if ui.button("x").clicked() {
+                                        self.path_dest = None;
+                                        self.found_path = None;
+                                        self.path_vbuf = Some(vec![]);
+                                    }
+                                    c
+                                })
+                                .inner;
+
+                            ui.horizontal(|ui| {
+                                ui.label("Exclure :");
+                                if ui.button("x").clicked() {
+                                    self.exclude_ids.clear();
+                                }
+                            });
+
+                            {
+                                let mut cur_excl = None;
+                                let mut del_excl = None;
+                                for (i, id) in self.exclude_ids.iter().enumerate() {
+                                    ui.horizontal(|ui| {
+                                        if ui
+                                            .add(
+                                                egui::Button::new(data.persons[*id].name)
+                                                    .min_size(vec2(COMBO_WIDTH, 0.0)),
+                                            )
+                                            .clicked()
+                                        {
+                                            cur_excl = Some(*id);
+                                        }
+                                        if ui.button("x").clicked() {
+                                            del_excl = Some(i);
+                                        }
+                                    });
+                                }
+                                if let Some(id) = cur_excl {
+                                    self.set_infos_current(Some(id));
+                                }
+                                if let Some(i) = del_excl {
+                                    self.path_dirty = true;
+                                    self.exclude_ids.remove(i);
+                                }
                             }
-                            if let Some(id) = cur_excl {
+
+                            if (self.path_dirty || c1.changed() || c2.changed())
+                                | ui.checkbox(&mut self.path_no_direct, "Éviter chemin direct")
+                                    .changed()
+                                | ui.checkbox(&mut self.path_no_mutual, "Éviter amis communs")
+                                    .changed()
+                            {
+                                self.path_dirty = false;
+                                self.found_path = None;
+                                self.path_vbuf = Some(vec![]);
+                                self.path_status = match (self.path_src, self.path_dest) {
+                                    (Some(x), Some(y)) if x == y => {
+                                        String::from("Source et destination sont identiques")
+                                    }
+                                    (None, _) | (_, None) => String::from(""),
+                                    _ => {
+                                        self.do_pathfinding(data);
+                                        match self.found_path {
+                                            Some(ref path) => {
+                                                format!("Chemin trouvé, longueur {}", path.len())
+                                            }
+                                            None => String::from("Aucun chemin trouvé"),
+                                        }
+                                    }
+                                }
+                            }
+
+                            ui.label(self.path_status.as_str());
+
+                            let mut del_path = None;
+                            let mut cur_path = None;
+                            if let Some(ref path) = self.found_path {
+                                for (i, id) in path.iter().enumerate() {
+                                    ui.horizontal(|ui| {
+                                        if ui
+                                            .add(
+                                                egui::Button::new(data.persons[*id].name)
+                                                    .min_size(vec2(COMBO_WIDTH, 0.0)),
+                                            )
+                                            .clicked()
+                                        {
+                                            cur_path = Some(*id);
+                                        }
+                                        if i != 0 && i != path.len() - 1 {
+                                            if ui.button("x").clicked() {
+                                                del_path = Some(*id);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                            if let Some(id) = cur_path {
                                 self.set_infos_current(Some(id));
                             }
-                            if let Some(i) = del_excl {
+                            if let Some(i) = del_path {
                                 self.path_dirty = true;
-                                self.exclude_ids.remove(i);
+                                self.exclude_ids.push(i);
                             }
-                        }
+                        });
 
-                        if (self.path_dirty || c1.changed() || c2.changed())
-                            | ui.checkbox(&mut self.path_no_direct, "Éviter chemin direct")
-                                .changed()
-                            | ui.checkbox(&mut self.path_no_mutual, "Éviter amis communs")
-                                .changed()
-                        {
-                            self.path_dirty = false;
-                            self.found_path = None;
-                            self.path_vbuf = Some(vec![]);
-                            self.path_status = match (self.path_src, self.path_dest) {
-                                (Some(x), Some(y)) if x == y => {
-                                    String::from("Source et destination sont identiques")
-                                }
-                                (None, _) | (_, None) => String::from(""),
-                                _ => {
-                                    self.do_pathfinding(data);
-                                    match self.found_path {
-                                        Some(ref path) => {
-                                            format!("Chemin trouvé, longueur {}", path.len())
-                                        }
-                                        None => String::from("Aucun chemin trouvé"),
-                                    }
-                                }
-                            }
-                        }
+                    CollapsingHeader::new("Informations")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
+                            if let Some(id) = self.infos_current {
+                                let person = &data.persons[id];
 
-                        ui.label(self.path_status.as_str());
-
-                        let mut del_path = None;
-                        let mut cur_path = None;
-                        if let Some(ref path) = self.found_path {
-                            for (i, id) in path.iter().enumerate() {
-                                ui.horizontal(|ui| {
-                                    if ui
-                                        .add(
-                                            egui::Button::new(data.persons[*id].name)
-                                                .min_size(vec2(COMBO_WIDTH, 0.0)),
+                                egui::Grid::new("#infos").show(ui, |ui| {
+                                    ui.label("ID Facebook :");
+                                    ui.add(
+                                        Hyperlink::from_label_and_url(
+                                            person.id,
+                                            format!("https://facebook.com/{}", person.id),
                                         )
-                                        .clicked()
-                                    {
-                                        cur_path = Some(*id);
-                                    }
-                                    if i != 0 && i != path.len() - 1 {
-                                        if ui.button("x").clicked() {
-                                            del_path = Some(*id);
-                                        }
-                                    }
+                                        .open_in_new_tab(true),
+                                    );
+                                    ui.end_row();
+                                    ui.label("Amis :");
+                                    ui.label(format!("{}", person.neighbors.len()));
+                                    ui.end_row();
+                                    ui.label("Classe :");
+                                    ui.label(format!("{}", person.modularity_class));
+                                    ui.end_row();
                                 });
                             }
-                        }
-                        if let Some(id) = cur_path {
-                            self.set_infos_current(Some(id));
-                        }
-                        if let Some(i) = del_path {
-                            self.path_dirty = true;
-                            self.exclude_ids.push(i);
-                        }
-                    });
-
-                CollapsingHeader::new("Informations")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
-                        if let Some(id) = self.infos_current {
-                            let person = &data.persons[id];
-
-                            egui::Grid::new("#infos").show(ui, |ui| {
-                                ui.label("ID Facebook :");
-                                ui.add(
-                                    Hyperlink::from_label_and_url(
-                                        person.id,
-                                        format!("https://facebook.com/{}", person.id),
-                                    )
-                                    .open_in_new_tab(true),
-                                );
-                                ui.end_row();
-                                ui.label("Amis :");
-                                ui.label(format!("{}", person.neighbors.len()));
-                                ui.end_row();
-                                ui.label("Classe :");
-                                ui.label(format!("{}", person.modularity_class));
-                                ui.end_row();
-                            });
-                        }
-                    });
-
-                CollapsingHeader::new("Classes")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        for &(clid, count) in &self.node_count_classes {
-                            let cl = &data.modularity_classes[clid];
-                            let rad = 5.0;
-                            let size = Vec2::splat(2.0 * rad + 5.0);
-                            ui.horizontal(|ui| {
-                                let (rect, _) = ui.allocate_at_least(size, Sense::hover());
-                                let Color3b { r, g, b } = cl.color.to_u8();
-                                ui.painter().circle_filled(
-                                    rect.center(),
-                                    rad,
-                                    Color32::from_rgb(r / 2, g / 2, b / 2),
-                                );
-                                ui.label(format!("{}", cl.id));
-                                ui.label(format!("{}", count));
-                            });
-                        }
-                    });
-
-                CollapsingHeader::new("Détails")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        egui::Grid::new("#mouse_pos").show(ui, |ui| {
-                            ui.label("Position :");
-                            ui.label(format!("{:?}", self.mouse_pos));
-                            ui.end_row();
-                            ui.label("Position (monde) :");
-                            ui.label(format!("{:?}", self.mouse_pos_world));
-                            ui.end_row();
                         });
-                        egui::Grid::new("#cammatrix").show(ui, |ui| {
-                            for i in 0..4 {
-                                for j in 0..4 {
-                                    // format fixed width
-                                    ui.label(format!("{:.3}", self.camera[(i, j)]));
+
+                    CollapsingHeader::new("Classes")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            TableBuilder::new(ui)
+                                .column(Column::exact(20.0))
+                                .column(Column::exact(40.0))
+                                .column(Column::exact(40.0))
+                                .body(|mut body| {
+                                    for &(clid, count) in &self.node_count_classes {
+                                        body.row(15.0, |mut row| {
+                                            let cl = &data.modularity_classes[clid];
+                                            let rad = 5.0;
+                                            let size = Vec2::splat(2.0 * rad + 5.0);
+                                            row.col(|ui| {
+                                                let (rect, _) =
+                                                    ui.allocate_at_least(size, Sense::hover());
+                                                let Color3b { r, g, b } = cl.color.to_u8();
+                                                ui.painter().circle_filled(
+                                                    rect.center(),
+                                                    rad,
+                                                    Color32::from_rgb(r / 2, g / 2, b / 2),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.label(format!("{}", cl.id));
+                                            });
+                                            row.col(|ui| {
+                                                ui.label(format!("{}", count));
+                                            });
+                                        });
+                                    }
+                                });
+                        });
+
+                    CollapsingHeader::new("Détails")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            egui::Grid::new("#mouse_pos").show(ui, |ui| {
+                                ui.label("Position :");
+                                ui.label(format!("{:?}", self.mouse_pos));
+                                ui.end_row();
+                                ui.label("Position (monde) :");
+                                ui.label(format!("{:?}", self.mouse_pos_world));
+                                ui.end_row();
+                            });
+                            egui::Grid::new("#cammatrix").show(ui, |ui| {
+                                for i in 0..4 {
+                                    for j in 0..4 {
+                                        // format fixed width
+                                        ui.label(format!("{:.3}", self.camera[(i, j)]));
+                                    }
+                                    ui.end_row();
                                 }
-                                ui.end_row();
-                            }
+                            });
                         });
-                    });
+                });
             });
     }
 }
