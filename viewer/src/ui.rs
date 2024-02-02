@@ -254,6 +254,7 @@ impl UiState {
                                 ui.label("Exclure :");
                                 if ui.button("x").clicked() {
                                     self.exclude_ids.clear();
+                                    self.path_dirty = true;
                                 }
                             });
 
