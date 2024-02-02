@@ -2,6 +2,7 @@
 name = "viewer"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 array_tool = "1.0.3"
@@ -21,6 +22,10 @@ speedy = "0.8.7"
 log = "0.4"
 graph_format = { path = "../graph_format" }
 egui_extras = "0.25.0"
+
+[build-dependencies]
+anyhow = "1.0.79"
+vergen = { version = "8.3.1", features = ["build", "git", "gitcl"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.10"

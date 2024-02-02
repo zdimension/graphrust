@@ -177,7 +177,20 @@ impl UiState {
         egui::SidePanel::left("settings")
             .resizable(false)
             .show(egui, |ui| {
+                ui.spacing_mut().slider_width = 200.0;
                 egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.add_space(10.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.add_space(10.0);
+                        let commit = env!("VERGEN_GIT_SHA");
+                        ui.label("Commit ");
+                        ui.hyperlink_to(
+                            commit,
+                            format!("https://github.com/zdimension/graphrust/commit/{}", commit),
+                        );
+                        ui.label(format!(" ({})", env!("VERGEN_BUILD_DATE")));
+                    });
                     ui.add_space(10.0);
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
