@@ -204,7 +204,7 @@ impl GraphFile {
         let mut persons: Vec<_> = self.nodes.iter().map(|_| Vec::new()).collect();
         for edge in self.edges.iter() {
             if edge.a == edge.b {
-                panic!("Self edge detected"); // TODO
+                //panic!("Self edge detected"); // TODO
                 continue;
             }
             persons[edge.a as usize].push(edge.b);
