@@ -1,6 +1,5 @@
 mod gephi;
 mod louvain;
-
 use crate::gephi::Modularity;
 use crate::louvain::PersonId;
 use ahash::AHashMap;
@@ -13,6 +12,7 @@ use graph_format::*;
 use neo4rs::{query, ConfigBuilder, Graph};
 use petgraph::graph::NodeIndex;
 use serde::Deserialize;
+use std::io::Write;
 use std::sync::Mutex;
 
 #[derive(Deserialize, Derivative)]
@@ -114,6 +114,9 @@ async fn main() {
         .unwrap();
 
     let mut edges = Vec::new();
+    // write edge list to edges.txt with a buffered writer
+    let edges_file = std::fs::File::create("edges.txt").unwrap();
+    let mut edges_writer = std::io::BufWriter::new(&edges_file);
     log!("Processing edge query");
     while let Ok(Some(row)) = edges_q.next().await {
         let uid1: String = row.get("n.uid").unwrap();
@@ -125,10 +128,71 @@ async fn main() {
             a: a as u32,
             b: b as u32,
         });
+        writeln!(&mut edges_writer, "{} {}", a, b).unwrap();
     }
     log!("{} edges", edges.len());
+    // run scp edges.txt zdimension@domino:/home/zdimension/GPUGraphLayout/builds/linux
+    use std::process::Command;
+    log!(
+        "scp exited with: {}",
+        Command::new("scp")
+            .arg("edges.txt")
+            .arg("zdimension@domino:/home/zdimension/GPUGraphLayout/builds/linux")
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap()
+    );
+    log!(
+        "ssh exited with: {}",
+        Command::new("ssh")
+            .arg("zdimension@domino")
+            .arg(format!("cd /home/zdimension/GPUGraphLayout/builds/linux; rm *.bin; ./graph_viewer gpu {} 1 sg 1 1 approximate edges.txt . bin", config.layout_iterations))
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap()
+    );
+    log!(
+        "scp exited with: {}",
+        Command::new("scp")
+            .arg(format!(
+                "zdimension@domino:/home/zdimension/GPUGraphLayout/builds/linux/edges.txt_{}.bin",
+                config.layout_iterations
+            ))
+            .arg("edges.bin")
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap()
+    );
 
-    rayon::ThreadPoolBuilder::new()
+    #[derive(Readable)]
+    struct GGLNode {
+        id: u32,
+        x: f32,
+        y: f32,
+    }
+    #[derive(Readable)]
+    struct GGLFile {
+        #[speedy(length = ..)]
+        nodes: Vec<GGLNode>,
+    }
+
+    for layout_node in GGLFile::read_from_file("edges.bin")
+        .unwrap()
+        .nodes
+        .into_iter()
+    {
+        file.nodes[layout_node.id as usize].position = Point {
+            x: layout_node.x,
+            y: layout_node.y,
+        };
+    }
+
+    log!("Layout done");
+
+    /*rayon::ThreadPoolBuilder::new()
         .num_threads(config.threads)
         .build_global()
         .ok();
@@ -171,7 +235,7 @@ async fn main() {
     log!("Writing positions");
     for (i, p) in layout.points.iter().enumerate() {
         file.nodes[i].position = Point { x: p[0], y: p[1] };
-    }
+    }*/
 
     log!("Computing adjacency matrix");
     let adj = file.get_adjacency();
