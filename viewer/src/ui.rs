@@ -15,6 +15,7 @@ use std::ops::{Range, RangeInclusive};
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct UiState {
+    #[derivative(Default(value = "true"))]
     pub g_show_nodes: bool,
     #[derivative(Default(value = "true"))]
     pub g_show_edges: bool,
