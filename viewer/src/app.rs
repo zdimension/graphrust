@@ -350,59 +350,67 @@ impl RenderedGraph {
                         p.modularity_class,
                     )
                 })
-                .chain(data.edges.iter().flat_map(|e| {
-                    let pa = &data.viewer.persons[e.a as usize];
-                    let pb = &data.viewer.persons[e.b as usize];
-                    let a = pa.position;
-                    let b = pb.position;
-                    let ortho = (b - a).ortho().normalized() * 0.75;
-                    let v0 = a + ortho;
-                    let v1 = a - ortho;
-                    let v2 = b - ortho;
-                    let v3 = b + ortho;
-                    let color_a =
-                        data.viewer.modularity_classes[pa.modularity_class as usize].color;
-                    let color_b =
-                        data.viewer.modularity_classes[pb.modularity_class as usize].color;
-                    [
-                        PersonVertex::new(
-                            v0,
-                            color_a,
-                            pa.neighbors.len() as u16,
-                            pa.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v1,
-                            color_a,
-                            pa.neighbors.len() as u16,
-                            pa.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v2,
-                            color_b,
-                            pb.neighbors.len() as u16,
-                            pb.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v2,
-                            color_b,
-                            pb.neighbors.len() as u16,
-                            pb.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v3,
-                            color_b,
-                            pb.neighbors.len() as u16,
-                            pb.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v0,
-                            color_a,
-                            pa.neighbors.len() as u16,
-                            pa.modularity_class,
-                        ),
-                    ]
-                }))
+                .chain(
+                    data.edges
+                        .iter()
+                        .map(|e| {
+                            let pa = &data.viewer.persons[e.a as usize];
+                            let pb = &data.viewer.persons[e.b as usize];
+                            (pa, pb)
+                        })
+                        //.filter(|(pa, pb)| pa.neighbors.len() > 5 && pb.neighbors.len() > 5)
+                        .flat_map(|(pa, pb)| {
+                            let a = pa.position;
+                            let b = pb.position;
+                            let ortho = (b - a).ortho().normalized() * 0.75;
+                            let v0 = a + ortho;
+                            let v1 = a - ortho;
+                            let v2 = b - ortho;
+                            let v3 = b + ortho;
+                            let color_a =
+                                data.viewer.modularity_classes[pa.modularity_class as usize].color;
+                            let color_b =
+                                data.viewer.modularity_classes[pb.modularity_class as usize].color;
+                            [
+                                PersonVertex::new(
+                                    v0,
+                                    color_a,
+                                    pa.neighbors.len() as u16,
+                                    pa.modularity_class,
+                                ),
+                                PersonVertex::new(
+                                    v1,
+                                    color_a,
+                                    pa.neighbors.len() as u16,
+                                    pa.modularity_class,
+                                ),
+                                PersonVertex::new(
+                                    v2,
+                                    color_b,
+                                    pb.neighbors.len() as u16,
+                                    pb.modularity_class,
+                                ),
+                                PersonVertex::new(
+                                    v2,
+                                    color_b,
+                                    pb.neighbors.len() as u16,
+                                    pb.modularity_class,
+                                ),
+                                PersonVertex::new(
+                                    v3,
+                                    color_b,
+                                    pb.neighbors.len() as u16,
+                                    pb.modularity_class,
+                                ),
+                                PersonVertex::new(
+                                    v0,
+                                    color_a,
+                                    pa.neighbors.len() as u16,
+                                    pa.modularity_class,
+                                ),
+                            ]
+                        }),
+                )
                 .collect_vec();
 
             let vertices_array = gl
