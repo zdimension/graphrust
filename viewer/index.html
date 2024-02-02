@@ -17,7 +17,7 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
 
-    <link data-trunk rel="copy-file" href="../graph2.bin" />
+    <link data-trunk rel="copy-file" href="../graph_n4j.bin" />
 
     <style>
         html {
@@ -120,7 +120,7 @@
 
 <script>
     // fetch graph2_4.bin from the server
-    fetch("graph2.bin")
+    fetch("graph_n4j.bin")
         .then((response) => response.arrayBuffer())
         .then((bytes) => {
             window.graph = bytes;
