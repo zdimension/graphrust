@@ -37,6 +37,7 @@ pub struct UiState {
     pub deg_filter_changed: bool,
     pub node_count: usize,
     pub node_count_classes: Vec<(usize, usize)>,
+    pub max_degree: u16,
     pub mouse_pos: Option<Pos2>,
     pub mouse_pos_world: Option<Vector2<f32>>,
     pub camera: Matrix4<f32>,
@@ -201,7 +202,7 @@ impl UiState {
                                 .add(
                                     egui::DragValue::new(&mut self.deg_filter.0)
                                         .speed(1)
-                                        .clamp_range(1..=u16::MAX)
+                                        .clamp_range(1..=self.deg_filter.1)
                                         .prefix("Degré minimum : "),
                                 )
                                 .changed();
@@ -209,7 +210,7 @@ impl UiState {
                                 .add(
                                     egui::DragValue::new(&mut self.deg_filter.1)
                                         .speed(1)
-                                        .clamp_range(1..=u16::MAX)
+                                        .clamp_range(self.deg_filter.0..=self.max_degree)
                                         .prefix("Degré maximum : "),
                                 )
                                 .changed();

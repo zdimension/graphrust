@@ -146,6 +146,13 @@ impl<'a> GraphViewApp<'a> {
                 node_count: data.viewer.persons.len(),
                 g_opac_edges: 300000.0 / data.edges.len() as f32,
                 g_opac_nodes: 40000.0 / data.viewer.persons.len() as f32,
+                max_degree: data
+                    .viewer
+                    .persons
+                    .iter()
+                    .map(|p| p.neighbors.len())
+                    .max()
+                    .unwrap() as u16,
                 ..UiState::default()
             },
             rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
