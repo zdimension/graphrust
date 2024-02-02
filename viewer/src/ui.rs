@@ -4,7 +4,7 @@ use crate::geom_draw::{create_circle_tris, create_rectangle};
 use array_tool::vec::Intersect;
 use derivative::*;
 
-use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Vec2};
+use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, RichText, Sense, TextStyle, Vec2};
 use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f};
 use itertools::Itertools;
@@ -178,6 +178,23 @@ impl UiState {
             .resizable(false)
             .show(egui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.add_space(10.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.add_space(10.0);
+                        ui.label("Si l'interface est ");
+                        ui.label(RichText::new("lente").strong());
+                        ui.label(", décocher \"");
+                        ui.label(RichText::new("Afficher les liens").underline().strong());
+                        ui.label("\".");
+                    });
+                    ui.add_space(10.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.add_space(10.0);
+                        ui.label("Affichage nœuds dysfonctionnel sur certains navigateurs.\n");
+                        ui.label("Je travaille dessus.");
+                    });
+                    ui.add_space(10.0);
                     CollapsingHeader::new("Affichage")
                         .default_open(true)
                         .show(ui, |ui| {
