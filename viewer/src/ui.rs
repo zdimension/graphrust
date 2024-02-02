@@ -330,7 +330,9 @@ impl UiState {
                                 }
                             }
 
-                            ui.label(self.path_status.as_str());
+                            if !self.path_status.is_empty() {
+                                ui.label(self.path_status.as_str());
+                            }
 
                             let mut del_path = None;
                             let mut cur_path = None;
