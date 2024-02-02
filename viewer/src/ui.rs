@@ -419,6 +419,31 @@ impl UiState {
                                     ui.label(format!("{}", person.modularity_class));
                                     ui.end_row();
                                 });
+
+                                CollapsingHeader::new("Liste d'amis")
+                                    .default_open(false)
+                                    .show(ui, |ui| {
+                                        egui::ScrollArea::vertical().max_height(200.0).show(
+                                            ui,
+                                            |ui| {
+                                                for (neighb, name) in person
+                                                    .neighbors
+                                                    .iter()
+                                                    .map(|(i, _)| (*i, data.persons[*i].name))
+                                                    .sorted_unstable_by(|(_, a), (_, b)| a.cmp(b))
+                                                {
+                                                    if ui
+                                                        .add(egui::Button::new(name).min_size(
+                                                            vec2(COMBO_WIDTH - 18.0, 0.0),
+                                                        ))
+                                                        .clicked()
+                                                    {
+                                                        self.set_infos_current(Some(neighb));
+                                                    }
+                                                }
+                                            },
+                                        );
+                                    });
                             }
                         });
 
