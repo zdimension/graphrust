@@ -144,6 +144,8 @@ impl<'a> GraphViewApp<'a> {
         let mut res = Self {
             ui_state: UiState {
                 node_count: data.viewer.persons.len(),
+                g_opac_edges: 300000.0 / data.edges.len() as f32,
+                g_opac_nodes: 40000.0 / data.viewer.persons.len() as f32,
                 ..UiState::default()
             },
             rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
@@ -233,6 +235,8 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                 let graph = self.rendered_graph.clone();
                 let edges = self.ui_state.g_show_edges;
                 let nodes = self.ui_state.g_show_nodes;
+                let opac_edges = self.ui_state.g_opac_edges;
+                let opac_nodes = self.ui_state.g_opac_nodes;
 
                 if let Some(path) = self.ui_state.path_vbuf.take() {
                     graph.lock().unwrap().new_path = Some(path);
@@ -249,7 +253,12 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                     rect,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
                         move |_info, painter| {
-                            graph.lock().unwrap().paint(painter.gl(), cam, edges, nodes);
+                            graph.lock().unwrap().paint(
+                                painter.gl(),
+                                cam,
+                                (edges, opac_edges),
+                                (nodes, opac_nodes),
+                            );
                         },
                     )),
                 };
@@ -291,7 +300,10 @@ impl RenderedGraph {
                 ],
                 [
                     (glow::VERTEX_SHADER, include_str!("shaders/graph.vert")),
-                    (glow::FRAGMENT_SHADER, include_str!("shaders/basic.frag")),
+                    (
+                        glow::FRAGMENT_SHADER,
+                        include_str!("shaders/graph_edge.frag"),
+                    ),
                 ],
                 [
                     (glow::VERTEX_SHADER, include_str!("shaders/graph.vert")),
@@ -513,14 +525,20 @@ impl RenderedGraph {
         }
     }
 
-    fn paint(&mut self, gl: &glow::Context, cam: Matrix4<f32>, edges: bool, nodes: bool) {
+    fn paint(
+        &mut self,
+        gl: &glow::Context,
+        cam: Matrix4<f32>,
+        edges: (bool, f32),
+        nodes: (bool, f32),
+    ) {
         use glow::HasContext as _;
         unsafe {
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
-            if edges {
+            if edges.0 {
                 gl.use_program(Some(self.program_edge));
                 gl.uniform_matrix_4_f32_slice(
                     Some(
@@ -537,13 +555,20 @@ impl RenderedGraph {
                     ),
                     ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32),
                 );
+                gl.uniform_1_f32(
+                    Some(
+                        &gl.get_uniform_location(self.program_edge, "opacity")
+                            .unwrap(),
+                    ),
+                    edges.1,
+                );
                 gl.draw_arrays(
                     glow::TRIANGLES,
                     self.nodes_count as i32,
                     2 * 3 * self.edges_count as i32,
                 );
             }
-            if nodes {
+            if nodes.0 {
                 gl.use_program(Some(self.program_node));
                 gl.uniform_matrix_4_f32_slice(
                     Some(
@@ -559,6 +584,13 @@ impl RenderedGraph {
                             .unwrap(),
                     ),
                     ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32),
+                );
+                gl.uniform_1_f32(
+                    Some(
+                        &gl.get_uniform_location(self.program_node, "opacity")
+                            .unwrap(),
+                    ),
+                    nodes.1,
                 );
                 gl.draw_arrays(glow::POINTS, 0, self.nodes_count as i32);
             }

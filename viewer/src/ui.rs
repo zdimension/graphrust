@@ -19,6 +19,8 @@ pub struct UiState {
     pub g_show_nodes: bool,
     #[derivative(Default(value = "true"))]
     pub g_show_edges: bool,
+    pub g_opac_nodes: f32,
+    pub g_opac_edges: f32,
     pub infos_current: Option<usize>,
     pub infos_open: bool,
     pub path_src: Option<usize>,
@@ -179,7 +181,21 @@ impl UiState {
                         .default_open(true)
                         .show(ui, |ui| {
                             ui.checkbox(&mut self.g_show_nodes, "Afficher les nœuds");
+                            if self.g_show_nodes {
+                                ui.add(
+                                    egui::Slider::new(&mut self.g_opac_nodes, 0.0..=1.0)
+                                        .text("Opacité")
+                                        .clamp_to_range(true),
+                                );
+                            }
                             ui.checkbox(&mut self.g_show_edges, "Afficher les liens");
+                            if self.g_show_edges {
+                                ui.add(
+                                    egui::Slider::new(&mut self.g_opac_edges, 0.0..=1.0)
+                                        .text("Opacité")
+                                        .clamp_to_range(true),
+                                );
+                            }
 
                             let start = ui
                                 .add(
