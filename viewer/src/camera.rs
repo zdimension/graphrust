@@ -16,7 +16,7 @@ impl Camera {
             Vector3::new(0.0, 0.0, 0.0),
             1.0,
         )
-        .append_scaling(0.1);
+        .append_scaling(0.2);
         Camera {
             transf,
             ortho: Camera::create_orthographic(1, 1),
