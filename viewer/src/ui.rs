@@ -1,4 +1,4 @@
-use crate::app::{Vertex, ViewerData};
+use crate::app::{RenderedGraph, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use array_tool::vec::Intersect;
@@ -32,8 +32,6 @@ pub struct UiState {
     pub path_no_mutual: bool,
     pub path_status: String,
     pub path_vbuf: Option<Vec<Vertex>>,
-    #[derivative(Default(value = "(0, u16::MAX)"))]
-    pub deg_filter: (u16, u16),
     pub deg_filter_changed: bool,
     pub node_count: usize,
     pub node_count_classes: Vec<(usize, usize)>,
@@ -49,7 +47,7 @@ impl UiState {
         self.infos_open = id.is_some();
     }
 
-    fn do_pathfinding(&mut self, data: &ViewerData) {
+    fn do_pathfinding(&mut self, data: &ViewerData, graph: &mut RenderedGraph) {
         let src_id = self.path_src.unwrap();
         let dest_id = self.path_dest.unwrap();
         let src = &data.persons[src_id];
@@ -131,7 +129,7 @@ impl UiState {
 
                         self.found_path = Some(path);
 
-                        self.path_vbuf = Some(verts);
+                        graph.new_path = Some(verts);
 
                         return;
                     }
@@ -140,7 +138,7 @@ impl UiState {
         }
     }
 
-    fn refresh_node_count(&mut self, data: &ViewerData<'_>) {
+    fn refresh_node_count(&mut self, data: &ViewerData<'_>, graph: &mut RenderedGraph) {
         let mut count_classes = vec![0; data.modularity_classes.len()];
         /*self.node_count = data
         .persons
@@ -154,7 +152,7 @@ impl UiState {
         self.node_count = 0;
         for p in &data.persons {
             let deg = p.neighbors.len() as u16;
-            if deg >= self.deg_filter.0 && deg <= self.deg_filter.1 {
+            if deg >= graph.degree_filter.0 && deg <= graph.degree_filter.1 {
                 self.node_count += 1;
                 count_classes[p.modularity_class as usize] += 1;
             }
@@ -173,6 +171,7 @@ impl UiState {
         egui: &egui::Context,
         _frame: &mut eframe::Frame,
         data: &ViewerData<'_>,
+        graph: &mut RenderedGraph,
     ) {
         egui::SidePanel::left("settings")
             .resizable(false)
@@ -236,23 +235,23 @@ impl UiState {
 
                             let start = ui
                                 .add(
-                                    egui::DragValue::new(&mut self.deg_filter.0)
+                                    egui::DragValue::new(&mut graph.degree_filter.0)
                                         .speed(1)
-                                        .clamp_range(1..=self.deg_filter.1)
+                                        .clamp_range(1..=graph.degree_filter.1)
                                         .prefix("Degré minimum : "),
                                 )
                                 .changed();
                             let end = ui
                                 .add(
-                                    egui::DragValue::new(&mut self.deg_filter.1)
+                                    egui::DragValue::new(&mut graph.degree_filter.1)
                                         .speed(1)
-                                        .clamp_range(self.deg_filter.0..=self.max_degree)
+                                        .clamp_range(graph.degree_filter.0..=self.max_degree)
                                         .prefix("Degré maximum : "),
                                 )
                                 .changed();
                             if start || end {
                                 self.deg_filter_changed = true;
-                                self.refresh_node_count(data);
+                                self.refresh_node_count(data, graph);
                             }
 
                             ui.horizontal(|ui| {
@@ -278,7 +277,7 @@ impl UiState {
                                     if ui.button("x").clicked() {
                                         self.path_src = None;
                                         self.found_path = None;
-                                        self.path_vbuf = Some(vec![]);
+                                        graph.new_path = Some(vec![]);
                                     }
                                     c
                                 })
@@ -298,7 +297,7 @@ impl UiState {
                                     if ui.button("x").clicked() {
                                         self.path_dest = None;
                                         self.found_path = None;
-                                        self.path_vbuf = Some(vec![]);
+                                        graph.new_path = Some(vec![]);
                                     }
                                     c
                                 })
@@ -348,14 +347,14 @@ impl UiState {
                             {
                                 self.path_dirty = false;
                                 self.found_path = None;
-                                self.path_vbuf = Some(vec![]);
+                                graph.new_path = Some(vec![]);
                                 self.path_status = match (self.path_src, self.path_dest) {
                                     (Some(x), Some(y)) if x == y => {
                                         String::from("Source et destination sont identiques")
                                     }
                                     (None, _) | (_, None) => String::from(""),
                                     _ => {
-                                        self.do_pathfinding(data);
+                                        self.do_pathfinding(data, graph);
                                         match self.found_path {
                                             Some(ref path) => {
                                                 format!("Chemin trouvé, longueur {}", path.len())

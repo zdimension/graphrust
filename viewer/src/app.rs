@@ -184,7 +184,12 @@ impl<'a> eframe::App for GraphViewApp<'a> {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let cid = Id::from("camera");
 
-        self.ui_state.draw_ui(ctx, frame, &self.viewer_data);
+        self.ui_state.draw_ui(
+            ctx,
+            frame,
+            &self.viewer_data,
+            &mut *self.rendered_graph.lock().unwrap(),
+        );
         egui::CentralPanel::default()
             .frame(egui::Frame {
                 fill: Color32::WHITE,
@@ -245,15 +250,6 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                 let opac_edges = self.ui_state.g_opac_edges;
                 let opac_nodes = self.ui_state.g_opac_nodes;
 
-                if let Some(path) = self.ui_state.path_vbuf.take() {
-                    graph.lock().unwrap().new_path = Some(path);
-                }
-
-                if self.ui_state.deg_filter_changed {
-                    graph.lock().unwrap().degree_filter = self.ui_state.deg_filter;
-                    self.ui_state.deg_filter_changed = false;
-                }
-
                 let cam = self.camera.get_matrix();
                 self.ui_state.camera = cam;
                 let callback = egui::PaintCallback {
@@ -275,18 +271,18 @@ impl<'a> eframe::App for GraphViewApp<'a> {
 }
 
 pub struct RenderedGraph {
-    program_node: glow::Program,
-    program_basic: glow::Program,
-    program_edge: glow::Program,
-    nodes_buffer: glow::Buffer,
-    nodes_count: usize,
-    nodes_array: glow::VertexArray,
-    edges_count: usize,
-    path_array: glow::VertexArray,
-    path_buffer: glow::Buffer,
-    path_count: usize,
-    new_path: Option<Vec<Vertex>>,
-    degree_filter: (u16, u16),
+    pub program_node: glow::Program,
+    pub program_basic: glow::Program,
+    pub program_edge: glow::Program,
+    pub nodes_buffer: glow::Buffer,
+    pub nodes_count: usize,
+    pub nodes_array: glow::VertexArray,
+    pub edges_count: usize,
+    pub path_array: glow::VertexArray,
+    pub path_buffer: glow::Buffer,
+    pub path_count: usize,
+    pub new_path: Option<Vec<Vertex>>,
+    pub degree_filter: (u16, u16),
 }
 
 impl RenderedGraph {
