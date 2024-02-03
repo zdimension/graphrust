@@ -1,7 +1,6 @@
 use crate::app::{RenderedGraph, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
-use array_tool::vec::Intersect;
 use derivative::*;
 
 use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, RichText, Sense, TextStyle, Vec2};
@@ -54,9 +53,9 @@ impl UiState {
         let dest = &data.persons[dest_id];
 
         let intersect = if self.path_no_mutual {
-            let src_friends = src.neighbors.iter().map(|&(i, _)| i).collect_vec();
-            let dest_friends = dest.neighbors.iter().map(|&(i, _)| i).collect_vec();
-            HashSet::from_iter(src_friends.intersect(dest_friends))
+            HashSet::from_iter(src.neighbors.iter())
+                .intersection(&HashSet::from_iter(dest.neighbors.iter()))
+                .collect()
         } else {
             HashSet::new()
         };

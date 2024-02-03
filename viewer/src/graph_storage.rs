@@ -81,8 +81,8 @@ pub fn load_binary<'a>() -> ProcessedData<'a> {
             continue;
         }
         let (p1, p2) = person_data.get_two_mut(edge.a as usize, edge.b as usize);
-        p1.neighbors.push((edge.b as usize, i));
-        p2.neighbors.push((edge.a as usize, i));
+        p1.neighbors.push(edge.b as usize);
+        p2.neighbors.push(edge.a as usize);
     }
 
     log::info!("Initializing search engine");

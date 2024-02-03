@@ -19,7 +19,7 @@ pub struct Person<'a> {
     pub id: &'a str,
     pub name: &'a str,
     pub sorted_id: u64,
-    pub neighbors: Vec<(usize, usize)>,
+    pub neighbors: Vec<usize>,
 }
 
 impl<'a> Person<'a> {
