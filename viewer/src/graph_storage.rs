@@ -33,13 +33,13 @@ pub fn load_file() -> GraphFile {
     panic!("Cannot load graph file");
 }
 
-pub struct ProcessedData<'a> {
+pub struct ProcessedData<'graph> {
     pub strings: StringTables,
-    pub viewer: ViewerData<'a>,
+    pub viewer: ViewerData<'graph>,
     pub edges: Vec<EdgeStore>,
 }
 
-pub fn load_binary<'a>() -> ProcessedData<'a> {
+pub fn load_binary<'graph>() -> ProcessedData<'graph> {
     log::info!("Loading binary");
     let content: GraphFile = load_file();
     log::info!("Binary content loaded");

@@ -149,8 +149,8 @@ pub fn create_tab<'a, 'b>(
     }
 }
 
-pub struct GraphViewApp<'a> {
-    tree: DockState<GraphTab<'a>>,
+pub struct GraphViewApp<'graph> {
+    tree: DockState<GraphTab<'graph>>,
     #[allow(dead_code)]
     // we do a little trolling
     string_tables: StringTables,
@@ -186,30 +186,25 @@ impl<'a> GraphViewApp<'a> {
                 .unwrap()
                 .set_inner_html("");
         }
-        let mut res = Self {
+        Self {
             tree: DockState::new(vec![default_tab]),
             string_tables: data.strings,
-        };
-        res
+        }
     }
 }
 
-struct TabViewer<'a, 'b, 'c, 'd> {
-    ctx: &'b egui::Context,
-    data: PhantomData<&'a bool>,
-    tab_request: &'c mut Option<NewTabRequest<'a>>,
-    frame: &'d mut eframe::Frame,
+struct TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
+    ctx: &'ctx egui::Context,
+    data: PhantomData<&'graph bool>,
+    tab_request: &'tab_request mut Option<NewTabRequest<'graph>>,
+    frame: &'frame mut eframe::Frame,
 }
 
-impl<'a, 'b, 'c, 'd> egui_dock::TabViewer for TabViewer<'a, 'b, 'c, 'd> {
-    type Tab = GraphTab<'a>;
+impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer for TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
+    type Tab = GraphTab<'graph>;
 
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
         RichText::from(&tab.title).into()
-    }
-
-    fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
-        tab.closeable
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
@@ -299,6 +294,10 @@ impl<'a, 'b, 'c, 'd> egui_dock::TabViewer for TabViewer<'a, 'b, 'c, 'd> {
                 };
                 ui.painter().add(callback);
             });
+    }
+
+    fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
+        tab.closeable
     }
 }
 
