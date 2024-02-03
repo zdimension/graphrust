@@ -8,6 +8,7 @@ uniform mat4 u_projection;
 uniform uint u_degfilter;
 uniform float opacity;
 const float neg_infinity = uintBitsToFloat(0xFF800000u);
+const float nan = intBitsToFloat(int(0xFFC00000u));
 void main()
 {
     uint deg = deg_and_class & 0xFFFFu;
@@ -16,9 +17,10 @@ void main()
     uint high = u_degfilter >> 16;
     if (deg < low || deg > high) {
         v_color = vec4(0.0, 0.0, 0.0, neg_infinity);
+        gl_Position = vec4(nan, nan, nan, nan);
     } else {
         v_color = vec4(color, opacity);
+        gl_Position = u_projection * vec4(position, 0.0, 1.0);
+        gl_PointSize = 16.0 * -u_projection[2][2];
     }
-    gl_Position = u_projection * vec4(position, 0.0, 1.0);
-    gl_PointSize = 16.0 * -u_projection[2][2];
 }

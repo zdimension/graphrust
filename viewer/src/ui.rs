@@ -197,9 +197,21 @@ impl UiState {
                         ui.add_space(10.0);
                         ui.label("Si l'interface est ");
                         ui.label(RichText::new("lente").strong());
-                        ui.label(", décocher \"");
+                        ui.label(":");
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.add_space(10.0);
+                        ui.label(" - décocher \"");
                         ui.label(RichText::new("Afficher les liens").underline().strong());
-                        ui.label("\".");
+                        ui.label("\"");
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.add_space(10.0);
+                        ui.label(" - augmenter \"");
+                        ui.label(RichText::new("Degré minimum").underline().strong());
+                        ui.label("\"");
                     });
                     ui.add_space(10.0);
                     CollapsingHeader::new("Affichage")
