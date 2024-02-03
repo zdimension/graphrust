@@ -16,7 +16,10 @@ void main()
     uint low = u_degfilter & 0xFFFFu;
     uint high = u_degfilter >> 16;
     if (deg < low || deg > high) {
+        // alpha=-inf so when blended all points have alpha=-inf
+        // it's clamped to 0 anyway after the fragment shader
         v_color = vec4(0.0, 0.0, 0.0, neg_infinity);
+        // set position to nan so the vertex gets culled out of existence and the whole primitive is scrapped
         gl_Position = vec4(nan, nan, nan, nan);
     } else {
         v_color = vec4(color, opacity);
