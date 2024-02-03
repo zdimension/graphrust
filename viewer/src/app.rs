@@ -7,7 +7,7 @@ use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
 use egui::{Color32, Id, RichText, Ui, Vec2, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
-use graph_format::{Color3f, Point};
+use graph_format::{Color3f, EdgeStore, Point};
 use itertools::Itertools;
 use nalgebra::{Matrix4, Vector4};
 use simsearch::SimSearch;
@@ -21,7 +21,6 @@ pub struct Person<'a> {
     pub modularity_class: u16,
     pub id: &'a str,
     pub name: &'a str,
-    pub sorted_id: u64,
     pub neighbors: Vec<usize>,
 }
 
@@ -39,7 +38,6 @@ impl<'a> Person<'a> {
             modularity_class,
             id,
             name,
-            sorted_id: 0,
             neighbors: Vec::new(),
         }
     }
@@ -112,12 +110,12 @@ pub struct StringTables {
 }
 
 pub struct GraphTab<'a> {
-    ui_state: UiState,
-    viewer_data: ViewerData<'a>,
-    rendered_graph: Arc<Mutex<RenderedGraph>>,
-    camera: Camera,
-    cam_animating: Option<Vec2>,
-    closeable: bool,
+    pub ui_state: UiState,
+    pub viewer_data: ViewerData<'a>,
+    pub rendered_graph: Arc<Mutex<RenderedGraph>>,
+    pub camera: Camera,
+    pub cam_animating: Option<Vec2>,
+    pub closeable: bool,
     pub title: String,
 }
 
@@ -160,7 +158,11 @@ impl<'a> GraphViewApp<'a> {
                     .unwrap() as u16,
                 ..UiState::default()
             },
-            rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
+            rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(
+                gl,
+                &data.viewer,
+                data.edges.iter(),
+            ))),
             viewer_data: data.viewer.clone(),
             camera: Camera::new(center.into()),
             cam_animating: None,
@@ -190,12 +192,14 @@ impl<'a> GraphViewApp<'a> {
     }
 }
 
-struct TabViewer<'a, 'b> {
+struct TabViewer<'a, 'b, 'c, 'd> {
     ctx: &'b egui::Context,
     data: PhantomData<&'a bool>,
+    tab_request: &'c mut Option<NewTabRequest<'a>>,
+    frame: &'d mut eframe::Frame,
 }
 
-impl<'a, 'b> egui_dock::TabViewer for TabViewer<'a, 'b> {
+impl<'a, 'b, 'c, 'd> egui_dock::TabViewer for TabViewer<'a, 'b, 'c, 'd> {
     type Tab = GraphTab<'a>;
 
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
@@ -213,6 +217,8 @@ impl<'a, 'b> egui_dock::TabViewer for TabViewer<'a, 'b> {
             ui,
             &tab.viewer_data,
             &mut *tab.rendered_graph.lock().unwrap(),
+            self.tab_request,
+            self.frame,
         );
         egui::CentralPanel::default()
             .frame(egui::Frame {
@@ -294,9 +300,12 @@ impl<'a, 'b> egui_dock::TabViewer for TabViewer<'a, 'b> {
     }
 }
 
+pub type NewTabRequest<'a> = GraphTab<'a>;
+
 impl<'a> eframe::App for GraphViewApp<'a> {
     /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let mut new_tab_request = None;
         DockArea::new(&mut self.tree)
             .style({
                 let style = Style::from_egui(ctx.style().as_ref());
@@ -307,8 +316,36 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                 &mut TabViewer {
                     ctx,
                     data: PhantomData,
+                    tab_request: &mut new_tab_request,
+                    frame,
                 },
             );
+        if let Some(request) = new_tab_request {
+            /*
+                let mut default_tab = GraphTab {
+                ui_state: UiState {
+                    node_count: data.viewer.persons.len(),
+                    g_opac_edges: 300000.0 / data.edges.len() as f32,
+                    g_opac_nodes: 40000.0 / data.viewer.persons.len() as f32,
+                    max_degree: data
+                        .viewer
+                        .persons
+                        .iter()
+                        .map(|p| p.neighbors.len())
+                        .max()
+                        .unwrap() as u16,
+                    ..UiState::default()
+                },
+                rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
+                viewer_data: data.viewer.clone(),
+                camera: Camera::new(center.into()),
+                cam_animating: None,
+                closeable: false,
+                title: String::from("Graphe"),
+            };
+                 */
+            self.tree.push_to_focused_leaf(request);
+        }
     }
 }
 
@@ -328,7 +365,11 @@ pub struct RenderedGraph {
 }
 
 impl RenderedGraph {
-    fn new(gl: &glow::Context, data: &ProcessedData<'_>) -> Self {
+    pub fn new<'a>(
+        gl: &glow::Context,
+        viewer: &ViewerData<'_>,
+        edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
+    ) -> Self {
         use glow::HasContext as _;
 
         let shader_version = if cfg!(target_arch = "wasm32") {
@@ -395,24 +436,23 @@ impl RenderedGraph {
                 program
             });
 
-            let vertices = data
-                .viewer
+            let edges_count = edges.len();
+            let vertices = viewer
                 .persons
                 .iter()
                 .map(|p| {
                     PersonVertex::new(
                         p.position,
-                        data.viewer.modularity_classes[p.modularity_class as usize].color,
+                        viewer.modularity_classes[p.modularity_class as usize].color,
                         p.neighbors.len() as u16,
                         p.modularity_class,
                     )
                 })
                 .chain(
-                    data.edges
-                        .iter()
+                    edges
                         .map(|e| {
-                            let pa = &data.viewer.persons[e.a as usize];
-                            let pb = &data.viewer.persons[e.b as usize];
+                            let pa = &viewer.persons[e.a as usize];
+                            let pb = &viewer.persons[e.b as usize];
                             (pa, pb)
                         })
                         //.filter(|(pa, pb)| pa.neighbors.len() > 5 && pb.neighbors.len() > 5)
@@ -425,9 +465,9 @@ impl RenderedGraph {
                             let v2 = b - ortho;
                             let v3 = b + ortho;
                             let color_a =
-                                data.viewer.modularity_classes[pa.modularity_class as usize].color;
+                                viewer.modularity_classes[pa.modularity_class as usize].color;
                             let color_b =
-                                data.viewer.modularity_classes[pb.modularity_class as usize].color;
+                                viewer.modularity_classes[pb.modularity_class as usize].color;
                             [
                                 PersonVertex::new(
                                     v0,
@@ -545,9 +585,9 @@ impl RenderedGraph {
                 program_edge,
                 program_node,
                 nodes_buffer: vertices_buffer,
-                nodes_count: data.viewer.persons.len(),
+                nodes_count: viewer.persons.len(),
                 nodes_array: vertices_array,
-                edges_count: data.edges.len(),
+                edges_count,
                 path_array,
                 path_buffer,
                 path_count: 0,

@@ -1,15 +1,20 @@
-use crate::app::{RenderedGraph, Vertex, ViewerData};
+use crate::app::{GraphTab, NewTabRequest, Person, RenderedGraph, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use derivative::*;
 
-use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, RichText, Sense, TextStyle, Vec2};
+use crate::camera::Camera;
+use egui::ahash::{AHashMap, AHashSet};
+use egui::{
+    vec2, CollapsingHeader, Color32, Frame, Hyperlink, Pos2, RichText, Sense, TextStyle, Vec2,
+};
 use egui_extras::{Column, TableBuilder};
-use graph_format::{Color3b, Color3f};
+use graph_format::{Color3b, Color3f, EdgeStore, Point};
 use itertools::Itertools;
-use nalgebra::{Matrix4, Vector2};
+use nalgebra::{DimAdd, Matrix4, Vector2};
 use std::collections::{HashSet, VecDeque};
 use std::ops::{Range, RangeInclusive};
+use std::sync::{Arc, Mutex};
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -52,16 +57,16 @@ impl UiState {
         let src = &data.persons[src_id];
         let dest = &data.persons[dest_id];
 
-        let intersect: HashSet<usize> = if self.path_no_mutual {
-            HashSet::<_>::from_iter(src.neighbors.iter().copied())
-                .intersection(&HashSet::<_>::from_iter(dest.neighbors.iter().copied()))
+        let intersect: AHashSet<usize> = if self.path_no_mutual {
+            AHashSet::<_>::from_iter(src.neighbors.iter().copied())
+                .intersection(&AHashSet::<_>::from_iter(dest.neighbors.iter().copied()))
                 .copied()
                 .collect()
         } else {
-            HashSet::new()
+            AHashSet::new()
         };
 
-        let exclude_set: HashSet<usize> = HashSet::from_iter(self.exclude_ids.iter().cloned());
+        let exclude_set: AHashSet<usize> = AHashSet::from_iter(self.exclude_ids.iter().cloned());
 
         let mut queue = VecDeque::new();
         let mut visited = vec![false; data.persons.len()];
@@ -166,7 +171,14 @@ impl UiState {
             .collect_vec();
     }
 
-    pub fn draw_ui(&mut self, ui: &mut egui::Ui, data: &ViewerData<'_>, graph: &mut RenderedGraph) {
+    pub fn draw_ui<'a>(
+        &mut self,
+        ui: &mut egui::Ui,
+        data: &ViewerData<'a>,
+        graph: &mut RenderedGraph,
+        tab_request: &mut Option<NewTabRequest<'a>>,
+        frame: &mut eframe::Frame,
+    ) {
         egui::SidePanel::left("settings")
             .resizable(false)
             .show_inside(ui, |ui| {
@@ -443,6 +455,91 @@ impl UiState {
                                             },
                                         );
                                     });
+
+                                if ui.button("Afficher voisinage").clicked() {
+                                    //let mut new_graph = person.neighbors.clone();
+                                    //new_graph.push(id);
+                                    let new_included = AHashSet::<_>::from_iter(
+                                        person.neighbors.iter().copied().chain([id]),
+                                    );
+
+                                    let mut new_persons = Vec::with_capacity(256);
+                                    //let id_map = vec![None; data.persons.len()];
+
+                                    let mut id_map = AHashMap::new();
+                                    let mut class_list = AHashSet::new();
+
+                                    for &id in new_included.iter() {
+                                        let pers = &data.persons[id];
+                                        id_map.insert(id, new_persons.len());
+                                        class_list.insert(pers.modularity_class);
+                                        new_persons.push(Person {
+                                            neighbors: vec![],
+                                            ..*pers
+                                        });
+                                    }
+
+                                    let mut edges = AHashSet::new();
+
+                                    for (&old_id, &new_id) in id_map.iter() {
+                                        new_persons[new_id].neighbors.extend(
+                                            data.persons[old_id]
+                                                .neighbors
+                                                .iter()
+                                                .filter_map(|&i| id_map.get(&i)),
+                                        );
+                                        for &nb in new_persons[new_id].neighbors.iter() {
+                                            let [a, b] = std::cmp::minmax(new_id, nb);
+                                            edges.insert(EdgeStore {
+                                                a: a as u32,
+                                                b: b as u32,
+                                            });
+                                        }
+                                    }
+
+                                    let viewer = ViewerData::<'a> {
+                                        persons: new_persons,
+                                        /*modularity_classes: data
+                                        .modularity_classes
+                                        .iter()
+                                        .enumerate()
+                                        .filter(|&(i, _)| class_list.contains(&(i as u16)))
+                                        .map(|(_, c)| c.clone())
+                                        .collect(),*/
+                                        modularity_classes: data.modularity_classes.clone(),
+                                        engine: Default::default(),
+                                    };
+
+                                    let center =
+                                        viewer.persons.iter().map(|p| p.position).sum::<Point>()
+                                            / viewer.persons.len() as f32;
+                                    let new_tab = GraphTab {
+                                        title: format!("Voisinage de {}", person.name),
+                                        closeable: true,
+                                        camera: Camera::new(center.into()),
+                                        cam_animating: None,
+                                        ui_state: UiState {
+                                            node_count: viewer.persons.len(),
+                                            g_opac_edges: 300000.0 / edges.len() as f32,
+                                            g_opac_nodes: 40000.0 / viewer.persons.len() as f32,
+                                            max_degree: viewer
+                                                .persons
+                                                .iter()
+                                                .map(|p| p.neighbors.len())
+                                                .max()
+                                                .unwrap()
+                                                as u16,
+                                            ..UiState::default()
+                                        },
+                                        rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(
+                                            &frame.gl().unwrap().clone(),
+                                            &viewer,
+                                            edges.iter(),
+                                        ))),
+                                        viewer_data: viewer,
+                                    };
+                                    *tab_request = Some(new_tab);
+                                }
                             }
                         });
 
