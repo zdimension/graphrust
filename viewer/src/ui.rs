@@ -166,16 +166,10 @@ impl UiState {
             .collect_vec();
     }
 
-    pub fn draw_ui(
-        &mut self,
-        egui: &egui::Context,
-        _frame: &mut eframe::Frame,
-        data: &ViewerData<'_>,
-        graph: &mut RenderedGraph,
-    ) {
+    pub fn draw_ui(&mut self, ui: &mut egui::Ui, data: &ViewerData<'_>, graph: &mut RenderedGraph) {
         egui::SidePanel::left("settings")
             .resizable(false)
-            .show(egui, |ui| {
+            .show_inside(ui, |ui| {
                 ui.spacing_mut().slider_width = 200.0;
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.add_space(10.0);

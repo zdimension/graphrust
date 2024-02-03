@@ -21,6 +21,7 @@ speedy = "0.8.7"
 log = "0.4"
 graph_format = { path = "../graph_format" }
 egui_extras = "0.25.0"
+egui_dock = "0.10.0"
 
 [build-dependencies]
 anyhow = "1.0.79"

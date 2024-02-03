@@ -1,10 +1,12 @@
 use crate::camera::Camera;
+use std::marker::PhantomData;
 
 use crate::graph_storage::{load_binary, ProcessedData};
 use crate::ui::UiState;
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{Color32, Id, Vec2};
+use egui::{Color32, Id, RichText, Ui, Vec2, WidgetText};
+use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3f, Point};
 use itertools::Itertools;
 use nalgebra::{Matrix4, Vector4};
@@ -12,6 +14,7 @@ use simsearch::SimSearch;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
+#[derive(Clone)]
 pub struct Person<'a> {
     pub position: Point,
     pub size: f32,
@@ -72,42 +75,34 @@ impl Vertex {
     }
 }
 
-pub struct ModularityClass<'a> {
+#[derive(Clone)]
+pub struct ModularityClass {
     pub color: Color3f,
     pub id: u16,
     pub name: String,
-    pub people: Option<Vec<&'a Person<'a>>>,
 }
 
-impl<'a> ModularityClass<'a> {
-    pub fn new(color: Color3f, id: u16) -> ModularityClass<'a> {
+impl ModularityClass {
+    pub fn new(color: Color3f, id: u16) -> ModularityClass {
         ModularityClass {
             color,
             id,
             name: format!("Classe {}", id),
-            people: None,
         }
     }
 
-    pub fn get_people(&mut self, data: &'a ViewerData<'a>) -> &Vec<&'a Person<'a>> {
-        match self.people {
-            Some(ref people) => people,
-            None => {
-                let filtered = data
-                    .persons
-                    .iter()
-                    .filter(|p| p.modularity_class == self.id)
-                    .collect();
-                self.people = Some(filtered);
-                self.people.as_ref().unwrap()
-            }
-        }
-    }
+    /*pub fn get_people<'a>(&mut self, data: &ViewerData<'a>) -> &Vec<&Person<'a>> {
+        data.persons
+            .iter()
+            .filter(|p| p.modularity_class == self.id)
+            .collect()
+    }*/
 }
 
+#[derive(Clone)]
 pub struct ViewerData<'a> {
     pub persons: Vec<Person<'a>>,
-    pub modularity_classes: Vec<ModularityClass<'a>>,
+    pub modularity_classes: Vec<ModularityClass>,
     pub engine: SimSearch<usize>,
 }
 
@@ -122,15 +117,13 @@ pub struct GraphTab<'a> {
     rendered_graph: Arc<Mutex<RenderedGraph>>,
     camera: Camera,
     cam_animating: Option<Vec2>,
+    closeable: bool,
+    pub title: String,
 }
 
 pub struct GraphViewApp<'a> {
-    ui_state: UiState,
+    tree: DockState<GraphTab<'a>>,
     string_tables: StringTables,
-    viewer_data: ViewerData<'a>,
-    rendered_graph: Arc<Mutex<RenderedGraph>>,
-    camera: Camera,
-    cam_animating: Option<Vec2>,
 }
 
 impl<'a> GraphViewApp<'a> {
@@ -153,7 +146,7 @@ impl<'a> GraphViewApp<'a> {
             .sum::<Point>()
             / data.viewer.persons.len() as f32;
         log::info!("Center: {:?}", center);
-        let mut res = Self {
+        let mut default_tab = GraphTab {
             ui_state: UiState {
                 node_count: data.viewer.persons.len(),
                 g_opac_edges: 300000.0 / data.edges.len() as f32,
@@ -168,10 +161,11 @@ impl<'a> GraphViewApp<'a> {
                 ..UiState::default()
             },
             rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
-            string_tables: data.strings,
-            viewer_data: data.viewer,
+            viewer_data: data.viewer.clone(),
             camera: Camera::new(center.into()),
             cam_animating: None,
+            closeable: false,
+            title: String::from("Graphe"),
         };
         #[cfg(target_arch = "wasm32")]
         {
@@ -188,83 +182,100 @@ impl<'a> GraphViewApp<'a> {
                 .unwrap()
                 .set_inner_html("");
         }
+        let mut res = Self {
+            tree: DockState::new(vec![default_tab]),
+            string_tables: data.strings,
+        };
         res
     }
 }
 
-impl<'a> eframe::App for GraphViewApp<'a> {
-    /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let cid = Id::from("camera");
+struct TabViewer<'a, 'b> {
+    ctx: &'b egui::Context,
+    data: PhantomData<&'a bool>,
+}
 
-        self.ui_state.draw_ui(
-            ctx,
-            frame,
-            &self.viewer_data,
-            &mut *self.rendered_graph.lock().unwrap(),
+impl<'a, 'b> egui_dock::TabViewer for TabViewer<'a, 'b> {
+    type Tab = GraphTab<'a>;
+
+    fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
+        RichText::from(&tab.title).into()
+    }
+
+    fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
+        tab.closeable
+    }
+
+    fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
+        let ctx = self.ctx;
+        let cid = Id::from("camera");
+        tab.ui_state.draw_ui(
+            ui,
+            &tab.viewer_data,
+            &mut *tab.rendered_graph.lock().unwrap(),
         );
         egui::CentralPanel::default()
             .frame(egui::Frame {
                 fill: Color32::WHITE,
                 ..Default::default()
             })
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 let (id, rect) = ui.allocate_space(ui.available_size());
 
                 let sz = rect.size();
-                if sz != self.camera.size {
-                    self.camera.set_window_size(sz);
+                if sz != tab.camera.size {
+                    tab.camera.set_window_size(sz);
                 }
 
                 let response =
                     ui.interact(rect, id, egui::Sense::click().union(egui::Sense::drag()));
 
                 if !response.is_pointer_button_down_on() {
-                    if let Some(v) = self.cam_animating {
+                    if let Some(v) = tab.cam_animating {
                         let anim = ctx.animate_bool_with_time(cid, false, 0.5);
                         if anim == 0.0 {
-                            self.cam_animating = None;
+                            tab.cam_animating = None;
                         } else {
                             let v = v * anim;
-                            self.camera.pan(v.x, v.y);
+                            tab.camera.pan(v.x, v.y);
                         }
                     }
                 }
 
                 if response.dragged() {
-                    self.camera
+                    tab.camera
                         .pan(response.drag_delta().x, response.drag_delta().y);
 
                     ctx.animate_bool_with_time(cid, true, 0.0);
-                    self.cam_animating = Some(response.drag_delta());
+                    tab.cam_animating = Some(response.drag_delta());
                 }
 
                 if let Some(pos) = response.hover_pos() {
                     let zero_pos = (pos - rect.min).to_pos2();
                     let centered_pos = (pos - rect.center()) / rect.size();
-                    self.ui_state.mouse_pos = Some(centered_pos.to_pos2());
-                    self.ui_state.mouse_pos_world = Some(
-                        (self.camera.get_inverse_matrix()
+                    tab.ui_state.mouse_pos = Some(centered_pos.to_pos2());
+                    tab.ui_state.mouse_pos_world = Some(
+                        (tab.camera.get_inverse_matrix()
                             * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
                         .xy(),
                     );
                     let scroll_delta = ui.input(|is| is.scroll_delta);
                     if scroll_delta.y != 0.0 {
-                        self.camera.zoom(scroll_delta.y, zero_pos);
+                        tab.camera.zoom(scroll_delta.y, zero_pos);
                     }
                 } else {
-                    self.ui_state.mouse_pos = None;
-                    self.ui_state.mouse_pos_world = None;
+                    tab.ui_state.mouse_pos = None;
+                    tab.ui_state.mouse_pos_world = None;
                 }
 
-                let graph = self.rendered_graph.clone();
-                let edges = self.ui_state.g_show_edges;
-                let nodes = self.ui_state.g_show_nodes;
-                let opac_edges = self.ui_state.g_opac_edges;
-                let opac_nodes = self.ui_state.g_opac_nodes;
+                let graph = tab.rendered_graph.clone();
+                let edges = tab.ui_state.g_show_edges;
+                let nodes = tab.ui_state.g_show_nodes;
+                let opac_edges = tab.ui_state.g_opac_edges;
+                let opac_nodes = tab.ui_state.g_opac_nodes;
 
-                let cam = self.camera.get_matrix();
-                self.ui_state.camera = cam;
+                let cam = tab.camera.get_matrix();
+                tab.ui_state.camera = cam;
                 let callback = egui::PaintCallback {
                     rect,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
@@ -280,6 +291,24 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                 };
                 ui.painter().add(callback);
             });
+    }
+}
+
+impl<'a> eframe::App for GraphViewApp<'a> {
+    /// Called each time the UI needs repainting, which may be many times per second.
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        DockArea::new(&mut self.tree)
+            .style({
+                let style = Style::from_egui(ctx.style().as_ref());
+                style
+            })
+            .show(
+                ctx,
+                &mut TabViewer {
+                    ctx,
+                    data: PhantomData,
+                },
+            );
     }
 }
 
