@@ -1,4 +1,4 @@
-use crate::app::{ModularityClass, Person, ViewerData};
+use crate::app::{ModularityClass, Person, StringTables, ViewerData};
 
 use graph_format::{EdgeStore, GraphFile, Point};
 use itertools::Itertools;
@@ -34,6 +34,7 @@ pub fn load_file() -> GraphFile {
 }
 
 pub struct ProcessedData<'a> {
+    pub strings: StringTables,
     pub viewer: ViewerData<'a>,
     pub edges: Vec<EdgeStore>,
 }
@@ -94,9 +95,11 @@ pub fn load_binary<'a>() -> ProcessedData<'a> {
     log::info!("Done");
 
     ProcessedData {
-        viewer: ViewerData {
+        strings: StringTables {
             ids: content.ids,
             names: content.names,
+        },
+        viewer: ViewerData {
             persons: person_data,
             modularity_classes,
             engine,

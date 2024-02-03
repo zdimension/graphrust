@@ -106,15 +106,27 @@ impl<'a> ModularityClass<'a> {
 }
 
 pub struct ViewerData<'a> {
-    pub ids: Vec<u8>,
-    pub names: Vec<u8>,
     pub persons: Vec<Person<'a>>,
     pub modularity_classes: Vec<ModularityClass<'a>>,
     pub engine: SimSearch<usize>,
 }
 
+pub struct StringTables {
+    pub ids: Vec<u8>,
+    pub names: Vec<u8>,
+}
+
+pub struct GraphTab<'a> {
+    ui_state: UiState,
+    viewer_data: ViewerData<'a>,
+    rendered_graph: Arc<Mutex<RenderedGraph>>,
+    camera: Camera,
+    cam_animating: Option<Vec2>,
+}
+
 pub struct GraphViewApp<'a> {
     ui_state: UiState,
+    string_tables: StringTables,
     viewer_data: ViewerData<'a>,
     rendered_graph: Arc<Mutex<RenderedGraph>>,
     camera: Camera,
@@ -156,6 +168,7 @@ impl<'a> GraphViewApp<'a> {
                 ..UiState::default()
             },
             rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
+            string_tables: data.strings,
             viewer_data: data.viewer,
             camera: Camera::new(center.into()),
             cam_animating: None,

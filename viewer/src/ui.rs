@@ -52,9 +52,10 @@ impl UiState {
         let src = &data.persons[src_id];
         let dest = &data.persons[dest_id];
 
-        let intersect = if self.path_no_mutual {
-            HashSet::from_iter(src.neighbors.iter())
-                .intersection(&HashSet::from_iter(dest.neighbors.iter()))
+        let intersect: HashSet<usize> = if self.path_no_mutual {
+            HashSet::<_>::from_iter(src.neighbors.iter().copied())
+                .intersection(&HashSet::<_>::from_iter(dest.neighbors.iter().copied()))
+                .copied()
                 .collect()
         } else {
             HashSet::new()
@@ -73,7 +74,7 @@ impl UiState {
 
         while let Some(id) = queue.pop_front() {
             let person = &data.persons[id];
-            for &(i, _) in person.neighbors.iter() {
+            for &i in person.neighbors.iter() {
                 if self.path_no_direct && id == src_id && i == dest_id {
                     continue;
                 }
@@ -433,7 +434,7 @@ impl UiState {
                                                 for (neighb, name) in person
                                                     .neighbors
                                                     .iter()
-                                                    .map(|(i, _)| (*i, data.persons[*i].name))
+                                                    .map(|&i| (i, data.persons[i].name))
                                                     .sorted_unstable_by(|(_, a), (_, b)| a.cmp(b))
                                                 {
                                                     if ui
