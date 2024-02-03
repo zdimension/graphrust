@@ -587,7 +587,7 @@ impl RenderedGraph {
                 );
                 gl.uniform_1_u32(
                     Some(
-                        &gl.get_uniform_location(self.program_edge, "u_degfilter")
+                        &gl.get_uniform_location(self.program_node, "u_degfilter")
                             .unwrap(),
                     ),
                     ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32),

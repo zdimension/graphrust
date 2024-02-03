@@ -202,12 +202,6 @@ impl UiState {
                         ui.label("\".");
                     });
                     ui.add_space(10.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add_space(10.0);
-                        ui.label("Affichage nœuds dysfonctionnel sur certains navigateurs.\n");
-                        ui.label("Je travaille dessus.");
-                    });
-                    ui.add_space(10.0);
                     CollapsingHeader::new("Affichage")
                         .default_open(true)
                         .show(ui, |ui| {
