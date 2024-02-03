@@ -1,4 +1,4 @@
-use crate::app::{GraphTab, NewTabRequest, Person, RenderedGraph, Vertex, ViewerData};
+use crate::app::{create_tab, GraphTab, NewTabRequest, Person, RenderedGraph, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use derivative::*;
@@ -510,35 +510,12 @@ impl UiState {
                                         engine: Default::default(),
                                     };
 
-                                    let center =
-                                        viewer.persons.iter().map(|p| p.position).sum::<Point>()
-                                            / viewer.persons.len() as f32;
-                                    let new_tab = GraphTab {
-                                        title: format!("Voisinage de {}", person.name),
-                                        closeable: true,
-                                        camera: Camera::new(center.into()),
-                                        cam_animating: None,
-                                        ui_state: UiState {
-                                            node_count: viewer.persons.len(),
-                                            g_opac_edges: 300000.0 / edges.len() as f32,
-                                            g_opac_nodes: 40000.0 / viewer.persons.len() as f32,
-                                            max_degree: viewer
-                                                .persons
-                                                .iter()
-                                                .map(|p| p.neighbors.len())
-                                                .max()
-                                                .unwrap()
-                                                as u16,
-                                            ..UiState::default()
-                                        },
-                                        rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(
-                                            &frame.gl().unwrap().clone(),
-                                            &viewer,
-                                            edges.iter(),
-                                        ))),
-                                        viewer_data: viewer,
-                                    };
-                                    *tab_request = Some(new_tab);
+                                    *tab_request = Some(create_tab(
+                                        format!("Voisinage de {}", person.name),
+                                        viewer,
+                                        edges.iter(),
+                                        &frame.gl().unwrap().clone(),
+                                    ));
                                 }
                             }
                         });

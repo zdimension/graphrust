@@ -119,8 +119,40 @@ pub struct GraphTab<'a> {
     pub title: String,
 }
 
+pub fn create_tab<'a, 'b>(
+    title: impl Into<String>,
+    viewer: ViewerData<'b>,
+    edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
+    gl: &glow::Context,
+) -> GraphTab<'b> {
+    let center =
+        viewer.persons.iter().map(|p| p.position).sum::<Point>() / viewer.persons.len() as f32;
+    GraphTab {
+        title: title.into(),
+        closeable: true,
+        camera: Camera::new(center.into()),
+        cam_animating: None,
+        ui_state: UiState {
+            node_count: viewer.persons.len(),
+            g_opac_edges: (300000.0 / edges.len() as f32).max(0.5),
+            g_opac_nodes: (40000.0 / viewer.persons.len() as f32).max(0.75),
+            max_degree: viewer
+                .persons
+                .iter()
+                .map(|p| p.neighbors.len())
+                .max()
+                .unwrap() as u16,
+            ..UiState::default()
+        },
+        rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &viewer, edges))),
+        viewer_data: viewer,
+    }
+}
+
 pub struct GraphViewApp<'a> {
     tree: DockState<GraphTab<'a>>,
+    #[allow(dead_code)]
+    // we do a little trolling
     string_tables: StringTables,
 }
 
@@ -135,39 +167,9 @@ impl<'a> GraphViewApp<'a> {
             gl.enable(glow::PROGRAM_POINT_SIZE);
         }
         let data = load_binary();
-        log::info!("Computing center");
-        let center = data
-            .viewer
-            .persons
-            .iter()
-            .map(|p| p.position)
-            .sum::<Point>()
-            / data.viewer.persons.len() as f32;
-        log::info!("Center: {:?}", center);
-        let mut default_tab = GraphTab {
-            ui_state: UiState {
-                node_count: data.viewer.persons.len(),
-                g_opac_edges: 300000.0 / data.edges.len() as f32,
-                g_opac_nodes: 40000.0 / data.viewer.persons.len() as f32,
-                max_degree: data
-                    .viewer
-                    .persons
-                    .iter()
-                    .map(|p| p.neighbors.len())
-                    .max()
-                    .unwrap() as u16,
-                ..UiState::default()
-            },
-            rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(
-                gl,
-                &data.viewer,
-                data.edges.iter(),
-            ))),
-            viewer_data: data.viewer.clone(),
-            camera: Camera::new(center.into()),
-            cam_animating: None,
+        let default_tab = GraphTab {
             closeable: false,
-            title: String::from("Graphe"),
+            ..create_tab("Graphe", data.viewer, data.edges.iter(), gl)
         };
         #[cfg(target_arch = "wasm32")]
         {
