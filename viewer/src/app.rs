@@ -125,8 +125,17 @@ pub fn create_tab<'a, 'b>(
     edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
     gl: &glow::Context,
 ) -> GraphTab<'b> {
+    log::info!("Creating tab");
     let center =
         viewer.persons.iter().map(|p| p.position).sum::<Point>() / viewer.persons.len() as f32;
+    log::info!("Center: {:?}", center);
+    let max_degree = viewer
+        .persons
+        .iter()
+        .map(|p| p.neighbors.len())
+        .max()
+        .unwrap() as u16;
+    log::info!("Max degree: {}", max_degree);
     GraphTab {
         title: title.into(),
         closeable: true,
@@ -136,12 +145,7 @@ pub fn create_tab<'a, 'b>(
             node_count: viewer.persons.len(),
             g_opac_edges: (300000.0 / edges.len() as f32).max(0.5),
             g_opac_nodes: (40000.0 / viewer.persons.len() as f32).max(0.75),
-            max_degree: viewer
-                .persons
-                .iter()
-                .map(|p| p.neighbors.len())
-                .max()
-                .unwrap() as u16,
+            max_degree,
             ..UiState::default()
         },
         rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &viewer, edges))),
@@ -200,7 +204,9 @@ struct TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
     frame: &'frame mut eframe::Frame,
 }
 
-impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer for TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
+impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
+    for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
+{
     type Tab = GraphTab<'graph>;
 
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
@@ -210,6 +216,7 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer for TabViewer<'gra
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         let ctx = self.ctx;
         let cid = Id::from("camera");
+
         tab.ui_state.draw_ui(
             ui,
             &tab.viewer_data,
@@ -307,6 +314,51 @@ impl<'a> eframe::App for GraphViewApp<'a> {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let mut new_tab_request = None;
+
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                ui.add_space(10.0);
+                ui.vertical(|ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        let commit = env!("VERGEN_GIT_SHA");
+                        ui.label("Commit ");
+                        ui.hyperlink_to(
+                            commit,
+                            format!("https://github.com/zdimension/graphrust/commit/{}", commit),
+                        );
+                        ui.label(format!(" ({})", env!("VERGEN_BUILD_DATE")));
+                    });
+                    ui.hyperlink_to("zdimension", "https://zdimension.fr");
+                });
+                ui.vertical(|ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.add_space(10.0);
+                        ui.label("Si l'interface est ");
+                        ui.label(RichText::new("lente").strong());
+                        ui.label(":");
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.add_space(10.0);
+                        ui.label(" - décocher \"");
+                        ui.label(RichText::new("Afficher les liens").underline().strong());
+                        ui.label("\"");
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.add_space(10.0);
+                        ui.label(" - augmenter \"");
+                        ui.label(RichText::new("Degré minimum").underline().strong());
+                        ui.label("\"");
+                    });
+                });
+            });
+            ui.add_space(10.0);
+        });
+
         DockArea::new(&mut self.tree)
             .style({
                 let style = Style::from_egui(ctx.style().as_ref());
@@ -401,6 +453,7 @@ impl RenderedGraph {
                 ],
             ];
 
+            log::info!("Compiling shaders");
             let [program_basic, program_edge, program_node] = programs.map(|shader_sources| {
                 let program = gl.create_program().expect("Cannot create program");
 
@@ -438,6 +491,7 @@ impl RenderedGraph {
             });
 
             let edges_count = edges.len();
+            log::info!("Creating vertice list");
             let vertices = viewer
                 .persons
                 .iter()
@@ -511,6 +565,7 @@ impl RenderedGraph {
                 )
                 .collect_vec();
 
+            log::info!("Sending data to GPU");
             let vertices_array = gl
                 .create_vertex_array()
                 .expect("Cannot create vertex array");
@@ -580,6 +635,7 @@ impl RenderedGraph {
                 std::mem::size_of::<Point>() as i32,
             );
             gl.enable_vertex_attrib_array(1);
+            log::info!("Done");
 
             Self {
                 program_basic,

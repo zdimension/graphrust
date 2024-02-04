@@ -43,6 +43,8 @@ pub struct UiState {
     pub mouse_pos: Option<Pos2>,
     pub mouse_pos_world: Option<Vector2<f32>>,
     pub camera: Matrix4<f32>,
+    #[derivative(Default(value = "1"))]
+    pub neighborhood_degree: usize,
 }
 
 impl UiState {
@@ -184,41 +186,6 @@ impl UiState {
             .show_inside(ui, |ui| {
                 ui.spacing_mut().slider_width = 200.0;
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.add_space(10.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.add_space(10.0);
-                        let commit = env!("VERGEN_GIT_SHA");
-                        ui.label("Commit ");
-                        ui.hyperlink_to(
-                            commit,
-                            format!("https://github.com/zdimension/graphrust/commit/{}", commit),
-                        );
-                        ui.label(format!(" ({})", env!("VERGEN_BUILD_DATE")));
-                    });
-                    ui.add_space(10.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.add_space(10.0);
-                        ui.label("Si l'interface est ");
-                        ui.label(RichText::new("lente").strong());
-                        ui.label(":");
-                    });
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.add_space(10.0);
-                        ui.label(" - décocher \"");
-                        ui.label(RichText::new("Afficher les liens").underline().strong());
-                        ui.label("\"");
-                    });
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.add_space(10.0);
-                        ui.label(" - augmenter \"");
-                        ui.label(RichText::new("Degré minimum").underline().strong());
-                        ui.label("\"");
-                    });
-                    ui.add_space(10.0);
                     CollapsingHeader::new("Affichage")
                         .default_open(true)
                         .show(ui, |ui| {
@@ -456,67 +423,85 @@ impl UiState {
                                         );
                                     });
 
-                                if ui.button("Afficher voisinage").clicked() {
-                                    //let mut new_graph = person.neighbors.clone();
-                                    //new_graph.push(id);
-                                    let new_included = AHashSet::<_>::from_iter(
-                                        person.neighbors.iter().copied().chain([id]),
+                                ui.horizontal(|ui| {
+                                    ui.style_mut().spacing.slider_width = 100.0;
+                                    ui.add(
+                                        egui::Slider::new(&mut self.neighborhood_degree, 1..=20)
+                                            .text("Degré")
+                                            .clamp_to_range(true),
                                     );
 
-                                    let mut new_persons = Vec::with_capacity(256);
-                                    //let id_map = vec![None; data.persons.len()];
+                                    if ui.button("Afficher voisinage").clicked() {
+                                        let mut new_included = AHashSet::from([id]);
+                                        let mut last_batch = AHashSet::from([id]);
+                                        for i in 0..self.neighborhood_degree {
+                                            log::info!("Getting friends at degree {}", i + 1);
+                                            let mut new_friends = AHashSet::new();
+                                            for person in last_batch.iter() {
+                                                new_friends.extend(
+                                                    data.persons[*person]
+                                                        .neighbors
+                                                        .iter()
+                                                        .copied()
+                                                        .filter(|&i| !new_included.contains(&i)),
+                                                );
+                                            }
+                                            new_included.extend(new_friends.iter().copied());
+                                            last_batch = new_friends;
+                                        }
 
-                                    let mut id_map = AHashMap::new();
-                                    let mut class_list = AHashSet::new();
+                                        log::info!("Got {} persons total", new_included.len());
 
-                                    for &id in new_included.iter() {
-                                        let pers = &data.persons[id];
-                                        id_map.insert(id, new_persons.len());
-                                        class_list.insert(pers.modularity_class);
-                                        new_persons.push(Person {
-                                            neighbors: vec![],
-                                            ..*pers
-                                        });
-                                    }
+                                        let mut new_persons =
+                                            Vec::with_capacity(new_included.len());
 
-                                    let mut edges = AHashSet::new();
+                                        let mut id_map = AHashMap::new();
+                                        let mut class_list = AHashSet::new();
 
-                                    for (&old_id, &new_id) in id_map.iter() {
-                                        new_persons[new_id].neighbors.extend(
-                                            data.persons[old_id]
-                                                .neighbors
-                                                .iter()
-                                                .filter_map(|&i| id_map.get(&i)),
-                                        );
-                                        for &nb in new_persons[new_id].neighbors.iter() {
-                                            let [a, b] = std::cmp::minmax(new_id, nb);
-                                            edges.insert(EdgeStore {
-                                                a: a as u32,
-                                                b: b as u32,
+                                        log::info!("Processing person list and creating ID map");
+                                        for &id in new_included.iter() {
+                                            let pers = &data.persons[id];
+                                            id_map.insert(id, new_persons.len());
+                                            class_list.insert(pers.modularity_class);
+                                            new_persons.push(Person {
+                                                neighbors: vec![],
+                                                ..*pers
                                             });
                                         }
+
+                                        let mut edges = AHashSet::new();
+
+                                        log::info!("Creating new neighbor lists and edge list");
+                                        for (&old_id, &new_id) in id_map.iter() {
+                                            new_persons[new_id].neighbors.extend(
+                                                data.persons[old_id]
+                                                    .neighbors
+                                                    .iter()
+                                                    .filter_map(|&i| id_map.get(&i)),
+                                            );
+                                            for &nb in new_persons[new_id].neighbors.iter() {
+                                                let [a, b] = std::cmp::minmax(new_id, nb);
+                                                edges.insert(EdgeStore {
+                                                    a: a as u32,
+                                                    b: b as u32,
+                                                });
+                                            }
+                                        }
+
+                                        let viewer = ViewerData::<'a> {
+                                            persons: new_persons,
+                                            modularity_classes: data.modularity_classes.clone(),
+                                            engine: Default::default(),
+                                        };
+
+                                        *tab_request = Some(create_tab(
+                                            format!("Voisinage de {}", person.name),
+                                            viewer,
+                                            edges.iter(),
+                                            &frame.gl().unwrap().clone(),
+                                        ));
                                     }
-
-                                    let viewer = ViewerData::<'a> {
-                                        persons: new_persons,
-                                        /*modularity_classes: data
-                                        .modularity_classes
-                                        .iter()
-                                        .enumerate()
-                                        .filter(|&(i, _)| class_list.contains(&(i as u16)))
-                                        .map(|(_, c)| c.clone())
-                                        .collect(),*/
-                                        modularity_classes: data.modularity_classes.clone(),
-                                        engine: Default::default(),
-                                    };
-
-                                    *tab_request = Some(create_tab(
-                                        format!("Voisinage de {}", person.name),
-                                        viewer,
-                                        edges.iter(),
-                                        &frame.gl().unwrap().clone(),
-                                    ));
-                                }
+                                });
                             }
                         });
 
