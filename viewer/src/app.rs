@@ -104,6 +104,24 @@ pub struct ViewerData<'a> {
     pub engine: SimSearch<usize>,
 }
 
+impl<'a> ViewerData<'a> {
+    pub fn new(
+        persons: Vec<Person<'a>>,
+        modularity_classes: Vec<ModularityClass>,
+    ) -> ViewerData<'a> {
+        log::info!("Initializing search engine");
+        let mut engine: SimSearch<usize> = SimSearch::new();
+        for (i, person) in persons.iter().enumerate() {
+            engine.insert(i, person.name);
+        }
+        ViewerData {
+            persons,
+            modularity_classes,
+            engine,
+        }
+    }
+}
+
 pub struct StringTables {
     pub ids: Vec<u8>,
     pub names: Vec<u8>,

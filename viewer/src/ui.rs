@@ -426,7 +426,7 @@ impl UiState {
                                 ui.horizontal(|ui| {
                                     ui.style_mut().spacing.slider_width = 100.0;
                                     ui.add(
-                                        egui::Slider::new(&mut self.neighborhood_degree, 1..=20)
+                                        egui::Slider::new(&mut self.neighborhood_degree, 1..=10)
                                             .text("Degré")
                                             .clamp_to_range(true),
                                     );
@@ -435,7 +435,7 @@ impl UiState {
                                         let mut new_included = AHashSet::from([id]);
                                         let mut last_batch = AHashSet::from([id]);
                                         for i in 0..self.neighborhood_degree {
-                                            log::info!("Getting friends at degree {}", i + 1);
+                                            log::info!("{} new friends at degree {}, getting friends at degree {}", last_batch.len(), i, i + 1);
                                             let mut new_friends = AHashSet::new();
                                             for person in last_batch.iter() {
                                                 new_friends.extend(
@@ -488,14 +488,10 @@ impl UiState {
                                             }
                                         }
 
-                                        let viewer = ViewerData::<'a> {
-                                            persons: new_persons,
-                                            modularity_classes: data.modularity_classes.clone(),
-                                            engine: Default::default(),
-                                        };
+                                        let viewer = ViewerData::new(new_persons, data.modularity_classes.clone());
 
                                         *tab_request = Some(create_tab(
-                                            format!("Voisinage de {}", person.name),
+                                            format!("{}-voisinage de {}", self.neighborhood_degree, person.name),
                                             viewer,
                                             edges.iter(),
                                             &frame.gl().unwrap().clone(),

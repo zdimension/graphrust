@@ -86,12 +86,6 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
         p2.neighbors.push(edge.a as usize);
     }
 
-    log::info!("Initializing search engine");
-    let mut engine: SimSearch<usize> = SimSearch::new();
-    for (i, person) in person_data.iter().enumerate() {
-        engine.insert(i, person.name);
-    }
-
     log::info!("Done");
 
     ProcessedData {
@@ -99,11 +93,7 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
             ids: content.ids,
             names: content.names,
         },
-        viewer: ViewerData {
-            persons: person_data,
-            modularity_classes,
-            engine,
-        },
+        viewer: ViewerData::new(person_data, modularity_classes),
         edges: content.edges,
     }
 }
