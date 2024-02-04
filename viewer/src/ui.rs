@@ -446,6 +446,13 @@ impl UiState {
                                                         .filter(|&i| !new_included.contains(&i)),
                                                 );
                                             }
+                                            if new_friends.is_empty() {
+                                                log::info!("No new friends at degree {}", i + 1);
+                                                if last_batch.len() < 50 {
+                                                    log::info!("At {}: {:?}", i, last_batch.iter().map(|i| data.persons[*i].name).collect::<Vec<_>>());
+                                                }
+                                                break;
+                                            }
                                             new_included.extend(new_friends.iter().copied());
                                             last_batch = new_friends;
                                         }
