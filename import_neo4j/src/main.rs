@@ -80,7 +80,7 @@ async fn main() {
     let mut file = GraphFile::default();
     let mut nodes = graph
         .execute(
-            query("match (n) where count { (n)--() } > $mind return n.uid, n.name")
+            query("match (n) where count { (n)--() } >= $mind return n.uid, n.name")
                 .param("mind", config.min_degree),
         )
         .await
@@ -108,7 +108,7 @@ async fn main() {
 
     let mut edges_q = graph
         .execute(query(
-            "match (n)-->(m) where count { (n)--() } > $mind and count { (m)--() } > $mind return n.uid, m.uid",
+            "match (n)-->(m) where count { (n)--() } >= $mind and count { (m)--() } >= $mind return n.uid, m.uid",
         ).param("mind", config.min_degree))
         .await
         .unwrap();
