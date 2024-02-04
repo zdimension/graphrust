@@ -143,8 +143,8 @@ pub fn create_tab<'a, 'b>(
         cam_animating: None,
         ui_state: UiState {
             node_count: viewer.persons.len(),
-            g_opac_edges: (300000.0 / edges.len() as f32).max(0.5),
-            g_opac_nodes: (40000.0 / viewer.persons.len() as f32).max(0.75),
+            g_opac_edges: (300000.0 / edges.len() as f32).min(0.5),
+            g_opac_nodes: (40000.0 / viewer.persons.len() as f32).min(0.75),
             max_degree,
             ..UiState::default()
         },
