@@ -92,7 +92,7 @@ pub fn combo_with_filter(
     }
 
     type StateType = Arc<Mutex<ComboFilterState>>;
-    let id = Id::new(label).with("combo_with_filter");
+    let id = Id::new(label).with(ui.id()).with("combo_with_filter");
 
     let popup_id = id.with("popup");
     let wrap_enabled = false;

@@ -233,7 +233,7 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         let ctx = self.ctx;
-        let cid = Id::from("camera");
+        let cid = Id::from("camera").with(ui.id());
 
         tab.ui_state.draw_ui(
             ui,
@@ -392,29 +392,6 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                 },
             );
         if let Some(request) = new_tab_request {
-            /*
-                let mut default_tab = GraphTab {
-                ui_state: UiState {
-                    node_count: data.viewer.persons.len(),
-                    g_opac_edges: 300000.0 / data.edges.len() as f32,
-                    g_opac_nodes: 40000.0 / data.viewer.persons.len() as f32,
-                    max_degree: data
-                        .viewer
-                        .persons
-                        .iter()
-                        .map(|p| p.neighbors.len())
-                        .max()
-                        .unwrap() as u16,
-                    ..UiState::default()
-                },
-                rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &data))),
-                viewer_data: data.viewer.clone(),
-                camera: Camera::new(center.into()),
-                cam_animating: None,
-                closeable: false,
-                title: String::from("Graphe"),
-            };
-                 */
             self.tree.push_to_focused_leaf(request);
         }
     }
