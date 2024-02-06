@@ -181,6 +181,7 @@ impl UiState {
         tab_request: &mut Option<NewTabRequest<'a>>,
         frame: &mut eframe::Frame,
     ) {
+        ui.spacing_mut().scroll.floating_allocated_width = 18.0;
         egui::SidePanel::left("settings")
             .resizable(false)
             .show_inside(ui, |ui| {
