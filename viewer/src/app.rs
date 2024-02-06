@@ -5,7 +5,7 @@ use crate::graph_storage::{load_binary, ProcessedData};
 use crate::ui::UiState;
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{Color32, Id, RichText, Ui, Vec2, WidgetText};
+use egui::{Color32, Hyperlink, Id, RichText, Ui, Vec2, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3f, EdgeStore, Point};
 use itertools::Itertools;
@@ -342,13 +342,22 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                         ui.spacing_mut().item_spacing.x = 0.0;
                         let commit = env!("VERGEN_GIT_SHA");
                         ui.label("Commit ");
-                        ui.hyperlink_to(
-                            commit,
-                            format!("https://github.com/zdimension/graphrust/commit/{}", commit),
+                        ui.add(
+                            Hyperlink::from_label_and_url(
+                                commit,
+                                format!(
+                                    "https://github.com/zdimension/graphrust/commit/{}",
+                                    commit
+                                ),
+                            )
+                            .open_in_new_tab(true),
                         );
                         ui.label(format!(" ({})", env!("VERGEN_BUILD_DATE")));
                     });
-                    ui.hyperlink_to("zdimension", "https://zdimension.fr");
+                    ui.add(
+                        Hyperlink::from_label_and_url("zdimension", "https://zdimension.fr")
+                            .open_in_new_tab(true),
+                    );
                 });
                 ui.vertical(|ui| {
                     ui.horizontal_wrapped(|ui| {
