@@ -89,7 +89,9 @@ async fn main() {
     log!("Processing node query");
     while let Ok(Some(row)) = nodes.next().await {
         let uid: String = row.get("n.uid").unwrap();
-        let name: String = row.get("n.name").unwrap();
+        let name: String = row
+            .get("n.name")
+            .expect(format!("Node without name: {}", uid).as_str());
         let pers = NodeStore {
             position: Point { x: 0.0, y: 0.0 },
             size: 0.0,
@@ -131,6 +133,75 @@ async fn main() {
         writeln!(&mut edges_writer, "{} {}", a, b).unwrap();
     }
     log!("{} edges", edges.len());
+
+    log!("Computing adjacency matrix");
+    let adj = file.get_adjacency();
+
+    log!("Running BFS to check if graph contains unconnected nodes");
+    let mut covered = vec![false; adj.len()];
+    let mut queue = std::collections::VecDeque::new();
+    queue.push_back(0);
+    covered[0] = true;
+    let mut count = 0;
+    while let Some(node) = queue.pop_front() {
+        count += 1;
+        for &neigh in &adj[node as usize] {
+            if !covered[neigh as usize] {
+                covered[neigh as usize] = true;
+                queue.push_back(neigh);
+            }
+        }
+    }
+    assert_eq!(
+        count,
+        adj.len(),
+        "Graph contains {} unconnected nodes",
+        adj.len() - count
+    );
+
+    log!("Running Louvain algorithm2");
+    let mut pet = petgraph::Graph::new_undirected();
+    let mut inv_map: AHashMap<usize, NodeIndex> = AHashMap::new();
+    for i in 0..adj.len() {
+        inv_map.insert(i, pet.add_node(()));
+    }
+    for (i, pers) in adj.iter().enumerate() {
+        for &j in pers {
+            let i = *inv_map.get(&i).unwrap();
+            let j = *inv_map.get(&(j as usize)).unwrap();
+            pet.add_edge(i, j, 1.0);
+        }
+    }
+    let resolution = 1.0;
+    let noise = 1;
+    let mut modularity = Modularity::new(resolution, noise);
+    log!("Running clusterization");
+    let results = modularity.execute(&pet);
+    log!("Done");
+    let num_of_communities = *modularity.communityByNode.iter().max().unwrap_or(&0) as usize + 2; // Parent Community included
+    println!(
+        "Number of Clusters: {} -  with resolution {}",
+        num_of_communities - 1,
+        resolution
+    );
+    println!("Final Modularity: {:?}", results);
+
+    log!("Creating color palette");
+    let palette = ColorPalette::new(num_of_communities as u32, PaletteType::Random, false);
+    file.classes.push(Color3b { r: 255, g: 0, b: 0 });
+
+    for (i, color) in palette.colors.iter().enumerate() {
+        file.classes.push(Color3b {
+            r: (color.red * 255.0) as u8,
+            g: (color.green * 255.0) as u8,
+            b: (color.blue * 255.0) as u8,
+        });
+    }
+
+    for (i, comm) in modularity.communityByNode.iter().enumerate() {
+        file.nodes[i].class = *comm as u16 + 1;
+    }
+
     // run scp edges.txt zdimension@domino:/home/zdimension/GPUGraphLayout/builds/linux
     use std::process::Command;
     log!(
@@ -138,6 +209,7 @@ async fn main() {
         Command::new("scp")
             .arg("edges.txt")
             .arg("zdimension@domino:/home/zdimension/GPUGraphLayout/builds/linux")
+            .stdout(std::process::Stdio::null())
             .spawn()
             .unwrap()
             .wait()
@@ -161,6 +233,7 @@ async fn main() {
                 config.layout_iterations
             ))
             .arg("edges.bin")
+            .stdout(std::process::Stdio::null())
             .spawn()
             .unwrap()
             .wait()
@@ -237,52 +310,6 @@ async fn main() {
         file.nodes[i].position = Point { x: p[0], y: p[1] };
     }*/
 
-    log!("Computing adjacency matrix");
-    let adj = file.get_adjacency();
-
-    log!("Running Louvain algorithm2");
-    let mut pet = petgraph::Graph::new_undirected();
-    let mut inv_map: AHashMap<usize, NodeIndex> = AHashMap::new();
-    for i in 0..adj.len() {
-        inv_map.insert(i, pet.add_node(()));
-    }
-    for (i, pers) in adj.iter().enumerate() {
-        for &j in pers {
-            let i = *inv_map.get(&i).unwrap();
-            let j = *inv_map.get(&(j as usize)).unwrap();
-            pet.add_edge(i, j, 1.0);
-        }
-    }
-    log!("p {} {}", pet.edge_count(), pet.node_count());
-    let resolution = 1.0;
-    let noise = 1;
-    let mut modularity = Modularity::new(resolution, noise);
-    log!("Running clusterization");
-    let results = modularity.execute(&pet);
-    log!("Done");
-    let num_of_communities = *modularity.communityByNode.iter().max().unwrap_or(&0) as usize + 2; // Parent Community included
-    println!(
-        "Number of Clusters: {} -  with resolution {}",
-        num_of_communities - 1,
-        resolution
-    );
-    println!("Final Modularity: {:?}", results);
-
-    log!("Creating color palette");
-    let palette = ColorPalette::new(num_of_communities as u32, PaletteType::Random, false);
-    file.classes.push(Color3b { r: 255, g: 0, b: 0 });
-
-    for (i, color) in palette.colors.iter().enumerate() {
-        file.classes.push(Color3b {
-            r: (color.red * 255.0) as u8,
-            g: (color.green * 255.0) as u8,
-            b: (color.blue * 255.0) as u8,
-        });
-    }
-
-    for (i, comm) in modularity.communityByNode.iter().enumerate() {
-        file.nodes[i].class = *comm as u16 + 1;
-    }
     /*log!("Running Louvain algorithm");
     let louvain = louvain::Graph::new(adj).louvain();
 
