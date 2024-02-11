@@ -152,17 +152,18 @@ impl UiState {
         })
         .inspect(|p| todo!())
         .count();*/
-        if graph.filter_nodes {
-            self.node_count = 0;
-            for p in &data.persons {
+        self.node_count = 0;
+        for p in &data.persons {
+            let ok = if graph.filter_nodes {
                 let deg = p.neighbors.len() as u16;
-                if deg >= graph.degree_filter.0 && deg <= graph.degree_filter.1 {
-                    self.node_count += 1;
-                    count_classes[p.modularity_class as usize] += 1;
-                }
+                deg >= graph.degree_filter.0 && deg <= graph.degree_filter.1
+            } else {
+                true
+            };
+            if ok {
+                self.node_count += 1;
+                count_classes[p.modularity_class as usize] += 1;
             }
-        } else {
-            self.node_count = data.persons.len();
         }
         self.node_count_classes = count_classes
             .iter()
