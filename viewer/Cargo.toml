@@ -41,3 +41,7 @@ wasm-bindgen-futures = "0.4"
 wasm-bindgen = "*"
 js-sys = "*"
 wasm-logger = "0.2.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.chrono]
+version = "*"
+features = ["wasmbind"]

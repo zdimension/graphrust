@@ -162,7 +162,7 @@ pub struct NodeStore {
     pub offset_name: u32,
 }
 
-#[derive(Readable, Writable, Hash, PartialEq, Eq)]
+#[derive(Readable, Writable, Hash, PartialEq, Eq, Copy, Clone)]
 pub struct EdgeStore {
     pub a: u32,
     pub b: u32,

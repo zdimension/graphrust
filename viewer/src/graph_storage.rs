@@ -58,6 +58,7 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
 
     log::info!("Processing nodes");
 
+    let start = chrono::Local::now();
     let mut person_data: Vec<_> = content
         .nodes
         .par_iter()
@@ -74,9 +75,14 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
         })
         .collect();
 
+    log::info!(
+        "Done, took {}ms",
+        (chrono::Local::now() - start).num_milliseconds()
+    );
+
     log::info!("Generating neighbor lists");
 
-    let start = std::time::Instant::now();
+    let start = chrono::Local::now();
     for (_i, edge) in content.edges.iter().enumerate() {
         if edge.a == edge.b {
             //panic!("Self edge detected"); TODO
@@ -87,7 +93,10 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
         p2.neighbors.push(edge.a as usize);
     }
 
-    log::info!("Done, took {:?}", start.elapsed());
+    log::info!(
+        "Done, took {}ms",
+        (chrono::Local::now() - start).num_milliseconds()
+    );
 
     ProcessedData {
         strings: StringTables {
