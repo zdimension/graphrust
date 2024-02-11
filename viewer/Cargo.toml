@@ -24,6 +24,9 @@ graphrust_macros = { path = "../macros" }
 egui_extras = "0.25.0"
 egui_dock = "0.10.0"
 
+[dev-dependencies]
+log = "*"
+
 [build-dependencies]
 anyhow = "1.0.79"
 vergen = { version = "8.3.1", features = ["build", "git", "gitcl"] }

@@ -39,7 +39,7 @@ impl<'a> Person<'a> {
             modularity_class,
             id,
             name,
-            neighbors: Vec::new(),
+            neighbors: Vec::with_capacity(4),
         }
     }
 }

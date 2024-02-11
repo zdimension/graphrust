@@ -16,7 +16,7 @@ const GRAPH_NAME: &str = "graph_n4j.bin";
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_file() -> GraphFile {
-    GraphFile::read_from_file(GRAPH_NAME).unwrap()
+    GraphFile::read_from_file(format!("{}/../{}", env!("CARGO_MANIFEST_DIR"), GRAPH_NAME)).unwrap()
 }
 
 #[cfg(target_arch = "wasm32")]
