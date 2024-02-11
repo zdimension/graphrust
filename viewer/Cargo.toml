@@ -23,6 +23,7 @@ graph_format = { path = "../graph_format" }
 graphrust_macros = { path = "../macros" }
 egui_extras = "0.26"
 egui_dock = "0.11"
+rayon = "1.8"
 
 [dev-dependencies]
 log = "*"

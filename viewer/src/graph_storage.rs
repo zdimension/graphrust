@@ -2,9 +2,9 @@ use crate::app::{ModularityClass, Person, StringTables, ViewerData};
 
 use graph_format::{EdgeStore, GraphFile, Point};
 use itertools::Itertools;
+use rayon::prelude::*;
 
-
-use speedy::{Readable};
+use speedy::Readable;
 
 use crate::utils::{str_from_null_terminated_utf8, SliceExt};
 
@@ -58,9 +58,9 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
 
     log::info!("Processing nodes");
 
-    let mut person_data = content
+    let mut person_data: Vec<_> = content
         .nodes
-        .iter()
+        .par_iter()
         .map(|node| unsafe {
             Person::new(
                 node.position + Point::new(0.0, 3000.0),
@@ -72,10 +72,11 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
                 ),
             )
         })
-        .collect_vec();
+        .collect();
 
     log::info!("Generating neighbor lists");
 
+    let start = std::time::Instant::now();
     for (_i, edge) in content.edges.iter().enumerate() {
         if edge.a == edge.b {
             //panic!("Self edge detected"); TODO
@@ -86,7 +87,7 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
         p2.neighbors.push(edge.a as usize);
     }
 
-    log::info!("Done");
+    log::info!("Done, took {:?}", start.elapsed());
 
     ProcessedData {
         strings: StringTables {
