@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 pub struct UiState {
     #[derivative(Default(value = "true"))]
     pub g_show_nodes: bool,
-    #[derivative(Default(value = "true"))]
+    #[derivative(Default(value = "cfg!(not(target_arch = \"wasm32\"))"))]
     pub g_show_edges: bool,
     pub g_opac_nodes: f32,
     pub g_opac_edges: f32,
