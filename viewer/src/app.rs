@@ -1,7 +1,7 @@
 use crate::camera::Camera;
 use std::marker::PhantomData;
 
-use crate::graph_storage::{load_binary, ProcessedData};
+use crate::graph_storage::load_binary;
 use crate::ui::UiState;
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
@@ -12,7 +12,7 @@ use graphrust_macros::md;
 use itertools::Itertools;
 use nalgebra::{Matrix4, Vector4};
 use simsearch::SimSearch;
-use std::ops::Range;
+
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
@@ -324,6 +324,14 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
 
     fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
         tab.closeable
+    }
+
+    fn on_close(&mut self, tab: &mut Self::Tab) -> bool {
+        tab.rendered_graph
+            .lock()
+            .unwrap()
+            .destroy(&self.frame.gl().unwrap().clone());
+        true
     }
 }
 

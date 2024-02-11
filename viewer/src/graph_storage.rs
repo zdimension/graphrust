@@ -2,9 +2,9 @@ use crate::app::{ModularityClass, Person, StringTables, ViewerData};
 
 use graph_format::{EdgeStore, GraphFile, Point};
 use itertools::Itertools;
-use nalgebra::Vector2;
-use simsearch::SimSearch;
-use speedy::{Readable, Writable};
+
+
+use speedy::{Readable};
 
 use crate::utils::{str_from_null_terminated_utf8, SliceExt};
 
@@ -76,7 +76,7 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
 
     log::info!("Generating neighbor lists");
 
-    for (i, edge) in content.edges.iter().enumerate() {
+    for (_i, edge) in content.edges.iter().enumerate() {
         if edge.a == edge.b {
             //panic!("Self edge detected"); TODO
             continue;

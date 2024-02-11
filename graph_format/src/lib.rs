@@ -1,6 +1,5 @@
 use nalgebra::Vector2;
 pub use speedy::{Readable, Writable};
-use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::iter::Sum;
 
 // 24bpp color structure

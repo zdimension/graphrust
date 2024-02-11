@@ -1,20 +1,15 @@
-use crate::app::{create_tab, GraphTab, NewTabRequest, Person, RenderedGraph, Vertex, ViewerData};
+use crate::app::{create_tab, NewTabRequest, Person, RenderedGraph, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use derivative::*;
 
-use crate::camera::Camera;
 use egui::ahash::{AHashMap, AHashSet};
-use egui::{
-    vec2, CollapsingHeader, Color32, Frame, Hyperlink, Pos2, RichText, Sense, TextStyle, Vec2,
-};
+use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Vec2};
 use egui_extras::{Column, TableBuilder};
-use graph_format::{Color3b, Color3f, EdgeStore, Point};
+use graph_format::{Color3b, Color3f, EdgeStore};
 use itertools::Itertools;
 use nalgebra::{DimAdd, Matrix4, Vector2};
-use std::collections::{HashSet, VecDeque};
-use std::ops::{Range, RangeInclusive};
-use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -53,7 +48,7 @@ impl UiState {
         self.infos_open = id.is_some();
     }
 
-    fn do_pathfinding(&mut self, data: &ViewerData, graph: &mut RenderedGraph) {
+    fn do_pathfinding(&mut self, data: &ViewerData<'_>, graph: &mut RenderedGraph) {
         let src_id = self.path_src.unwrap();
         let dest_id = self.path_dest.unwrap();
         let src = &data.persons[src_id];

@@ -1,7 +1,7 @@
 use derivative::Derivative;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use syn::parse::{Parse, Parser};
+use syn::parse::Parse;
 use syn::{Expr, LitStr, Token};
 
 struct MdArgs {
@@ -131,13 +131,14 @@ pub fn md(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                     #our_ui.label(" ".repeat(#spaces));
                 });
                 state.should_insert_newline = false;
-                if let Some(mut number) = state.list_point.take() {
+                /*if let Some(number) = state.list_point.take() {
                     todo!();
-                    number += 1;
-                    state.list_point = Some(number);
+                    /*number += 1;
+                    state.list_point = Some(number);*/
                 } else if state.indentation >= 1 {
                     todo!();
-                } else {
+                } else*/
+                {
                     result.extend(bullet_point!());
                 }
             }

@@ -75,12 +75,12 @@ impl Camera {
             .append_translation_mut(&nalgebra::Translation3::new(dx, -dy, 0.0));
     }
 
-    pub fn rotate(&mut self, rot: f32) {
+    /*pub fn rotate(&mut self, rot: f32) {
         // TODO: fuck quaternions all my homies uses euler angles
         //let center = self.transf.inverse_transform_point(&nalgebra::Point3::new(0.0, 0.0, 0.0));
         self.transf
             .append_rotation_wrt_center_mut(&nalgebra::UnitQuaternion::from_euler_angles(
                 0.0, 0.0, rot,
             ));
-    }
+    }*/
 }
