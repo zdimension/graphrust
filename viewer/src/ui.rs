@@ -16,7 +16,8 @@ use std::collections::VecDeque;
 pub struct UiState {
     #[derivative(Default(value = "true"))]
     pub g_show_nodes: bool,
-    #[derivative(Default(value = "cfg!(not(target_arch = \"wasm32\"))"))]
+    //#[derivative(Default(value = "cfg!(not(target_arch = \"wasm32\"))"))]
+    #[derivative(Default(value = "true"))]
     pub g_show_edges: bool,
     pub g_opac_nodes: f32,
     pub g_opac_edges: f32,
@@ -151,13 +152,17 @@ impl UiState {
         })
         .inspect(|p| todo!())
         .count();*/
-        self.node_count = 0;
-        for p in &data.persons {
-            let deg = p.neighbors.len() as u16;
-            if deg >= graph.degree_filter.0 && deg <= graph.degree_filter.1 {
-                self.node_count += 1;
-                count_classes[p.modularity_class as usize] += 1;
+        if graph.filter_nodes {
+            self.node_count = 0;
+            for p in &data.persons {
+                let deg = p.neighbors.len() as u16;
+                if deg >= graph.degree_filter.0 && deg <= graph.degree_filter.1 {
+                    self.node_count += 1;
+                    count_classes[p.modularity_class as usize] += 1;
+                }
             }
+        } else {
+            self.node_count = data.persons.len();
         }
         self.node_count_classes = count_classes
             .iter()
@@ -202,31 +207,39 @@ impl UiState {
                                 );
                             }
 
-                            let start = ui
-                                .add(
-                                    egui::DragValue::new(&mut graph.degree_filter.0)
-                                        .speed(1)
-                                        .clamp_range(1..=graph.degree_filter.1)
-                                        .prefix("Degré minimum : "),
-                                )
-                                .changed();
-                            let end = ui
-                                .add(
-                                    egui::DragValue::new(&mut graph.degree_filter.1)
-                                        .speed(1)
-                                        .clamp_range(graph.degree_filter.0..=self.max_degree)
-                                        .prefix("Degré maximum : "),
-                                )
-                                .changed();
-                            if start || end {
-                                self.deg_filter_changed = true;
-                                self.refresh_node_count(data, graph);
-                            }
+                            ui.horizontal(|ui| {
+                               ui.vertical(|ui| {
+                                   let start = ui
+                                       .add(
+                                           egui::DragValue::new(&mut graph.degree_filter.0)
+                                               .speed(1)
+                                               .clamp_range(1..=graph.degree_filter.1)
+                                               .prefix("Degré minimum : "),
+                                       )
+                                       .changed();
+                                   let end = ui
+                                       .add(
+                                           egui::DragValue::new(&mut graph.degree_filter.1)
+                                               .speed(1)
+                                               .clamp_range(graph.degree_filter.0..=self.max_degree)
+                                               .prefix("Degré maximum : "),
+                                       )
+                                       .changed();
+                                   if start || end {
+                                       self.deg_filter_changed = true;
+                                       self.refresh_node_count(data, graph);
+                                   }
+                               });
+                                ui.vertical(|ui| {
+                                    ui.checkbox(&mut graph.filter_nodes, "Filtrer les nœuds");
+                                });
+                            });
+
 
                             ui.horizontal(|ui| {
                                 ui.label("Nœuds affichés :");
                                 ui.label(format!("{}", self.node_count));
-                            })
+                            });
                         });
 
                     CollapsingHeader::new("Chemin le plus court")
@@ -500,6 +513,7 @@ impl UiState {
                                             viewer,
                                             edges.iter(),
                                             &frame.gl().unwrap().clone(),
+                                            0
                                         ));
                                     }
                                 });

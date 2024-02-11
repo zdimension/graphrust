@@ -143,6 +143,7 @@ pub fn create_tab<'a, 'b>(
     viewer: ViewerData<'b>,
     edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
     gl: &glow::Context,
+    default_filter: u16,
 ) -> GraphTab<'b> {
     log::info!("Creating tab");
     let center =
@@ -162,12 +163,15 @@ pub fn create_tab<'a, 'b>(
         cam_animating: None,
         ui_state: UiState {
             node_count: viewer.persons.len(),
-            g_opac_edges: (300000.0 / edges.len() as f32).min(0.5),
+            g_opac_edges: (300000.0 / edges.len() as f32).min(0.35),
             g_opac_nodes: (40000.0 / viewer.persons.len() as f32).min(0.75),
             max_degree,
             ..UiState::default()
         },
-        rendered_graph: Arc::new(Mutex::new(RenderedGraph::new(gl, &viewer, edges))),
+        rendered_graph: Arc::new(Mutex::new(RenderedGraph {
+            degree_filter: (default_filter, u16::MAX),
+            ..RenderedGraph::new(gl, &viewer, edges)
+        })),
         viewer_data: viewer,
     }
 }
@@ -192,7 +196,7 @@ impl<'a> GraphViewApp<'a> {
         let data = load_binary();
         let default_tab = GraphTab {
             closeable: false,
-            ..create_tab("Graphe", data.viewer, data.edges.iter(), gl)
+            ..create_tab("Graphe", data.viewer, data.edges.iter(), gl, 30)
         };
         #[cfg(target_arch = "wasm32")]
         {
@@ -420,6 +424,8 @@ pub struct RenderedGraph {
     pub path_count: usize,
     pub new_path: Option<Vec<Vertex>>,
     pub degree_filter: (u16, u16),
+    pub filter_nodes: bool,
+    pub destroyed: bool,
 }
 
 impl RenderedGraph {
@@ -655,11 +661,14 @@ impl RenderedGraph {
                 path_count: 0,
                 new_path: None,
                 degree_filter: (0, u16::MAX),
+                filter_nodes: false,
+                destroyed: false,
             }
         }
     }
 
-    fn destroy(&self, gl: &glow::Context) {
+    fn destroy(&mut self, gl: &glow::Context) {
+        self.destroyed = true;
         use glow::HasContext as _;
         unsafe {
             gl.delete_program(self.program_basic);
@@ -679,6 +688,10 @@ impl RenderedGraph {
         edges: (bool, f32),
         nodes: (bool, f32),
     ) {
+        if self.destroyed {
+            return;
+        }
+
         use glow::HasContext as _;
         unsafe {
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
@@ -730,7 +743,11 @@ impl RenderedGraph {
                         &gl.get_uniform_location(self.program_node, "u_degfilter")
                             .unwrap(),
                     ),
-                    ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32),
+                    if self.filter_nodes {
+                        ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32)
+                    } else {
+                        0xffff_0000
+                    },
                 );
                 gl.uniform_1_f32(
                     Some(
