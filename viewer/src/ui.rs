@@ -10,6 +10,7 @@ use graph_format::{Color3b, Color3f, EdgeStore};
 use itertools::Itertools;
 use nalgebra::{Matrix4, Vector2};
 use std::collections::VecDeque;
+use std::ops::RangeInclusive;
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -41,6 +42,18 @@ pub struct UiState {
     pub camera: Matrix4<f32>,
     #[derivative(Default(value = "1"))]
     pub neighborhood_degree: usize,
+}
+
+fn percent_formatter(val: f64, _: RangeInclusive<usize>) -> String {
+    format!("{:.1}%", val * 100.0)
+}
+
+fn percent_parser(s: &str) -> Option<f64> {
+    s.strip_suffix('%')
+        .unwrap_or(s)
+        .parse()
+        .ok()
+        .map(|v: f64| v / 100.0)
 }
 
 impl UiState {
@@ -196,6 +209,8 @@ impl UiState {
                                 ui.add(
                                     egui::Slider::new(&mut self.g_opac_nodes, 0.0..=1.0)
                                         .text("Opacité")
+                                        .custom_formatter(percent_formatter)
+                                        .custom_parser(percent_parser)
                                         .clamp_to_range(true),
                                 );
                             }
@@ -204,6 +219,8 @@ impl UiState {
                                 ui.add(
                                     egui::Slider::new(&mut self.g_opac_edges, 0.0..=1.0)
                                         .text("Opacité")
+                                        .custom_formatter(percent_formatter)
+                                        .custom_parser(percent_parser)
                                         .clamp_to_range(true),
                                 );
                             }
