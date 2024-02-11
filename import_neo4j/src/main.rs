@@ -190,13 +190,12 @@ async fn main() {
     let palette = ColorPalette::new(num_of_communities as u32, PaletteType::Random, false);
     file.classes.push(Color3b { r: 255, g: 0, b: 0 });
 
-    for (i, color) in palette.colors.iter().enumerate() {
-        file.classes.push(Color3b {
+    file.classes
+        .extend(palette.colors.iter().map(|color| Color3b {
             r: (color.red * 255.0) as u8,
             g: (color.green * 255.0) as u8,
             b: (color.blue * 255.0) as u8,
-        });
-    }
+        }));
 
     for (i, comm) in modularity.communityByNode.iter().enumerate() {
         file.nodes[i].class = *comm as u16 + 1;
