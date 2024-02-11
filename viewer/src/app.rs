@@ -337,7 +337,7 @@ impl<'a> eframe::App for GraphViewApp<'a> {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
-                ui.add_space(10.0);
+                ui.spacing_mut().item_spacing.x = 50.0;
                 ui.vertical(|ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
@@ -361,36 +361,19 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                     );
                 });
                 ui.vertical(|ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.add_space(10.0);
-                        ui.label("Si l'interface est ");
-                        ui.label(RichText::new("lente").strong());
-                        ui.label(":");
-                    });
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.add_space(10.0);
-                        ui.label(" - décocher \"");
-                        ui.label(RichText::new("Afficher les liens").underline().strong());
-                        ui.label("\"");
-                    });
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.add_space(10.0);
-                        ui.label(" - augmenter \"");
-                        ui.label(RichText::new("Degré minimum").underline().strong());
-                        ui.label("\"");
-                    });
+                    md!(ui, r#"
+Si l'interface est **lente**:
+- décocher **Afficher les liens**
+- augmenter **Degré minimum**
+                    "#);
                 });
                 ui.vertical(|ui| {
-                    /*ui.label(
-                        "Chaque nœud du graphe est un compte Facebook, et deux nœuds sont reliés s'ils sont amis. \
-                        Un groupe de comptes fortement connectés entre eux forme une classe, représentée par une couleur. \
-                        Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortement connectées.");*/
-                    md!(ui, "Chaque **nœud** du graphe est un **compte Facebook**, et deux nœuds sont **reliés** s'ils sont **amis**. \
-                        Un **groupe** de comptes **fortement connectés** entre eux forme une **classe**, représentée par une **couleur**. \
-                        Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortement connectées.");
+                    md!(ui, r#"
+Chaque **nœud** du graphe est un **compte Facebook**, et deux nœuds sont **reliés** s'ils sont **amis**.
+
+Un **groupe** de comptes **fortement connectés** entre eux forme une **classe**, représentée par une **couleur**.
+
+Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortement connectées."#);
                 });
             });
             ui.add_space(10.0);

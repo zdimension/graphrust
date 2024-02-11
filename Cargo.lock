@@ -1238,6 +1238,7 @@ dependencies = [
 name = "graphrust_macros"
 version = "0.1.0"
 dependencies = [
+ "derivative",
  "paste",
  "proc-macro2",
  "pulldown-cmark",
