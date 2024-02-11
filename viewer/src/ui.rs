@@ -8,7 +8,7 @@ use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Vec2};
 use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f, EdgeStore};
 use itertools::Itertools;
-use nalgebra::{DimAdd, Matrix4, Vector2};
+use nalgebra::{Matrix4, Vector2};
 use std::collections::VecDeque;
 
 #[derive(Derivative)]
