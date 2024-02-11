@@ -196,7 +196,7 @@ pub fn combo_with_filter(
                 state.pattern.clear();
                 ui.memory_mut(|m| m.request_focus(txt.id));
                 // TODO: doesn't work so we just clear the pattern
-                txt_resp.state.set_ccursor_range(Some(CCursorRange::two(
+                txt_resp.state.cursor.set_char_range(Some(CCursorRange::two(
                     CCursor::new(0),
                     CCursor::new(state.pattern.len()),
                 )));

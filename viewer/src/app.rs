@@ -288,9 +288,9 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                             * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
                         .xy(),
                     );
-                    let scroll_delta = ui.input(|is| is.scroll_delta);
+                    let scroll_delta = ui.input(|is| is.raw_scroll_delta);
                     if scroll_delta.y != 0.0 {
-                        tab.camera.zoom(scroll_delta.y, zero_pos);
+                        tab.camera.zoom(scroll_delta.y * 2.0, zero_pos);
                     }
                 } else {
                     tab.ui_state.mouse_pos = None;

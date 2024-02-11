@@ -4,19 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-neo4rs = "0.7.1"
-tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
+neo4rs = "0.7"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
 graph_format = { path = "../graph_format" }
-forceatlas2 = { version = "0.5.0", features = ["barnes_hut", "parallel"] }
-ahash = "0.8.7"
-rayon = "1.8.1"
-chrono = "0.4.32"
-serde = { version = "1.0.195", features = ["derive"] }
-figment = { version = "0.10.14", features = ["env", "toml"] }
-derivative = "2.2.0"
-colourado = "0.2.0"
-rand = "0.8.5"
-itertools = "0.11.0"
+forceatlas2 = { version = "0.5", features = ["barnes_hut", "parallel"] }
+ahash = "0.8"
+rayon = "1.8"
+chrono = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+figment = { version = "0.10", features = ["env", "toml"] }
+derivative = "2.2"
+colourado = "0.2"
+rand = "0.8"
+itertools = "0.12"
 petgraph = "0.6"
-slotmap = "1.0.7"
-speedy = "0.8.7"
+slotmap = "1.0"
+speedy = "0.8"
