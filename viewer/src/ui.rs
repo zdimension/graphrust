@@ -432,7 +432,9 @@ impl UiState {
                                             .clamp_to_range(true),
                                     );
 
-                                    if ui.button("Afficher voisinage").clicked() {
+                                    if ui.button("Afficher voisinage")
+                                        .on_hover_text("Afficher les amis jusqu'à une certaine distance de la personne. Le degré 1 affichera les amis directs, le degré 2 les amis des amis, etc.")
+                                        .clicked() {
                                         let mut new_included = AHashSet::from([id]);
                                         let mut last_batch = AHashSet::from([id]);
                                         for i in 0..self.neighborhood_degree {

@@ -8,6 +8,7 @@ use eframe::{egui_glow, glow};
 use egui::{Color32, Hyperlink, Id, RichText, Ui, Vec2, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3f, EdgeStore, Point};
+use graphrust_macros::md;
 use itertools::Itertools;
 use nalgebra::{Matrix4, Vector4};
 use simsearch::SimSearch;
@@ -381,6 +382,15 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                         ui.label(RichText::new("Degré minimum").underline().strong());
                         ui.label("\"");
                     });
+                });
+                ui.vertical(|ui| {
+                    /*ui.label(
+                        "Chaque nœud du graphe est un compte Facebook, et deux nœuds sont reliés s'ils sont amis. \
+                        Un groupe de comptes fortement connectés entre eux forme une classe, représentée par une couleur. \
+                        Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortement connectées.");*/
+                    md!(ui, "Chaque **nœud** du graphe est un **compte Facebook**, et deux nœuds sont **reliés** s'ils sont **amis**. \
+                        Un **groupe** de comptes **fortement connectés** entre eux forme une **classe**, représentée par une **couleur**. \
+                        Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortement connectées.");
                 });
             });
             ui.add_space(10.0);

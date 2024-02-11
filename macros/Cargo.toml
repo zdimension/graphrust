@@ -1,0 +1,14 @@
+[package]
+name = "graphrust_macros"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+paste = "1.0"
+proc-macro2 = "1.0"
+pulldown-cmark = "0.10.0"
+quote = "1.0"
+syn = "2.0"
