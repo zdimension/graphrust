@@ -6,6 +6,9 @@
       <sourceFolder url="file://$MODULE_DIR$/import_neo4j/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/viewer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/plots/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/macros/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/viewer/tests" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/macros/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
