@@ -2,7 +2,7 @@ use crate::camera::Camera;
 use std::marker::PhantomData;
 
 use crate::graph_storage::load_binary;
-use crate::ui::UiState;
+use crate::ui::{DisplaySection, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
 use egui::{Color32, Hyperlink, Id, RichText, Ui, Vec2, WidgetText};
@@ -162,10 +162,13 @@ pub fn create_tab<'a, 'b>(
         camera: Camera::new(center.into()),
         cam_animating: None,
         ui_state: UiState {
-            node_count: viewer.persons.len(),
-            g_opac_edges: (300000.0 / edges.len() as f32).min(0.35),
-            g_opac_nodes: (40000.0 / viewer.persons.len() as f32).min(0.75),
-            max_degree,
+            display: DisplaySection {
+                node_count: viewer.persons.len(),
+                g_opac_edges: (300000.0 / edges.len() as f32).min(0.35),
+                g_opac_nodes: (40000.0 / viewer.persons.len() as f32).min(0.75),
+                max_degree,
+                ..DisplaySection::default()
+            },
             ..UiState::default()
         },
         rendered_graph: Arc::new(Mutex::new(RenderedGraph {
@@ -286,8 +289,8 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                 if let Some(pos) = response.hover_pos() {
                     let zero_pos = (pos - rect.min).to_pos2();
                     let centered_pos = (pos - rect.center()) / rect.size();
-                    tab.ui_state.mouse_pos = Some(centered_pos.to_pos2());
-                    tab.ui_state.mouse_pos_world = Some(
+                    tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
+                    tab.ui_state.details.mouse_pos_world = Some(
                         (tab.camera.get_inverse_matrix()
                             * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
                         .xy(),
@@ -297,18 +300,18 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                         tab.camera.zoom(scroll_delta.y * 2.0, zero_pos);
                     }
                 } else {
-                    tab.ui_state.mouse_pos = None;
-                    tab.ui_state.mouse_pos_world = None;
+                    tab.ui_state.details.mouse_pos = None;
+                    tab.ui_state.details.mouse_pos_world = None;
                 }
 
                 let graph = tab.rendered_graph.clone();
-                let edges = tab.ui_state.g_show_edges;
-                let nodes = tab.ui_state.g_show_nodes;
-                let opac_edges = tab.ui_state.g_opac_edges;
-                let opac_nodes = tab.ui_state.g_opac_nodes;
+                let edges = tab.ui_state.display.g_show_edges;
+                let nodes = tab.ui_state.display.g_show_nodes;
+                let opac_edges = tab.ui_state.display.g_opac_edges;
+                let opac_nodes = tab.ui_state.display.g_opac_nodes;
 
                 let cam = tab.camera.get_matrix();
-                tab.ui_state.camera = cam;
+                tab.ui_state.details.camera = cam;
                 let callback = egui::PaintCallback {
                     rect,
                     callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
