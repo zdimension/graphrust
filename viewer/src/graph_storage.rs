@@ -66,7 +66,7 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
             Person::new(
                 node.position + Point::new(0.0, 3000.0),
                 node.size,
-                node.class as u16,
+                node.class,
                 str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)),
                 str_from_null_terminated_utf8(
                     content.names.as_ptr().offset(node.offset_name as isize),

@@ -53,8 +53,8 @@ impl Camera {
             1.0 / zoom_speed
         };
         let diffpoint = nalgebra::Point3::new(
-            mouse.x as f32 - self.ortho.right(),
-            mouse.y as f32 - self.ortho.top(),
+            mouse.x - self.ortho.right(),
+            mouse.y - self.ortho.top(),
             0.0,
         );
         let before = self.transf.inverse_transform_point(&diffpoint);

@@ -314,16 +314,14 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                 tab.ui_state.details.camera = cam;
                 let callback = egui::PaintCallback {
                     rect,
-                    callback: std::sync::Arc::new(egui_glow::CallbackFn::new(
-                        move |_info, painter| {
-                            graph.lock().unwrap().paint(
-                                painter.gl(),
-                                cam,
-                                (edges, opac_edges),
-                                (nodes, opac_nodes),
-                            );
-                        },
-                    )),
+                    callback: Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
+                        graph.lock().unwrap().paint(
+                            painter.gl(),
+                            cam,
+                            (edges, opac_edges),
+                            (nodes, opac_nodes),
+                        );
+                    })),
                 };
                 ui.painter().add(callback);
             });

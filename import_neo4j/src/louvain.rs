@@ -1,12 +1,12 @@
 use crate::log;
-use ahash::{AHashMap, AHashSet};
+use ahash::AHashMap;
 use itertools::Itertools;
 use rand::seq::SliceRandom;
 /// Louvain algorithm
 /// Ported from https://github.com/ledyba/cpp-louvain-fast
 /// Licensed under the AGPLv3 license, see https://github.com/ledyba/cpp-louvain-fast/blob/master/LICENSE
 use rand::thread_rng;
-use std::path::Component::Prefix;
+
 pub struct Graph {
     pub nodes: Vec<Community>,
     pub total_links: usize,

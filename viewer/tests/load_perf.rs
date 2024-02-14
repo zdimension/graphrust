@@ -23,6 +23,6 @@ fn init_logs() {
 #[test]
 fn it_works() {
     // print the current directory
-    println!("Current directory: {:?}", std::env::current_dir().unwrap());
+    println!("Current directory: {:?}", env::current_dir().unwrap());
     load_binary();
 }

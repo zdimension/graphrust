@@ -6,7 +6,7 @@
 use petgraph::graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{Graph as PetGraph, Undirected};
-use rand::{seq, thread_rng, Rng};
+use rand::{thread_rng, Rng};
 use slotmap::DenseSlotMap;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -51,7 +51,7 @@ pub struct Community {
 impl Community {
     fn new(id: CommunityId) -> Community {
         Community {
-            id: id,
+            id,
             ..Default::default()
         }
     }
@@ -62,18 +62,18 @@ impl Community {
 
     fn seed(&mut self, node: usize, cs: &CommunityStructure) {
         self.nodes.push(node);
-        self.weightSum += cs.weights[node] as f64;
+        self.weightSum += cs.weights[node];
     }
 
     fn add(&mut self, node: usize, cs: &CommunityStructure) -> bool {
         self.nodes.push(node);
-        self.weightSum += cs.weights[node] as f64;
+        self.weightSum += cs.weights[node];
         true
     }
 
     fn remove(&mut self, node: usize, cs: &mut CommunityStructure) -> bool {
         self.nodes.retain(|&n| n != node);
-        self.weightSum -= cs.weights[node] as f64;
+        self.weightSum -= cs.weights[node];
         if self.nodes.is_empty() {
             cs.communities.retain(|&c| c != self.id); // FIXME: Maybe remove from cc too
         }
@@ -126,7 +126,7 @@ impl CommunityStructure {
         let N = graph.node_count();
         let cc = &mut modularity.cc;
         let mut cs = CommunityStructure {
-            N: N,
+            N,
             communities: Vec::new(),
             nodeConnectionsWeight: Vec::with_capacity(N),
             nodeConnectionsCount: Vec::with_capacity(N),
@@ -177,7 +177,7 @@ impl CommunityStructure {
                 let modularity_edge = ModEdge {
                     source: node.index(),
                     target: neighbor.index(),
-                    weight: weight,
+                    weight,
                 };
                 cs.topology[node.index()].push(modularity_edge);
                 let adjCom = cc.get(&cs.nodeCommunities[neighbor.index()]).unwrap();
@@ -384,8 +384,8 @@ impl CommunityStructure {
 
                     let e = ModEdge {
                         source: index,
-                        target: target,
-                        weight: weight,
+                        target,
+                        weight,
                     };
                     newTopology[index].push(e);
                 }
@@ -448,8 +448,8 @@ impl Modularity {
             modularityResolution: 0.0,
             isRandomized: false,
             useWeight: true,
-            resolution: resolution,
-            noise: noise,
+            resolution,
+            noise,
             cc: Default::default(),
             communityByNode: Default::default(),
         }

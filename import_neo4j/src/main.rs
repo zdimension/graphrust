@@ -1,13 +1,13 @@
 mod gephi;
 mod louvain;
 use crate::gephi::Modularity;
-use crate::louvain::PersonId;
+
 use ahash::AHashMap;
 use colourado::{ColorPalette, PaletteType};
 use derivative::Derivative;
 use figment::providers::{Env, Format, Toml};
 use figment::Figment;
-use forceatlas2::{Layout, Nodes, Settings};
+
 use graph_format::*;
 use neo4rs::{query, ConfigBuilder, Graph};
 use petgraph::graph::NodeIndex;
