@@ -364,7 +364,7 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                                     commit
                                 ),
                             )
-                            .open_in_new_tab(true),
+                                .open_in_new_tab(true),
                         );
                         ui.label(format!(" ({})", env!("VERGEN_BUILD_DATE")));
                     });
@@ -526,7 +526,8 @@ impl RenderedGraph {
                         .flat_map(|(pa, pb)| {
                             let a = pa.position;
                             let b = pb.position;
-                            let ortho = (b - a).ortho().normalized() * 0.75;
+                            const EDGE_HALF_WIDTH: f32 = 0.75;
+                            let ortho = (b - a).ortho().normalized() * EDGE_HALF_WIDTH;
                             let v0 = a + ortho;
                             let v1 = a - ortho;
                             let v2 = b - ortho;
