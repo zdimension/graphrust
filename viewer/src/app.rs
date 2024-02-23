@@ -164,8 +164,8 @@ pub fn create_tab<'a, 'b>(
         ui_state: UiState {
             display: DisplaySection {
                 node_count: viewer.persons.len(),
-                g_opac_edges: (300000.0 / edges.len() as f32).min(0.35),
-                g_opac_nodes: (40000.0 / viewer.persons.len() as f32).min(0.75),
+                g_opac_edges: (300000.0 / edges.len() as f32).min(0.22),
+                g_opac_nodes: (40000.0 / viewer.persons.len() as f32).min(0.58),
                 max_degree,
                 ..DisplaySection::default()
             },
@@ -199,7 +199,7 @@ impl<'a> GraphViewApp<'a> {
         let data = load_binary();
         let default_tab = GraphTab {
             closeable: false,
-            ..create_tab("Graphe", data.viewer, data.edges.iter(), gl, 30)
+            ..create_tab("Graphe", data.viewer, data.edges.iter(), gl, 17)
         };
         #[cfg(target_arch = "wasm32")]
         {
