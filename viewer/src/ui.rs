@@ -425,6 +425,11 @@ impl InfosSection {
                                 }
                             }
 
+                            let mut filter = 1;
+                            while new_persons.iter().filter(|p| p.neighbors.len() as u16 >= filter).count() > 10000 {
+                                filter += 1;
+                            }
+
                             let viewer = ViewerData::new(new_persons, data.modularity_classes.clone());
 
                             *tab_request = Some(create_tab(
@@ -432,7 +437,7 @@ impl InfosSection {
                                 viewer,
                                 edges.iter(),
                                 &frame.gl().unwrap().clone(),
-                                0
+                                filter,
                             ));
                         }
                     });
