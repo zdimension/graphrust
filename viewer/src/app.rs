@@ -1,11 +1,12 @@
 use crate::camera::Camera;
 use std::marker::PhantomData;
+use std::ops::Deref;
 
 use crate::graph_storage::load_binary;
 use crate::ui::{DisplaySection, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{Color32, Hyperlink, Id, RichText, Ui, Vec2, WidgetText};
+use egui::{pos2, vec2, Color32, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3f, EdgeStore, Point};
 use graphrust_macros::md;
@@ -13,6 +14,7 @@ use itertools::Itertools;
 use nalgebra::{Matrix4, Vector4};
 use simsearch::SimSearch;
 
+use egui::epaint::TextShape;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
@@ -324,6 +326,33 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                     })),
                 };
                 ui.painter().add(callback);
+
+                let draw_person = |id, color| {
+                    let person: &Person<'_> = &tab.viewer_data.persons[id];
+                    let pos = person.position;
+                    let pos_scr = (cam * Vector4::new(pos.x, pos.y, 0.0, 1.0)).xy();
+                    let txt = WidgetText::from(person.name)
+                        .background_color(color)
+                        .color(Color32::WHITE);
+                    let gal = txt.into_galley(ui, Some(false), f32::INFINITY, TextStyle::Heading);
+                    ui.painter().add(TextShape::new(
+                        rect.center()
+                            + vec2(pos_scr.x, -pos_scr.y) * rect.size() * 0.5
+                            + vec2(10.0, 10.0),
+                        gal,
+                        Color32::TRANSPARENT,
+                    ));
+                };
+
+                if let Some(ref path) = tab.ui_state.path.found_path {
+                    for &p in path {
+                        draw_person(p, Color32::from_rgba_unmultiplied(150, 0, 0, 200));
+                    }
+                }
+
+                if let Some(sel) = tab.ui_state.infos.infos_current {
+                    draw_person(sel, Color32::from_rgba_unmultiplied(0, 100, 0, 200));
+                }
             });
     }
 

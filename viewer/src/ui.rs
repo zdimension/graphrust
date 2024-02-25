@@ -253,6 +253,12 @@ impl PathSection {
                 if let Some(ref path) = self.found_path {
                     for (i, id) in path.iter().enumerate() {
                         ui.horizontal(|ui| {
+                            ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
+                                Color32::from_rgba_unmultiplied(60, 40, 40, 255);
+                            ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
+                                Color32::from_rgba_unmultiplied(70, 45, 45, 255);
+                            ui.style_mut().visuals.widgets.active.weak_bg_fill =
+                                Color32::from_rgba_unmultiplied(55, 30, 30, 255);
                             self.person_button(data, ui, id, &mut cur_path);
                             if i != 0 && i != path.len() - 1 {
                                 if ui.button("x").clicked() {
@@ -304,7 +310,15 @@ impl InfosSection {
         CollapsingHeader::new("Informations")
             .default_open(true)
             .show(ui, |ui| {
-                combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
+                ui.vertical(|ui| {
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
+                        Color32::from_rgba_unmultiplied(40, 60, 40, 255);
+                    ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
+                        Color32::from_rgba_unmultiplied(45, 70, 45, 255);
+                    ui.style_mut().visuals.widgets.active.weak_bg_fill =
+                        Color32::from_rgba_unmultiplied(30, 55, 30, 255);
+                    combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
+                });
                 if let Some(id) = self.infos_current {
                     let person = &data.persons[id];
 
