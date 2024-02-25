@@ -12,7 +12,7 @@ use graph_format::{Color3f, EdgeStore, Point};
 use graphrust_macros::md;
 use itertools::Itertools;
 use nalgebra::{Matrix4, Vector4};
-use simsearch::SimSearch;
+use simsearch::{SearchOptions, SimSearch};
 
 use egui::epaint::TextShape;
 use std::sync::{Arc, Mutex};
@@ -113,7 +113,8 @@ impl<'a> ViewerData<'a> {
         modularity_classes: Vec<ModularityClass>,
     ) -> ViewerData<'a> {
         log::info!("Initializing search engine");
-        let mut engine: SimSearch<usize> = SimSearch::new();
+        let mut engine: SimSearch<usize> =
+            SimSearch::new_with(SearchOptions::new().stop_words(vec!["-".into()]));
         for (i, person) in persons.iter().enumerate() {
             engine.insert(i, person.name);
         }
