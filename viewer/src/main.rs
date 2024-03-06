@@ -39,11 +39,17 @@ fn main() -> eframe::Result<()> {
 // When compiling to web using trunk:
 #[cfg(target_arch = "wasm32")]
 fn main() {
-    // Redirect `log` message to `console.log` and friends:
-    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
-    wasm_logger::init(wasm_logger::Config::default());
+    use log::*;
+
+    #[cfg(target_arch = "wasm32")]
+    use eframe::WebLogger;
+
+    WebLogger::init(LevelFilter::Debug).expect("Failed to initialize WebLogger");
 }
 
+#[cfg(target_arch = "wasm32")]
+use eframe::web_sys;
+use log::{LevelFilter, Log};
 use std::{env, io};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;

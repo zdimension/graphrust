@@ -204,21 +204,6 @@ impl<'a> GraphViewApp<'a> {
             closeable: false,
             ..create_tab("Graphe", data.viewer, data.edges.iter(), gl, 17)
         };
-        #[cfg(target_arch = "wasm32")]
-        {
-            use wasm_bindgen::JsCast;
-
-            // set #center_text.innerHTML to ""
-            eframe::web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_element_by_id("center_text")
-                .unwrap()
-                .dyn_ref::<eframe::web_sys::HtmlElement>()
-                .unwrap()
-                .set_inner_html("");
-        }
         Self {
             tree: DockState::new(vec![default_tab]),
             string_tables: data.strings,
@@ -625,6 +610,8 @@ impl RenderedGraph {
                 glow::STATIC_DRAW,
             );
 
+            log::info!("Configuring buffers");
+
             gl.vertex_attrib_pointer_f32(
                 0,
                 2,
@@ -652,6 +639,7 @@ impl RenderedGraph {
             );
             gl.enable_vertex_attrib_array(2);
 
+            log::info!("Creating path array");
             let path_array = gl
                 .create_vertex_array()
                 .expect("Cannot create vertex array");
@@ -660,6 +648,7 @@ impl RenderedGraph {
             gl.bind_vertex_array(Some(path_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(path_buffer));
 
+            log::info!("Configuring path buffers");
             gl.vertex_attrib_pointer_f32(
                 0,
                 2,
