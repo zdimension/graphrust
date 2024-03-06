@@ -308,6 +308,7 @@ impl InfosSection {
         frame: &mut Frame,
         ui: &mut Ui,
         camera: &Camera,
+        path_section: &PathSection,
     ) {
         CollapsingHeader::new("Informations")
             .default_open(true)
@@ -448,13 +449,31 @@ impl InfosSection {
 
                             let viewer = ViewerData::new(new_persons, data.modularity_classes.clone());
 
+                            let mut new_ui = UiState::default();
+
+                            // match path and selection
+                            macro_rules! match_id {
+                                ($field:expr, $self_expr:expr) => {
+                                    if let Some(current) = $self_expr {
+                                        if let Some(new_id) = id_map.get(&current) {
+                                            $field = Some(*new_id);
+                                        }
+                                    }
+                                }
+                            }
+                            match_id!(new_ui.infos.infos_current, self.infos_current);
+                            match_id!(new_ui.path.path_src, path_section.path_src);
+                            match_id!(new_ui.path.path_dest, path_section.path_dest);
+                            new_ui.path.path_dirty = true;
+
                             *tab_request = Some(create_tab(
                                 format!("{}-voisinage de {}", self.neighborhood_degree, person.name),
                                 viewer,
                                 edges.iter(),
                                 &frame.gl().unwrap().clone(),
                                 filter,
-                                camera.clone()
+                                camera.clone(),
+                                new_ui
                             ));
                         }
                     });
@@ -665,7 +684,8 @@ impl UiState {
 
                     self.path.show(data, graph, ui, &mut self.infos);
 
-                    self.infos.show(&data, tab_request, frame, ui, camera);
+                    self.infos
+                        .show(&data, tab_request, frame, ui, camera, &self.path);
 
                     self.classes.show(&data, ui);
 

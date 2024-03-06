@@ -148,6 +148,7 @@ pub fn create_tab<'a, 'b>(
     gl: &glow::Context,
     default_filter: u16,
     camera: Camera,
+    ui_state: UiState,
 ) -> GraphTab<'b> {
     log::info!("Creating tab");
     let max_degree = viewer
@@ -170,7 +171,7 @@ pub fn create_tab<'a, 'b>(
                 max_degree,
                 ..DisplaySection::default()
             },
-            ..UiState::default()
+            ..ui_state
         },
         rendered_graph: Arc::new(Mutex::new(RenderedGraph {
             degree_filter: (default_filter, u16::MAX),
@@ -217,7 +218,15 @@ impl<'a> GraphViewApp<'a> {
         cam.transf.append_scaling_mut(scale);
         let default_tab = GraphTab {
             closeable: false,
-            ..create_tab("Graphe", data.viewer, data.edges.iter(), gl, 17, cam)
+            ..create_tab(
+                "Graphe",
+                data.viewer,
+                data.edges.iter(),
+                gl,
+                17,
+                cam,
+                UiState::default(),
+            )
         };
         Self {
             tree: DockState::new(vec![default_tab]),
