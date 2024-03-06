@@ -147,11 +147,9 @@ pub fn create_tab<'a, 'b>(
     edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
     gl: &glow::Context,
     default_filter: u16,
+    camera: Camera,
 ) -> GraphTab<'b> {
     log::info!("Creating tab");
-    let center =
-        viewer.persons.iter().map(|p| p.position).sum::<Point>() / viewer.persons.len() as f32;
-    log::info!("Center: {:?}", center);
     let max_degree = viewer
         .persons
         .iter()
@@ -162,7 +160,7 @@ pub fn create_tab<'a, 'b>(
     GraphTab {
         title: title.into(),
         closeable: true,
-        camera: Camera::new(center.into()),
+        camera,
         cam_animating: None,
         ui_state: UiState {
             display: DisplaySection {
@@ -200,9 +198,26 @@ impl<'a> GraphViewApp<'a> {
             gl.enable(glow::PROGRAM_POINT_SIZE);
         }
         let data = load_binary();
+        let mut min = Point::new(f32::INFINITY, f32::INFINITY);
+        let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
+        for p in &data.viewer.persons {
+            min.x = min.x.min(p.position.x);
+            min.y = min.y.min(p.position.y);
+            max.x = max.x.max(p.position.x);
+            max.y = max.y.max(p.position.y);
+        }
+        let center = (min + max) / 2.0;
+        let mut cam = Camera::new(center);
+        // cam is normalized on the [-1, 1] range
+        // compute x and y scaling to fit the circle, take the best
+        let fig_size = max - min;
+        let scale_x = 1.0 / fig_size.x;
+        let scale_y = 1.0 / fig_size.y;
+        let scale = scale_x.min(scale_y) * 0.98;
+        cam.transf.append_scaling_mut(scale);
         let default_tab = GraphTab {
             closeable: false,
-            ..create_tab("Graphe", data.viewer, data.edges.iter(), gl, 17)
+            ..create_tab("Graphe", data.viewer, data.edges.iter(), gl, 17, cam)
         };
         Self {
             tree: DockState::new(vec![default_tab]),
@@ -237,6 +252,7 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
             &mut *tab.rendered_graph.lock().unwrap(),
             self.tab_request,
             self.frame,
+            &tab.camera,
         );
         egui::CentralPanel::default()
             .frame(egui::Frame {

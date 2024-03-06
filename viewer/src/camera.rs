@@ -3,6 +3,7 @@ use graph_format::Point;
 use nalgebra::{Matrix4, Orthographic3, Similarity3, Vector3};
 
 /// 2D planar camera
+#[derive(Copy, Clone)]
 pub struct Camera {
     pub transf: Similarity3<f32>,
     pub ortho: Orthographic3<f32>,
@@ -15,8 +16,8 @@ impl Camera {
             Vector3::new(-center.x, -center.y, 0.0),
             Vector3::new(0.0, 0.0, 0.0),
             1.0,
-        )
-        .append_scaling(0.2);
+        );
+        //.append_scaling(0.2);
         Camera {
             transf,
             ortho: Camera::create_orthographic(1, 1),
@@ -40,6 +41,11 @@ impl Camera {
     }
 
     pub fn set_window_size(&mut self, size: Vec2) {
+        self.transf.append_scaling_mut(if size.x < size.y {
+            size.x / self.size.x
+        } else {
+            size.y / self.size.y
+        });
         self.size = size;
         self.ortho = Camera::create_orthographic(size.x as u32, size.y as u32);
     }

@@ -3,6 +3,7 @@ use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use derivative::*;
 
+use crate::camera::Camera;
 use eframe::Frame;
 use egui::ahash::{AHashMap, AHashSet};
 use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2};
@@ -306,6 +307,7 @@ impl InfosSection {
         tab_request: &mut Option<NewTabRequest<'data>>,
         frame: &mut Frame,
         ui: &mut Ui,
+        camera: &Camera,
     ) {
         CollapsingHeader::new("Informations")
             .default_open(true)
@@ -452,6 +454,7 @@ impl InfosSection {
                                 edges.iter(),
                                 &frame.gl().unwrap().clone(),
                                 filter,
+                                camera.clone()
                             ));
                         }
                     });
@@ -646,6 +649,7 @@ impl UiState {
         graph: &mut RenderedGraph,
         tab_request: &mut Option<NewTabRequest<'a>>,
         frame: &mut Frame,
+        camera: &Camera,
     ) {
         ui.spacing_mut().scroll.floating_allocated_width = 18.0;
         egui::SidePanel::left("settings")
@@ -661,7 +665,7 @@ impl UiState {
 
                     self.path.show(data, graph, ui, &mut self.infos);
 
-                    self.infos.show(&data, tab_request, frame, ui);
+                    self.infos.show(&data, tab_request, frame, ui, camera);
 
                     self.classes.show(&data, ui);
 
