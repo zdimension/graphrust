@@ -319,5 +319,13 @@ async fn main() {
     log!("Writing to file");
     file.write_to_file("graph_n4j.bin").unwrap();
 
+    Command::new("bash")
+        .arg("-c")
+        .arg("brotli -f -o graph_n4j.bin.br graph_n4j.bin -q 5")
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
     log!("Done");
 }

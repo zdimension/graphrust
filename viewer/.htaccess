@@ -1,0 +1,4 @@
+<FilesMatch "\.br$">
+        Header append Content-Encoding br
+        Header append Vary Accept-Encoding
+</FilesMatch>
