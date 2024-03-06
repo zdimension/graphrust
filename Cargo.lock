@@ -2928,6 +2928,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "test_format"
+version = "0.1.0"
+dependencies = [
+ "graph_format",
+ "serde",
+ "speedy",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -20,6 +20,7 @@ members = [
     "import_neo4j",
     "graph_format",
     "viewer",
-    "plots"
+    "plots",
+    "test_format"
 ]
 resolver = "2"
