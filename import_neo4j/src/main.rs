@@ -33,6 +33,7 @@ struct Config {
     chunk_size: usize,
     #[derivative(Default(value = "0.01"))]
     community_min_gain: f32,
+    only_bfs: bool,
 }
 
 static LAST_LOG_TIME: Mutex<std::time::Instant> =
@@ -68,7 +69,7 @@ fn run_command(cmd: &mut Command) -> ExitStatus {
 
 fn do_layout(file: &mut GraphFile, config: &Config) {
     log!(
-        "ssh exited with: {}\r\n",
+        "graph_viewer ssh exited with: {}\r\n",
         run_command(Command::new("ssh").arg("zdimension@domino").arg(format!(
             r"
             cd /home/zdimension/graphrust_tools/GPUGraphLayout/builds/linux;
@@ -78,7 +79,7 @@ fn do_layout(file: &mut GraphFile, config: &Config) {
         )))
     );
     log!(
-        "scp exited with: {}",
+        "layout.bin scp exited with: {}",
         run_command(Command::new("scp")
             .arg(format!(
                 "zdimension@domino:/home/zdimension/graphrust_tools/GPUGraphLayout/builds/linux/edges.txt_{}.bin",
@@ -116,7 +117,7 @@ fn do_layout(file: &mut GraphFile, config: &Config) {
 
 fn do_modularity(file: &mut GraphFile, config: &Config) {
     log!(
-        "ssh exited with: {}",
+        "gpulouvain ssh exited with: {}",
         run_command(Command::new("ssh").arg("zdimension@domino").arg(format!(
             r"
             cd /home/zdimension/graphrust_tools/gpu-louvain;
@@ -126,7 +127,7 @@ fn do_modularity(file: &mut GraphFile, config: &Config) {
         )))
     );
     log!(
-        "scp exited with: {}",
+        "comms.bin scp exited with: {}",
         run_command(
             Command::new("scp")
                 .arg("zdimension@domino:/home/zdimension/graphrust_tools/gpu-louvain/comms.bin")
@@ -184,10 +185,12 @@ async fn main() {
     log!("Start");
     let mut file = GraphFile::default();
     let mut nodes = graph
-        .execute(
+        .execute(if config.only_bfs {
+            query("match (n) return n.uid, n.name")
+        } else {
             query("match (n) where count { (n)--() } >= $mind return n.uid, n.name")
-                .param("mind", config.min_degree),
-        )
+                .param("mind", config.min_degree)
+        })
         .await
         .unwrap();
     let mut nodes_ids = AHashMap::new();
@@ -214,16 +217,22 @@ async fn main() {
     log!("{} nodes", file.nodes.len());
 
     let mut edges_q = graph
-        .execute(query(
-            "match (n)-->(m) where count { (n)--() } >= $mind and count { (m)--() } >= $mind return n.uid, m.uid",
-        ).param("mind", config.min_degree))
+        .execute(
+            if config.only_bfs {
+                query("match (n)-->(m) return n.uid, m.uid")
+            } else {
+                query(
+                    "match (n)-->(m) where count { (n)--() } >= $mind and count { (m)--() } >= $mind return n.uid, m.uid",
+                )
+                .param("mind", config.min_degree)
+            },
+        )
         .await
         .unwrap();
 
     let mut edges = Vec::new();
     // write edge list to edges.txt with a buffered writer
-    let edges_file = std::fs::File::create("edges.txt").unwrap();
-    let mut edges_writer = std::io::BufWriter::new(&edges_file);
+
     log!("Processing edge query");
     while let Ok(Some(row)) = edges_q.next().await {
         let uid1: String = row.get("n.uid").unwrap();
@@ -265,9 +274,9 @@ async fn main() {
             }
         }
     }
-    /*assert_eq!(
-        count,
-        adj.len(),
+    log!(
+        /*count,
+        adj.len(),*/
         "Graph contains {} unconnected nodes: {}",
         adj.len() - count,
         covered
@@ -283,8 +292,14 @@ async fn main() {
             .map(|id| format!("bfs('{}', level=1, limit=10)", id))
             .collect::<Vec<_>>()
             .join("\n")
-    );*/
+    );
 
+    if config.only_bfs {
+        return;
+    }
+
+    let edges_file = std::fs::File::create("edges.txt").unwrap();
+    let mut edges_writer = std::io::BufWriter::new(&edges_file);
     writeln!(&mut edges_writer, "{} {}", file.nodes.len(), edges.len()).unwrap();
     for EdgeStore { a, b } in file.edges.iter() {
         writeln!(&mut edges_writer, "{} {}", a, b).unwrap();
@@ -318,6 +333,8 @@ async fn main() {
 
     log!("Writing to file");
     file.write_to_file("graph_n4j.bin").unwrap();
+
+    log!("Compressing file with brotli");
 
     Command::new("bash")
         .arg("-c")
