@@ -740,7 +740,7 @@ impl RenderedGraph {
 
         use glow::HasContext as _;
         unsafe {
-            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
 
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
