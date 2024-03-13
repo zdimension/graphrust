@@ -768,11 +768,11 @@ impl RenderedGraph {
                     ),
                     edges.1,
                 );
-                gl.draw_arrays(
-                    glow::TRIANGLES,
-                    self.nodes_count as i32,
-                    2 * 3 * self.edges_count as i32,
-                );
+                let verts = 2 * 3 * self.edges_count as i32;
+                // if wasm, clamp verts at 30M, because Firefox refuses to draw anything above that
+                #[cfg(target_arch = "wasm32")]
+                let verts = verts.min(30_000_000);
+                gl.draw_arrays(glow::TRIANGLES, self.nodes_count as i32, verts);
             }
             if nodes.0 {
                 gl.use_program(Some(self.program_node));
