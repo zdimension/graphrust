@@ -1,8 +1,10 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Release" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package viewer --bin viewer --release" />
+  <configuration default="false" name="Release desktop" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="run --package viewer --bin viewer --release --target x86_64-pc-windows-msvc" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
-    <envs />
+    <envs>
+      <env name="RUST_LOG" value="info" />
+    </envs>
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="NIGHTLY" />
     <option name="requiredFeatures" value="true" />

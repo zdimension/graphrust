@@ -6,5 +6,4 @@ out vec4 color;
 void main()
 {
     color = v_color;
-    color.rgb *= color.a;
 }

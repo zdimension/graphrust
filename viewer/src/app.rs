@@ -265,7 +265,7 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
         );
         egui::CentralPanel::default()
             .frame(egui::Frame {
-                fill: Color32::WHITE,
+                fill: Color32::from_rgba_unmultiplied(255, 255, 255, 0),
                 ..Default::default()
             })
             .show_inside(ui, |ui| {
@@ -740,7 +740,7 @@ impl RenderedGraph {
 
         use glow::HasContext as _;
         unsafe {
-            gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));

@@ -16,6 +16,4 @@ void main()
     color = vec4(v_color.rgb * 0.3, smoothstep(0.0, 0.005, RAD - dist) * v_color.a);
     else
     color = vec4(mix(v_color.rgb * 0.3, v_color.rgb, smoothstep(0.0, 0.005, INNER - dist)), v_color.a);
-
-    color.rgb *= color.a;
 }
