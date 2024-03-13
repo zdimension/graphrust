@@ -158,6 +158,11 @@ pub fn create_tab<'a, 'b>(
         .max()
         .unwrap() as u16;
     log::info!("Max degree: {}", max_degree);
+    let hide_edges = if cfg!(target_arch = "wasm32") {
+        edges.len() > 300000
+    } else {
+        false
+    };
     GraphTab {
         title: title.into(),
         closeable: true,
@@ -167,8 +172,11 @@ pub fn create_tab<'a, 'b>(
             display: DisplaySection {
                 node_count: viewer.persons.len(),
                 g_opac_edges: (300000.0 / edges.len() as f32).min(0.22),
-                g_opac_nodes: (40000.0 / viewer.persons.len() as f32).min(0.58),
+                g_opac_nodes: ((40000.0 / viewer.persons.len() as f32)
+                    * if hide_edges { 3.0 } else { 1.0 })
+                .min(0.58),
                 max_degree,
+                g_show_edges: !hide_edges,
                 ..DisplaySection::default()
             },
             ..ui_state
