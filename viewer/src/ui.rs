@@ -382,7 +382,6 @@ impl InfosSection {
                             let mut new_included = AHashSet::from([id]);
                             let mut last_batch = AHashSet::from([id]);
                             for i in 0..self.neighborhood_degree {
-                                log::info!("{} new friends at degree {}, getting friends at degree {}", last_batch.len(), i, i + 1);
                                 let mut new_friends = AHashSet::new();
                                 for person in last_batch.iter() {
                                     new_friends.extend(
@@ -401,6 +400,7 @@ impl InfosSection {
                                     break;
                                 }
                                 new_included.extend(new_friends.iter().copied());
+                                log::info!("{} new friends at degree {}", new_friends.len(), i + 1);
                                 last_batch = new_friends;
                             }
 
