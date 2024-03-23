@@ -8,7 +8,6 @@ use std::process::{Command, ExitStatus};
 
 use graph_format::*;
 use neo4rs::{query, ConfigBuilder, Graph};
-use petgraph::graph::NodeIndex;
 use serde::Deserialize;
 use std::io::{BufRead, BufReader, Write};
 use std::sync::Mutex;
