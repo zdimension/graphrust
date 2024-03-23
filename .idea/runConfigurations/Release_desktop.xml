@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Release desktop" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package viewer --bin viewer --release --target x86_64-pc-windows-msvc" />
+    <option name="command" value="run --bin viewer --release" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs>
       <env name="RUST_LOG" value="info" />
@@ -15,7 +15,7 @@
     <option name="isRedirectInput" value="false" />
     <option name="redirectInputPath" value="" />
     <method v="2">
-      <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="build workspace" run_configuration_type="CargoCommandRunConfiguration" />
     </method>
   </configuration>
 </component>
