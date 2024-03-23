@@ -51,20 +51,14 @@ impl Camera {
     }
 
     /// Zooms the view in or out around the specified mouse location.
-    pub fn zoom(&mut self, dy: f32, mouse: Pos2) {
-        let zoom_speed = 1.1;
-        let s = if dy > 0.0 {
-            zoom_speed
-        } else {
-            1.0 / zoom_speed
-        };
+    pub fn zoom(&mut self, scaling: f32, mouse: Pos2) {
         let diffpoint = nalgebra::Point3::new(
             mouse.x - self.ortho.right(),
             mouse.y - self.ortho.top(),
             0.0,
         );
         let before = self.transf.inverse_transform_point(&diffpoint);
-        self.transf.append_scaling_mut(s);
+        self.transf.append_scaling_mut(scaling);
         let after = self.transf.inverse_transform_point(&diffpoint);
         let scale = self.transf.scaling();
         self.transf
