@@ -309,13 +309,38 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
 
                 if let Some(pos) = response.hover_pos() {
                     let zero_pos = (pos - rect.min).to_pos2();
-                    let centered_pos = (pos - rect.center()) / rect.size();
+                    let centered_pos = 2.0 * (pos - rect.center()) / rect.size();
                     tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
-                    tab.ui_state.details.mouse_pos_world = Some(
-                        (tab.camera.get_inverse_matrix()
-                            * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
-                        .xy(),
-                    );
+                    let pos_world = (tab.camera.get_inverse_matrix()
+                        * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
+                    .xy();
+                    tab.ui_state.details.mouse_pos_world = Some(pos_world);
+
+                    if response.clicked() {
+                        let closest = tab
+                            .viewer_data
+                            .persons
+                            .iter()
+                            .map(|p| {
+                                let diff = p.position - pos_world.into();
+
+                                diff.norm_squared()
+                            })
+                            .enumerate()
+                            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+                            .map(|(i, _)| i);
+                        if let Some(closest) = closest {
+                            log::info!(
+                                "Selected person {}: {:?} (mouse: {:?})",
+                                closest,
+                                tab.viewer_data.persons[closest].position,
+                                pos_world
+                            );
+                            tab.ui_state.infos.infos_current = Some(closest);
+                            tab.ui_state.infos.infos_open = true;
+                        }
+                    }
+
                     let (scroll_delta, zoom_delta) =
                         ui.input(|is| (is.raw_scroll_delta, is.zoom_delta()));
                     if scroll_delta.y != 0.0 {

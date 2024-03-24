@@ -90,9 +90,14 @@ impl Point {
         }
     }
 
+    /// Returns the distance between the point and the origin squared.
+    pub fn norm_squared(&self) -> f32 {
+        self.x * self.x + self.y * self.y
+    }
+
     /// Returns the distance between the point and the origin.
     pub fn norm(&self) -> f32 {
-        (self.x * self.x + self.y * self.y).sqrt()
+        self.norm_squared().sqrt()
     }
 
     /// Returns the canonical orthogonal vector.

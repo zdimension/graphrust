@@ -497,7 +497,10 @@ impl DetailsSection {
             .show(ui, |ui| {
                 egui::Grid::new("#mouse_pos").show(ui, |ui| {
                     ui.label("Position :");
-                    ui.label(format!("{:?}", self.mouse_pos));
+                    ui.label(format!(
+                        "{:?}",
+                        self.mouse_pos.map(|p| Vector2::new(p.x, p.y))
+                    ));
                     ui.end_row();
                     ui.label("Position (monde) :");
                     ui.label(format!("{:?}", self.mouse_pos_world));
