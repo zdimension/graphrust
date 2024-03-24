@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 
 use crate::graph_storage::load_binary;
-use crate::ui::{DisplaySection, UiState};
+use crate::ui::{DisplaySection, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
 use egui::{pos2, vec2, Color32, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText};
@@ -338,6 +338,21 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                             );
                             tab.ui_state.infos.infos_current = Some(closest);
                             tab.ui_state.infos.infos_open = true;
+
+                            match tab.ui_state.selected_user_field {
+                                SelectedUserField::Selected => {
+                                    tab.ui_state.infos.infos_current = Some(closest);
+                                    tab.ui_state.infos.infos_open = true;
+                                }
+                                SelectedUserField::PathSource => {
+                                    tab.ui_state.path.path_src = Some(closest);
+                                    tab.ui_state.path.path_dirty = true;
+                                }
+                                SelectedUserField::PathDest => {
+                                    tab.ui_state.path.path_dest = Some(closest);
+                                    tab.ui_state.path.path_dirty = true;
+                                }
+                            }
                         }
                     }
 

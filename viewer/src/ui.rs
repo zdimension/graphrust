@@ -157,12 +157,14 @@ impl PathSection {
         graph: &mut RenderedGraph,
         ui: &mut Ui,
         infos: &mut InfosSection,
+        sel_field: &mut SelectedUserField,
     ) {
         CollapsingHeader::new("Chemin le plus court")
             .default_open(true)
             .show(ui, |ui| {
                 let c1 = ui
                     .horizontal(|ui| {
+                        ui.radio_value(sel_field, SelectedUserField::PathSource, "");
                         let c = combo_with_filter(ui, "#path_src", &mut self.path_src, data);
                         if c.changed() {
                             infos.set_infos_current(self.path_src);
@@ -178,6 +180,7 @@ impl PathSection {
 
                 let c2 = ui
                     .horizontal(|ui| {
+                        ui.radio_value(sel_field, SelectedUserField::PathDest, "");
                         let c = combo_with_filter(ui, "#path_dest", &mut self.path_dest, data);
                         if c.changed() {
                             infos.set_infos_current(self.path_dest);
@@ -309,17 +312,19 @@ impl InfosSection {
         ui: &mut Ui,
         camera: &Camera,
         path_section: &PathSection,
+        sel_field: &mut SelectedUserField,
     ) {
         CollapsingHeader::new("Informations")
             .default_open(true)
             .show(ui, |ui| {
-                ui.vertical(|ui| {
+                ui.horizontal(|ui| {
                     ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
                         Color32::from_rgba_unmultiplied(40, 60, 40, 255);
                     ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
                         Color32::from_rgba_unmultiplied(45, 70, 45, 255);
                     ui.style_mut().visuals.widgets.active.weak_bg_fill =
                         Color32::from_rgba_unmultiplied(30, 55, 30, 255);
+                    ui.radio_value(sel_field, SelectedUserField::Selected, "");
                     combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
                 });
                 if let Some(id) = self.infos_current {
@@ -519,14 +524,22 @@ impl DetailsSection {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Default)]
+#[derive(Default, PartialEq, Eq)]
+pub enum SelectedUserField {
+    #[default]
+    Selected,
+    PathSource,
+    PathDest,
+}
+
+#[derive(Default)]
 pub struct UiState {
     pub display: DisplaySection,
     pub path: PathSection,
     pub classes: ClassSection,
     pub infos: InfosSection,
     pub details: DetailsSection,
+    pub selected_user_field: SelectedUserField,
 }
 
 fn percent_formatter(val: f64, _: RangeInclusive<usize>) -> String {
@@ -685,10 +698,23 @@ impl UiState {
                         self.display.deg_filter_changed = false;
                     }
 
-                    self.path.show(data, graph, ui, &mut self.infos);
+                    self.path.show(
+                        data,
+                        graph,
+                        ui,
+                        &mut self.infos,
+                        &mut self.selected_user_field,
+                    );
 
-                    self.infos
-                        .show(&data, tab_request, frame, ui, camera, &self.path);
+                    self.infos.show(
+                        &data,
+                        tab_request,
+                        frame,
+                        ui,
+                        camera,
+                        &self.path,
+                        &mut self.selected_user_field,
+                    );
 
                     self.classes.show(&data, ui);
 
