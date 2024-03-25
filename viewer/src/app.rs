@@ -307,7 +307,7 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                     tab.cam_animating = Some(response.drag_delta());
                 }
 
-                if let Some(pos) = response.hover_pos() {
+                if let Some(pos) = response.interact_pointer_pos().or(response.hover_pos()) {
                     let zero_pos = (pos - rect.min).to_pos2();
                     let centered_pos = 2.0 * (pos - rect.center()) / rect.size();
                     tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
