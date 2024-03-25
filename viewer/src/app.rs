@@ -6,7 +6,9 @@ use crate::graph_storage::load_binary;
 use crate::ui::{DisplaySection, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{pos2, vec2, Color32, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText};
+use egui::{
+    pos2, vec2, Color32, Context, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText,
+};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3f, EdgeStore, Point};
 use graphrust_macros::md;
@@ -190,6 +192,7 @@ pub fn create_tab<'a, 'b>(
 }
 
 pub struct GraphViewApp<'graph> {
+    top_bar: bool,
     tree: DockState<GraphTab<'graph>>,
     #[allow(dead_code)]
     // we do a little trolling
@@ -237,6 +240,7 @@ impl<'a> GraphViewApp<'a> {
             )
         };
         Self {
+            top_bar: true,
             tree: DockState::new(vec![default_tab]),
             string_tables: data.strings,
         }
@@ -247,6 +251,7 @@ struct TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
     ctx: &'ctx egui::Context,
     data: PhantomData<&'graph bool>,
     tab_request: &'tab_request mut Option<NewTabRequest<'graph>>,
+    top_bar: &'tab_request mut bool,
     frame: &'frame mut eframe::Frame,
 }
 
@@ -263,14 +268,24 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
         let ctx = self.ctx;
         let cid = Id::from("camera").with(ui.id());
 
-        tab.ui_state.draw_ui(
-            ui,
-            &tab.viewer_data,
-            &mut *tab.rendered_graph.lock().unwrap(),
-            self.tab_request,
-            self.frame,
-            &tab.camera,
-        );
+        ui.spacing_mut().scroll.floating_allocated_width = 18.0;
+        egui::SidePanel::left("settings")
+            .resizable(false)
+            .show_inside(ui, |ui| {
+                if !*self.top_bar {
+                    if ui.button("Afficher l'en-tête").clicked() {
+                        *self.top_bar = true;
+                    }
+                }
+                tab.ui_state.draw_ui(
+                    ui,
+                    &tab.viewer_data,
+                    &mut *tab.rendered_graph.lock().unwrap(),
+                    self.tab_request,
+                    self.frame,
+                    &tab.camera,
+                );
+            });
         egui::CentralPanel::default()
             .frame(egui::Frame {
                 fill: Color32::from_rgba_unmultiplied(255, 255, 255, 0),
@@ -445,6 +460,33 @@ impl<'a> eframe::App for GraphViewApp<'a> {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let mut new_tab_request = None;
 
+        if self.top_bar {
+            self.show_top_bar(ctx);
+        }
+
+        DockArea::new(&mut self.tree)
+            .style({
+                let style = Style::from_egui(ctx.style().as_ref());
+                style
+            })
+            .show(
+                ctx,
+                &mut TabViewer {
+                    ctx,
+                    data: PhantomData,
+                    tab_request: &mut new_tab_request,
+                    top_bar: &mut self.top_bar,
+                    frame,
+                },
+            );
+        if let Some(request) = new_tab_request {
+            self.tree.push_to_focused_leaf(request);
+        }
+    }
+}
+
+impl<'a> GraphViewApp<'a> {
+    fn show_top_bar(&mut self, ctx: &Context) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
@@ -470,6 +512,9 @@ impl<'a> eframe::App for GraphViewApp<'a> {
                         Hyperlink::from_label_and_url("zdimension", "https://zdimension.fr")
                             .open_in_new_tab(true),
                     );
+                    if ui.button("Réduire").clicked() {
+                        self.top_bar = false;
+                    }
                 });
                 ui.vertical(|ui| {
                     md!(ui, r#"
@@ -489,24 +534,6 @@ Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortemen
             });
             ui.add_space(10.0);
         });
-
-        DockArea::new(&mut self.tree)
-            .style({
-                let style = Style::from_egui(ctx.style().as_ref());
-                style
-            })
-            .show(
-                ctx,
-                &mut TabViewer {
-                    ctx,
-                    data: PhantomData,
-                    tab_request: &mut new_tab_request,
-                    frame,
-                },
-            );
-        if let Some(request) = new_tab_request {
-            self.tree.push_to_focused_leaf(request);
-        }
     }
 }
 

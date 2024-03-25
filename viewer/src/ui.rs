@@ -686,40 +686,35 @@ impl UiState {
         frame: &mut Frame,
         camera: &Camera,
     ) {
-        ui.spacing_mut().scroll.floating_allocated_width = 18.0;
-        egui::SidePanel::left("settings")
-            .resizable(false)
-            .show_inside(ui, |ui| {
-                ui.spacing_mut().slider_width = 200.0;
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.display.show(graph, ui);
-                    if self.display.deg_filter_changed {
-                        self.refresh_node_count(data, graph);
-                        self.display.deg_filter_changed = false;
-                    }
+        ui.spacing_mut().slider_width = 200.0;
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            self.display.show(graph, ui);
+            if self.display.deg_filter_changed {
+                self.refresh_node_count(data, graph);
+                self.display.deg_filter_changed = false;
+            }
 
-                    self.path.show(
-                        data,
-                        graph,
-                        ui,
-                        &mut self.infos,
-                        &mut self.selected_user_field,
-                    );
+            self.path.show(
+                data,
+                graph,
+                ui,
+                &mut self.infos,
+                &mut self.selected_user_field,
+            );
 
-                    self.infos.show(
-                        &data,
-                        tab_request,
-                        frame,
-                        ui,
-                        camera,
-                        &self.path,
-                        &mut self.selected_user_field,
-                    );
+            self.infos.show(
+                &data,
+                tab_request,
+                frame,
+                ui,
+                camera,
+                &self.path,
+                &mut self.selected_user_field,
+            );
 
-                    self.classes.show(&data, ui);
+            self.classes.show(&data, ui);
 
-                    self.details.show(ui);
-                });
-            });
+            self.details.show(ui);
+        });
     }
 }
