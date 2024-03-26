@@ -79,7 +79,7 @@ impl Camera {
         //let center = self.transf.inverse_transform_point(&nalgebra::Point3::new(0.0, 0.0, 0.0));
         self.transf
             .append_rotation_wrt_center_mut(&nalgebra::UnitQuaternion::from_euler_angles(
-                0.0, 0.0, rot,
+                0.0, 0.0, -rot,
             ));
     }
 }

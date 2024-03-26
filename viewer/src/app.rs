@@ -412,7 +412,7 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                     }
 
                     if let Some(multi_touch) = multi_touch {
-                        tab.camera.rotate(-multi_touch.rotation_delta);
+                        tab.camera.rotate(multi_touch.rotation_delta);
                     }
                 } else {
                     tab.ui_state.details.mouse_pos = None;
