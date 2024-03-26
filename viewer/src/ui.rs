@@ -526,8 +526,8 @@ impl DetailsSection {
 
 #[derive(Default, PartialEq, Eq)]
 pub enum SelectedUserField {
-    #[default]
     Selected,
+    #[default]
     PathSource,
     PathDest,
 }

@@ -385,6 +385,7 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                                 SelectedUserField::PathSource => {
                                     tab.ui_state.path.path_src = Some(closest);
                                     tab.ui_state.path.path_dirty = true;
+                                    tab.ui_state.selected_user_field = SelectedUserField::PathDest;
                                 }
                                 SelectedUserField::PathDest => {
                                     tab.ui_state.path.path_dest = Some(closest);
