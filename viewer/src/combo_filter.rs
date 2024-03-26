@@ -126,10 +126,10 @@ pub fn combo_with_filter(
             f32::INFINITY
         };
 
-        let selected_text = WidgetText::from(match current_item {
-            Some(value) => viewer_data.persons[*value].name,
-            None => "",
-        });
+        let (selected_text, dim) = match current_item {
+            Some(value) => (WidgetText::from(viewer_data.persons[*value].name), false),
+            None => (WidgetText::from("Cliquer ici pour rechercher"), true),
+        };
 
         let galley =
             selected_text.into_galley(ui, Some(wrap_enabled), wrap_width, TextStyle::Button);
@@ -164,8 +164,15 @@ pub fn combo_with_filter(
             paint_icon(ui.painter(), icon_rect.expand(visuals.expansion), visuals);
 
             let text_rect = Align2::LEFT_CENTER.align_size_within_rect(galley.size(), rect);
-            ui.painter()
-                .galley(text_rect.min, galley, visuals.text_color());
+            ui.painter().galley(
+                text_rect.min,
+                galley,
+                if dim {
+                    visuals.text_color().gamma_multiply(0.5)
+                } else {
+                    visuals.text_color()
+                },
+            );
         }
     });
 
