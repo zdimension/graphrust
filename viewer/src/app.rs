@@ -17,6 +17,7 @@ use nalgebra::{Matrix4, Vector4};
 use simsearch::{SearchOptions, SimSearch};
 
 use egui::epaint::TextShape;
+use egui::Event::PointerButton;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
@@ -133,12 +134,18 @@ pub struct StringTables {
     pub names: Vec<u8>,
 }
 
+#[derive(Copy, Clone)]
+pub enum CamAnimating {
+    Pan(Vec2),
+    Rot(f32),
+}
+
 pub struct GraphTab<'a> {
     pub ui_state: UiState,
     pub viewer_data: ViewerData<'a>,
     pub rendered_graph: Arc<Mutex<RenderedGraph>>,
     pub camera: Camera,
-    pub cam_animating: Option<Vec2>,
+    pub cam_animating: Option<CamAnimating>,
     pub closeable: bool,
     pub title: String,
 }
@@ -308,23 +315,39 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                         if anim == 0.0 {
                             tab.cam_animating = None;
                         } else {
-                            let v = v * anim;
-                            tab.camera.pan(v.x, v.y);
+                            match v {
+                                CamAnimating::Pan(delta) => {
+                                    tab.camera.pan(delta.x * anim, delta.y * anim);
+                                }
+                                CamAnimating::Rot(rot) => {
+                                    tab.camera.rotate(rot * anim);
+                                }
+                            }
                         }
                     }
                 }
 
-                if response.dragged() {
-                    tab.camera
-                        .pan(response.drag_delta().x, response.drag_delta().y);
-
-                    ctx.animate_bool_with_time(cid, true, 0.0);
-                    tab.cam_animating = Some(response.drag_delta());
-                }
-
                 if let Some(pos) = response.interact_pointer_pos().or(response.hover_pos()) {
+                    let centered_pos_raw = pos - rect.center();
+                    let centered_pos = 2.0 * centered_pos_raw / rect.size();
+
+                    if response.dragged_by(egui::PointerButton::Primary) {
+                        tab.camera
+                            .pan(response.drag_delta().x, response.drag_delta().y);
+
+                        ctx.animate_bool_with_time(cid, true, 0.0);
+                        tab.cam_animating = Some(CamAnimating::Pan(response.drag_delta()));
+                    } else if response.dragged_by(egui::PointerButton::Secondary) {
+                        let prev_pos = centered_pos_raw - response.drag_delta();
+                        let rot = centered_pos_raw.angle() - prev_pos.angle();
+                        tab.camera.rotate(rot);
+
+                        ctx.animate_bool_with_time(cid, true, 0.0);
+                        tab.cam_animating = Some(CamAnimating::Rot(rot));
+                    }
+
                     let zero_pos = (pos - rect.min).to_pos2();
-                    let centered_pos = 2.0 * (pos - rect.center()) / rect.size();
+
                     tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
                     let pos_world = (tab.camera.get_inverse_matrix()
                         * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
@@ -517,6 +540,7 @@ impl<'a> GraphViewApp<'a> {
                         Hyperlink::from_label_and_url("zdimension", "https://zdimension.fr")
                             .open_in_new_tab(true),
                     );
+                    egui::widgets::global_dark_light_mode_switch(ui);
                     if ui.button("Réduire").clicked() {
                         self.top_bar = false;
                     }
