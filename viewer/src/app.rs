@@ -371,8 +371,9 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                         }
                     }
 
-                    let (scroll_delta, zoom_delta) =
-                        ui.input(|is| (is.raw_scroll_delta, is.zoom_delta()));
+                    let (scroll_delta, zoom_delta, multi_touch) =
+                        ui.input(|is| (is.raw_scroll_delta, is.zoom_delta(), is.multi_touch()));
+
                     if scroll_delta.y != 0.0 {
                         let zoom_speed = 1.1;
                         let s = if scroll_delta.y > 0.0 {
@@ -384,6 +385,10 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                     }
                     if zoom_delta != 1.0 {
                         tab.camera.zoom(zoom_delta, zero_pos);
+                    }
+
+                    if let Some(multi_touch) = multi_touch {
+                        tab.camera.rotate(-multi_touch.rotation_delta);
                     }
                 } else {
                     tab.ui_state.details.mouse_pos = None;
