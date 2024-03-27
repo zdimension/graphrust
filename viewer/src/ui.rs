@@ -6,7 +6,7 @@ use derivative::*;
 use crate::camera::Camera;
 use eframe::Frame;
 use egui::ahash::{AHashMap, AHashSet};
-use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2};
+use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals};
 use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f, EdgeStore};
 use itertools::Itertools;
@@ -41,6 +41,31 @@ pub struct PathSection {
     pub path_no_mutual: bool,
     pub path_status: String,
     pub path_vbuf: Option<Vec<Vertex>>,
+}
+
+fn set_bg_color_tinted(base: Color32, ui: &mut Ui) {
+    let visuals = &mut ui.style_mut().visuals;
+
+    const MIX: f32 = 1.0 / 3.0;
+
+    fn mix(orig: u8, tint: u8) -> u8 {
+        (orig as f32 * (1.0 - MIX * (1.0 - (tint as f32) / 255.0))) as u8
+    }
+
+    for orig in [
+        &mut visuals.widgets.inactive.weak_bg_fill,
+        &mut visuals.widgets.hovered.weak_bg_fill,
+        &mut visuals.widgets.active.weak_bg_fill,
+        &mut visuals.widgets.open.weak_bg_fill,
+    ] {
+        let [r, g, b, a] = orig.to_array();
+        *orig = Color32::from_rgba_unmultiplied(
+            mix(r, base.r()),
+            mix(g, base.g()),
+            mix(b, base.b()),
+            a,
+        );
+    }
 }
 
 impl PathSection {
@@ -257,12 +282,7 @@ impl PathSection {
                 if let Some(ref path) = self.found_path {
                     for (i, id) in path.iter().enumerate() {
                         ui.horizontal(|ui| {
-                            ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
-                                Color32::from_rgba_unmultiplied(60, 40, 40, 255);
-                            ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
-                                Color32::from_rgba_unmultiplied(70, 45, 45, 255);
-                            ui.style_mut().visuals.widgets.active.weak_bg_fill =
-                                Color32::from_rgba_unmultiplied(55, 30, 30, 255);
+                            set_bg_color_tinted(Color32::RED, ui);
                             self.person_button(data, ui, id, &mut cur_path);
                             if i != 0 && i != path.len() - 1 {
                                 if ui.button("x").clicked() {
@@ -318,12 +338,7 @@ impl InfosSection {
             .default_open(true)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
-                        Color32::from_rgba_unmultiplied(40, 60, 40, 255);
-                    ui.style_mut().visuals.widgets.hovered.weak_bg_fill =
-                        Color32::from_rgba_unmultiplied(45, 70, 45, 255);
-                    ui.style_mut().visuals.widgets.active.weak_bg_fill =
-                        Color32::from_rgba_unmultiplied(30, 55, 30, 255);
+                    set_bg_color_tinted(Color32::GREEN, ui);
                     ui.radio_value(sel_field, SelectedUserField::Selected, "");
                     combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
                 });
