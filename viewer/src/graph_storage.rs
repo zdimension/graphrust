@@ -64,7 +64,7 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
         .par_iter()
         .map(|node| unsafe {
             Person::new(
-                node.position + Point::new(0.0, 3000.0),
+                node.position,
                 node.size,
                 node.class,
                 str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)),
