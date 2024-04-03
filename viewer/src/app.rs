@@ -180,9 +180,9 @@ pub fn create_tab<'a, 'b>(
         ui_state: UiState {
             display: DisplaySection {
                 node_count: viewer.persons.len(),
-                g_opac_edges: (300000.0 / edges.len() as f32).min(0.22),
-                g_opac_nodes: ((40000.0 / viewer.persons.len() as f32)
-                    * if hide_edges { 3.0 } else { 1.0 })
+                g_opac_edges: (400000.0 / edges.len() as f32).min(0.22),
+                g_opac_nodes: ((70000.0 / viewer.persons.len() as f32)
+                    * if hide_edges { 5.0 } else { 2.0 })
                 .min(0.58),
                 max_degree,
                 g_show_edges: !hide_edges,
