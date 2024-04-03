@@ -241,7 +241,7 @@ impl<'a> GraphViewApp<'a> {
                 data.viewer,
                 data.edges.iter(),
                 gl,
-                17,
+                110,
                 cam,
                 UiState::default(),
             )
