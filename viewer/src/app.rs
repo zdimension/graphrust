@@ -2,7 +2,7 @@ use crate::camera::Camera;
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-use crate::graph_storage::load_binary;
+use crate::graph_storage::{load_binary, ProcessedData};
 use crate::ui::{DisplaySection, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
@@ -18,26 +18,43 @@ use simsearch::{SearchOptions, SimSearch};
 
 use egui::epaint::TextShape;
 use egui::Event::PointerButton;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, Mutex};
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use std::thread;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_thread as thread;
+
+#[macro_export]
+macro_rules! log {
+    ($ch:expr, $($arg:tt)*) => {
+        {
+            let msg = format!($($arg)*);
+            log::info!("{}", &msg);
+            $ch.send(msg.clone());
+        }
+    }
+}
 
 #[derive(Clone)]
-pub struct Person<'a> {
+pub struct Person {
     pub position: Point,
     pub size: f32,
     pub modularity_class: u16,
-    pub id: &'a str,
-    pub name: &'a str,
+    pub id: &'static str,
+    pub name: &'static str,
     pub neighbors: Vec<usize>,
 }
 
-impl<'a> Person<'a> {
+impl Person {
     pub fn new(
         position: Point,
         size: f32,
         modularity_class: u16,
-        id: &'a str,
-        name: &'a str,
-    ) -> Person<'a> {
+        id: &'static str,
+        name: &'static str,
+    ) -> Person {
         Person {
             position,
             size,
@@ -104,23 +121,25 @@ impl ModularityClass {
 }
 
 #[derive(Clone)]
-pub struct ViewerData<'a> {
-    pub persons: Vec<Person<'a>>,
+pub struct ViewerData {
+    pub persons: Vec<Person>,
     pub modularity_classes: Vec<ModularityClass>,
     pub engine: SimSearch<usize>,
 }
 
-impl<'a> ViewerData<'a> {
+impl ViewerData {
     pub fn new(
-        persons: Vec<Person<'a>>,
+        persons: Vec<Person>,
         modularity_classes: Vec<ModularityClass>,
-    ) -> ViewerData<'a> {
-        log::info!("Initializing search engine");
+        status_tx: &StatusWriter,
+    ) -> ViewerData {
+        log!(status_tx, "Initializing search engine");
         let mut engine: SimSearch<usize> =
             SimSearch::new_with(SearchOptions::new().stop_words(vec!["-".into()]));
         for (i, person) in persons.iter().enumerate() {
             engine.insert(i, person.name);
         }
+        log!(status_tx, "Done");
         ViewerData {
             persons,
             modularity_classes,
@@ -140,41 +159,172 @@ pub enum CamAnimating {
     Rot(f32),
 }
 
-pub struct GraphTab<'a> {
+pub struct GraphTabLoaded {
     pub ui_state: UiState,
-    pub viewer_data: ViewerData<'a>,
+    pub viewer_data: Arc<ViewerData>,
     pub rendered_graph: Arc<Mutex<RenderedGraph>>,
     pub camera: Camera,
     pub cam_animating: Option<CamAnimating>,
-    pub closeable: bool,
-    pub title: String,
 }
 
-pub fn create_tab<'a, 'b>(
-    title: impl Into<String>,
-    viewer: ViewerData<'b>,
+pub enum GraphTabState {
+    Loading {
+        status: String,
+        status_rx: StatusReader,
+        state_rx: Receiver<GraphTabLoaded>,
+        gl_mpsc: GlMpsc,
+    },
+    Loaded(GraphTabLoaded),
+}
+
+impl GraphTabState {
+    pub fn loading(
+        status_rx: StatusReader,
+        state_rx: Receiver<GraphTabLoaded>,
+        gl_mpsc: GlMpsc,
+    ) -> Self {
+        GraphTabState::Loading {
+            status: "Chargement du graphe...".to_string(),
+            status_rx,
+            state_rx,
+            gl_mpsc,
+        }
+    }
+}
+
+pub struct GraphTab {
+    pub title: String,
+    pub closeable: bool,
+    pub state: GraphTabState,
+}
+
+pub struct StatusWriter {
+    tx: Sender<String>,
+    ctx: Context,
+}
+
+pub struct StatusReader {
+    status: String,
+    rx: Receiver<String>,
+}
+
+impl StatusWriter {
+    pub fn send(&self, s: String) {
+        self.tx.send(s).unwrap();
+        // this tries to get the current time but it crashes since on wasm, the thread runs in a
+        // web worker which doesn't have access to Window
+        #[cfg(not(target_arch = "wasm32"))]
+        self.ctx.request_repaint();
+    }
+}
+
+impl StatusReader {
+    pub fn recv(&mut self) -> &str {
+        if let Ok(s) = self.rx.try_recv() {
+            self.status.push_str(&s);
+            self.status.push('\n');
+        }
+        &self.status
+    }
+}
+
+pub fn status_pipe(ctx: &Context) -> (StatusWriter, StatusReader) {
+    let (tx, rx) = mpsc::channel();
+    (
+        StatusWriter {
+            tx,
+            ctx: ctx.clone(),
+        },
+        StatusReader {
+            status: "".to_string(),
+            rx,
+        },
+    )
+}
+
+pub enum GlWorkResult {
+    Shaders([glow::Program; 3]),
+    PathArray(glow::VertexArray, glow::Buffer),
+    VertArray(glow::VertexArray, glow::Buffer),
+}
+
+trait GlWorkGetter<R>: FnOnce(&glow::Context) -> R {
+    fn get(rx: &Receiver<GlWorkResult>) -> R;
+    fn to_boxed(self) -> GlWork;
+}
+
+impl<T: Send + FnOnce(&glow::Context) -> GlWorkResult + 'static> GlWorkGetter<GlWorkResult> for T {
+    fn get(rx: &Receiver<GlWorkResult>) -> GlWorkResult {
+        rx.recv().unwrap()
+    }
+
+    fn to_boxed(self) -> GlWork {
+        GlWork(Box::new(move |gl, tx| {
+            tx.send(self(gl)).unwrap();
+        }))
+    }
+}
+
+impl<T: Send + FnOnce(&glow::Context) -> () + 'static> GlWorkGetter<()> for T {
+    fn get(_: &Receiver<GlWorkResult>) -> () {}
+    fn to_boxed(self) -> GlWork {
+        GlWork(Box::new(move |gl, _| {
+            self(gl);
+        }))
+    }
+}
+
+pub struct GlWork(Box<dyn Send + FnOnce(&glow::Context, &Sender<GlWorkResult>)>);
+type GlMpsc = (Receiver<GlWork>, Sender<GlWorkResult>);
+
+pub struct GlForwarder {
+    tx: Sender<GlWork>,
+    rx: Receiver<GlWorkResult>,
+}
+
+impl GlForwarder {
+    pub fn new() -> (GlForwarder, GlMpsc) {
+        let (work_tx, work_rx) = mpsc::channel();
+        let (res_tx, res_rx) = mpsc::channel();
+        (
+            Self {
+                tx: work_tx,
+                rx: res_rx,
+            },
+            (work_rx, res_tx),
+        )
+    }
+
+    pub fn run<R, T: GlWorkGetter<R>>(&self, work: T) -> R {
+        self.tx.send(work.to_boxed()).unwrap();
+        T::get(&self.rx)
+    }
+}
+
+pub fn create_tab<'a>(
+    viewer: ViewerData,
     edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
-    gl: &glow::Context,
+    gl: GlForwarder,
     default_filter: u16,
     camera: Camera,
     ui_state: UiState,
-) -> GraphTab<'b> {
-    log::info!("Creating tab");
+    status_tx: StatusWriter,
+) -> GraphTabLoaded {
+    log!(status_tx, "Creating tab");
+    log!(status_tx, "Computing maximum degree...");
     let max_degree = viewer
         .persons
         .iter()
         .map(|p| p.neighbors.len())
         .max()
         .unwrap() as u16;
-    log::info!("Max degree: {}", max_degree);
+    log!(status_tx, "Max degree: {}", max_degree);
     let hide_edges = if cfg!(target_arch = "wasm32") {
         edges.len() > 300000
     } else {
         false
     };
-    GraphTab {
-        title: title.into(),
-        closeable: true,
+    GraphTabLoaded {
         camera,
         cam_animating: None,
         ui_state: UiState {
@@ -192,21 +342,31 @@ pub fn create_tab<'a, 'b>(
         },
         rendered_graph: Arc::new(Mutex::new(RenderedGraph {
             degree_filter: (default_filter, u16::MAX),
-            ..RenderedGraph::new(gl, &viewer, edges)
+            ..RenderedGraph::new(gl, &viewer, edges, status_tx)
         })),
-        viewer_data: viewer,
+        viewer_data: Arc::from(viewer),
     }
 }
 
-pub struct GraphViewApp<'graph> {
+pub struct GraphViewApp {
     top_bar: bool,
-    tree: DockState<GraphTab<'graph>>,
-    #[allow(dead_code)]
-    // we do a little trolling
-    string_tables: StringTables,
+    state: AppState,
 }
 
-impl<'a> GraphViewApp<'a> {
+pub enum AppState {
+    Loading {
+        status_rx: StatusReader,
+        file_rx: Receiver<ProcessedData>,
+    },
+    Loaded {
+        tree: DockState<GraphTab>,
+        #[allow(dead_code)]
+        // we do a little trolling
+        string_tables: StringTables,
+    },
+}
+
+impl GraphViewApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let gl = cc
@@ -216,48 +376,25 @@ impl<'a> GraphViewApp<'a> {
         unsafe {
             gl.enable(glow::PROGRAM_POINT_SIZE);
         }
-        let data = load_binary();
-        let mut min = Point::new(f32::INFINITY, f32::INFINITY);
-        let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
-        for p in &data.viewer.persons {
-            min.x = min.x.min(p.position.x);
-            min.y = min.y.min(p.position.y);
-            max.x = max.x.max(p.position.x);
-            max.y = max.y.max(p.position.y);
-        }
-        let center = (min + max) / 2.0;
-        let mut cam = Camera::new(center);
-        // cam is normalized on the [-1, 1] range
-        // compute x and y scaling to fit the circle, take the best
-        let fig_size = max - min;
-        let scale_x = 1.0 / fig_size.x;
-        let scale_y = 1.0 / fig_size.y;
-        let scale = scale_x.min(scale_y) * 0.98;
-        cam.transf.append_scaling_mut(scale);
-        let default_tab = GraphTab {
-            closeable: false,
-            ..create_tab(
-                "Graphe",
-                data.viewer,
-                data.edges.iter(),
-                gl,
-                110,
-                cam,
-                UiState::default(),
-            )
-        };
-        Self {
+
+        let (status_tx, status_rx) = status_pipe(&cc.egui_ctx);
+        let (file_tx, file_rx) = mpsc::channel();
+
+        thread::spawn(move || {
+            file_tx.send(load_binary(status_tx)).unwrap();
+        });
+
+        return Self {
             top_bar: true,
-            tree: DockState::new(vec![default_tab]),
-            string_tables: data.strings,
-        }
+            state: AppState::Loading { status_rx, file_rx },
+        };
     }
 }
 
 struct TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
     ctx: &'ctx egui::Context,
     data: PhantomData<&'graph bool>,
-    tab_request: &'tab_request mut Option<NewTabRequest<'graph>>,
+    tab_request: &'tab_request mut Option<NewTabRequest>,
     top_bar: &'tab_request mut bool,
     frame: &'frame mut eframe::Frame,
 }
@@ -265,7 +402,7 @@ struct TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
 impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
     for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
 {
-    type Tab = GraphTab<'graph>;
+    type Tab = GraphTab;
 
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
         RichText::from(&tab.title).into()
@@ -273,200 +410,226 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         let ctx = self.ctx;
-        let cid = Id::from("camera").with(ui.id());
 
-        ui.spacing_mut().scroll.floating_allocated_width = 18.0;
-        egui::SidePanel::left("settings")
-            .resizable(false)
-            .show_inside(ui, |ui| {
-                if !*self.top_bar {
-                    if ui.button("Afficher l'en-tête").clicked() {
-                        *self.top_bar = true;
-                    }
+        match &mut tab.state {
+            GraphTabState::Loading {
+                status,
+                status_rx,
+                state_rx,
+                gl_mpsc,
+            } => {
+                for work in gl_mpsc.0.try_iter() {
+                    work.0(self.frame.gl().unwrap().deref(), &gl_mpsc.1);
                 }
-                tab.ui_state.draw_ui(
-                    ui,
-                    &tab.viewer_data,
-                    &mut *tab.rendered_graph.lock().unwrap(),
-                    self.tab_request,
-                    self.frame,
-                    &tab.camera,
-                );
-            });
-        egui::CentralPanel::default()
-            .frame(egui::Frame {
-                fill: Color32::from_rgba_unmultiplied(255, 255, 255, 0),
-                ..Default::default()
-            })
-            .show_inside(ui, |ui| {
-                let (id, rect) = ui.allocate_space(ui.available_size());
-
-                let sz = rect.size();
-                if sz != tab.camera.size {
-                    tab.camera.set_window_size(sz);
+                ui.label(status_rx.recv());
+                if let Ok(state) = state_rx.try_recv() {
+                    tab.state = GraphTabState::Loaded(state);
+                    ctx.request_repaint();
                 }
+            }
+            GraphTabState::Loaded(tab) => {
+                let cid = Id::from("camera").with(ui.id());
 
-                let response =
-                    ui.interact(rect, id, egui::Sense::click().union(egui::Sense::drag()));
+                ui.spacing_mut().scroll.floating_allocated_width = 18.0;
+                egui::SidePanel::left("settings")
+                    .resizable(false)
+                    .show_inside(ui, |ui| {
+                        if !*self.top_bar {
+                            if ui.button("Afficher l'en-tête").clicked() {
+                                *self.top_bar = true;
+                            }
+                        }
+                        tab.ui_state.draw_ui(
+                            ui,
+                            &tab.viewer_data,
+                            &mut *tab.rendered_graph.lock().unwrap(),
+                            self.tab_request,
+                            self.frame,
+                            &tab.camera,
+                        );
+                    });
+                egui::CentralPanel::default()
+                    .frame(egui::Frame {
+                        fill: Color32::from_rgba_unmultiplied(255, 255, 255, 0),
+                        ..Default::default()
+                    })
+                    .show_inside(ui, |ui| {
+                        let (id, rect) = ui.allocate_space(ui.available_size());
 
-                if !response.is_pointer_button_down_on() {
-                    if let Some(v) = tab.cam_animating {
-                        let anim = ctx.animate_bool_with_time(cid, false, 0.5);
-                        if anim == 0.0 {
-                            tab.cam_animating = None;
-                        } else {
-                            match v {
-                                CamAnimating::Pan(delta) => {
-                                    tab.camera.pan(delta.x * anim, delta.y * anim);
-                                }
-                                CamAnimating::Rot(rot) => {
-                                    tab.camera.rotate(rot * anim);
+                        let sz = rect.size();
+                        if sz != tab.camera.size {
+                            tab.camera.set_window_size(sz);
+                        }
+
+                        let response =
+                            ui.interact(rect, id, egui::Sense::click().union(egui::Sense::drag()));
+
+                        if !response.is_pointer_button_down_on() {
+                            if let Some(v) = tab.cam_animating {
+                                let anim = ctx.animate_bool_with_time(cid, false, 0.5);
+                                if anim == 0.0 {
+                                    tab.cam_animating = None;
+                                } else {
+                                    match v {
+                                        CamAnimating::Pan(delta) => {
+                                            tab.camera.pan(delta.x * anim, delta.y * anim);
+                                        }
+                                        CamAnimating::Rot(rot) => {
+                                            tab.camera.rotate(rot * anim);
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                }
 
-                if let Some(pos) = response.interact_pointer_pos().or(response.hover_pos()) {
-                    let centered_pos_raw = pos - rect.center();
-                    let centered_pos = 2.0 * centered_pos_raw / rect.size();
+                        if let Some(pos) = response.interact_pointer_pos().or(response.hover_pos())
+                        {
+                            let centered_pos_raw = pos - rect.center();
+                            let centered_pos = 2.0 * centered_pos_raw / rect.size();
 
-                    if response.dragged_by(egui::PointerButton::Primary) {
-                        tab.camera
-                            .pan(response.drag_delta().x, response.drag_delta().y);
+                            if response.dragged_by(egui::PointerButton::Primary) {
+                                tab.camera
+                                    .pan(response.drag_delta().x, response.drag_delta().y);
 
-                        ctx.animate_bool_with_time(cid, true, 0.0);
-                        tab.cam_animating = Some(CamAnimating::Pan(response.drag_delta()));
-                    } else if response.dragged_by(egui::PointerButton::Secondary) {
-                        let prev_pos = centered_pos_raw - response.drag_delta();
-                        let rot = centered_pos_raw.angle() - prev_pos.angle();
-                        tab.camera.rotate(rot);
+                                ctx.animate_bool_with_time(cid, true, 0.0);
+                                tab.cam_animating = Some(CamAnimating::Pan(response.drag_delta()));
+                            } else if response.dragged_by(egui::PointerButton::Secondary) {
+                                let prev_pos = centered_pos_raw - response.drag_delta();
+                                let rot = centered_pos_raw.angle() - prev_pos.angle();
+                                tab.camera.rotate(rot);
 
-                        ctx.animate_bool_with_time(cid, true, 0.0);
-                        tab.cam_animating = Some(CamAnimating::Rot(rot));
-                    }
+                                ctx.animate_bool_with_time(cid, true, 0.0);
+                                tab.cam_animating = Some(CamAnimating::Rot(rot));
+                            }
 
-                    let zero_pos = (pos - rect.min).to_pos2();
+                            let zero_pos = (pos - rect.min).to_pos2();
 
-                    tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
-                    let pos_world = (tab.camera.get_inverse_matrix()
-                        * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
-                    .xy();
-                    tab.ui_state.details.mouse_pos_world = Some(pos_world);
+                            tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
+                            let pos_world = (tab.camera.get_inverse_matrix()
+                                * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
+                            .xy();
+                            tab.ui_state.details.mouse_pos_world = Some(pos_world);
 
-                    if response.clicked() {
-                        let closest = tab
-                            .viewer_data
-                            .persons
-                            .iter()
-                            .map(|p| {
-                                let diff = p.position - pos_world.into();
+                            if response.clicked() {
+                                let closest = tab
+                                    .viewer_data
+                                    .persons
+                                    .iter()
+                                    .map(|p| {
+                                        let diff = p.position - pos_world.into();
 
-                                diff.norm_squared()
-                            })
-                            .enumerate()
-                            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-                            .map(|(i, _)| i);
-                        if let Some(closest) = closest {
-                            log::info!(
-                                "Selected person {}: {:?} (mouse: {:?})",
-                                closest,
-                                tab.viewer_data.persons[closest].position,
-                                pos_world
-                            );
-                            tab.ui_state.infos.infos_current = Some(closest);
-                            tab.ui_state.infos.infos_open = true;
-
-                            match tab.ui_state.selected_user_field {
-                                SelectedUserField::Selected => {
+                                        diff.norm_squared()
+                                    })
+                                    .enumerate()
+                                    .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+                                    .map(|(i, _)| i);
+                                if let Some(closest) = closest {
+                                    log::info!(
+                                        "Selected person {}: {:?} (mouse: {:?})",
+                                        closest,
+                                        tab.viewer_data.persons[closest].position,
+                                        pos_world
+                                    );
                                     tab.ui_state.infos.infos_current = Some(closest);
                                     tab.ui_state.infos.infos_open = true;
-                                }
-                                SelectedUserField::PathSource => {
-                                    tab.ui_state.path.path_src = Some(closest);
-                                    tab.ui_state.path.path_dirty = true;
-                                    tab.ui_state.selected_user_field = SelectedUserField::PathDest;
-                                }
-                                SelectedUserField::PathDest => {
-                                    tab.ui_state.path.path_dest = Some(closest);
-                                    tab.ui_state.path.path_dirty = true;
+
+                                    match tab.ui_state.selected_user_field {
+                                        SelectedUserField::Selected => {
+                                            tab.ui_state.infos.infos_current = Some(closest);
+                                            tab.ui_state.infos.infos_open = true;
+                                        }
+                                        SelectedUserField::PathSource => {
+                                            tab.ui_state.path.path_src = Some(closest);
+                                            tab.ui_state.path.path_dirty = true;
+                                            tab.ui_state.selected_user_field =
+                                                SelectedUserField::PathDest;
+                                        }
+                                        SelectedUserField::PathDest => {
+                                            tab.ui_state.path.path_dest = Some(closest);
+                                            tab.ui_state.path.path_dirty = true;
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
 
-                    let (scroll_delta, zoom_delta, multi_touch) =
-                        ui.input(|is| (is.raw_scroll_delta, is.zoom_delta(), is.multi_touch()));
+                            let (scroll_delta, zoom_delta, multi_touch) = ui.input(|is| {
+                                (is.raw_scroll_delta, is.zoom_delta(), is.multi_touch())
+                            });
 
-                    if scroll_delta.y != 0.0 {
-                        let zoom_speed = 1.1;
-                        let s = if scroll_delta.y > 0.0 {
-                            zoom_speed
+                            if scroll_delta.y != 0.0 {
+                                let zoom_speed = 1.1;
+                                let s = if scroll_delta.y > 0.0 {
+                                    zoom_speed
+                                } else {
+                                    1.0 / zoom_speed
+                                };
+                                tab.camera.zoom(s, zero_pos);
+                            }
+                            if zoom_delta != 1.0 {
+                                tab.camera.zoom(zoom_delta, zero_pos);
+                            }
+
+                            if let Some(multi_touch) = multi_touch {
+                                tab.camera.rotate(multi_touch.rotation_delta);
+                            }
                         } else {
-                            1.0 / zoom_speed
+                            tab.ui_state.details.mouse_pos = None;
+                            tab.ui_state.details.mouse_pos_world = None;
+                        }
+
+                        let graph = tab.rendered_graph.clone();
+                        let edges = tab.ui_state.display.g_show_edges;
+                        let nodes = tab.ui_state.display.g_show_nodes;
+                        let opac_edges = tab.ui_state.display.g_opac_edges;
+                        let opac_nodes = tab.ui_state.display.g_opac_nodes;
+
+                        let cam = tab.camera.get_matrix();
+                        tab.ui_state.details.camera = cam;
+                        let callback = egui::PaintCallback {
+                            rect,
+                            callback: Arc::new(egui_glow::CallbackFn::new(
+                                move |_info, painter| {
+                                    graph.lock().unwrap().paint(
+                                        painter.gl(),
+                                        cam,
+                                        (edges, opac_edges),
+                                        (nodes, opac_nodes),
+                                    );
+                                },
+                            )),
                         };
-                        tab.camera.zoom(s, zero_pos);
-                    }
-                    if zoom_delta != 1.0 {
-                        tab.camera.zoom(zoom_delta, zero_pos);
-                    }
+                        ui.painter().add(callback);
 
-                    if let Some(multi_touch) = multi_touch {
-                        tab.camera.rotate(multi_touch.rotation_delta);
-                    }
-                } else {
-                    tab.ui_state.details.mouse_pos = None;
-                    tab.ui_state.details.mouse_pos_world = None;
-                }
+                        let draw_person = |id, color| {
+                            let person: &Person = &tab.viewer_data.persons[id];
+                            let pos = person.position;
+                            let pos_scr = (cam * Vector4::new(pos.x, pos.y, 0.0, 1.0)).xy();
+                            let txt = WidgetText::from(person.name)
+                                .background_color(color)
+                                .color(Color32::WHITE);
+                            let gal =
+                                txt.into_galley(ui, Some(false), f32::INFINITY, TextStyle::Heading);
+                            ui.painter().add(TextShape::new(
+                                rect.center()
+                                    + vec2(pos_scr.x, -pos_scr.y) * rect.size() * 0.5
+                                    + vec2(10.0, 10.0),
+                                gal,
+                                Color32::TRANSPARENT,
+                            ));
+                        };
 
-                let graph = tab.rendered_graph.clone();
-                let edges = tab.ui_state.display.g_show_edges;
-                let nodes = tab.ui_state.display.g_show_nodes;
-                let opac_edges = tab.ui_state.display.g_opac_edges;
-                let opac_nodes = tab.ui_state.display.g_opac_nodes;
+                        if let Some(ref path) = tab.ui_state.path.found_path {
+                            for &p in path {
+                                draw_person(p, Color32::from_rgba_unmultiplied(150, 0, 0, 200));
+                            }
+                        }
 
-                let cam = tab.camera.get_matrix();
-                tab.ui_state.details.camera = cam;
-                let callback = egui::PaintCallback {
-                    rect,
-                    callback: Arc::new(egui_glow::CallbackFn::new(move |_info, painter| {
-                        graph.lock().unwrap().paint(
-                            painter.gl(),
-                            cam,
-                            (edges, opac_edges),
-                            (nodes, opac_nodes),
-                        );
-                    })),
-                };
-                ui.painter().add(callback);
-
-                let draw_person = |id, color| {
-                    let person: &Person<'_> = &tab.viewer_data.persons[id];
-                    let pos = person.position;
-                    let pos_scr = (cam * Vector4::new(pos.x, pos.y, 0.0, 1.0)).xy();
-                    let txt = WidgetText::from(person.name)
-                        .background_color(color)
-                        .color(Color32::WHITE);
-                    let gal = txt.into_galley(ui, Some(false), f32::INFINITY, TextStyle::Heading);
-                    ui.painter().add(TextShape::new(
-                        rect.center()
-                            + vec2(pos_scr.x, -pos_scr.y) * rect.size() * 0.5
-                            + vec2(10.0, 10.0),
-                        gal,
-                        Color32::TRANSPARENT,
-                    ));
-                };
-
-                if let Some(ref path) = tab.ui_state.path.found_path {
-                    for &p in path {
-                        draw_person(p, Color32::from_rgba_unmultiplied(150, 0, 0, 200));
-                    }
-                }
-
-                if let Some(sel) = tab.ui_state.infos.infos_current {
-                    draw_person(sel, Color32::from_rgba_unmultiplied(0, 100, 0, 200));
-                }
-            });
+                        if let Some(sel) = tab.ui_state.infos.infos_current {
+                            draw_person(sel, Color32::from_rgba_unmultiplied(0, 100, 0, 200));
+                        }
+                    });
+            }
+        }
     }
 
     fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
@@ -474,17 +637,19 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
     }
 
     fn on_close(&mut self, tab: &mut Self::Tab) -> bool {
-        tab.rendered_graph
-            .lock()
-            .unwrap()
-            .destroy(&self.frame.gl().unwrap().clone());
+        if let GraphTabState::Loaded(tab) = &tab.state {
+            tab.rendered_graph
+                .lock()
+                .unwrap()
+                .destroy(&self.frame.gl().unwrap().clone());
+        }
         true
     }
 }
 
-pub type NewTabRequest<'a> = GraphTab<'a>;
+pub type NewTabRequest = GraphTab;
 
-impl<'a> eframe::App for GraphViewApp<'a> {
+impl eframe::App for GraphViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let mut new_tab_request = None;
@@ -493,28 +658,85 @@ impl<'a> eframe::App for GraphViewApp<'a> {
             self.show_top_bar(ctx);
         }
 
-        DockArea::new(&mut self.tree)
-            .style({
-                let style = Style::from_egui(ctx.style().as_ref());
-                style
-            })
-            .show(
-                ctx,
-                &mut TabViewer {
-                    ctx,
-                    data: PhantomData,
-                    tab_request: &mut new_tab_request,
-                    top_bar: &mut self.top_bar,
-                    frame,
-                },
-            );
-        if let Some(request) = new_tab_request {
-            self.tree.push_to_focused_leaf(request);
-        }
+        match &mut self.state {
+            AppState::Loading { status_rx, file_rx } => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.label(status_rx.recv());
+                });
+                if let Ok(file) = file_rx.try_recv() {
+                    let (status_tx, status_rx) = status_pipe(ctx);
+                    let (state_tx, state_rx) = mpsc::channel();
+                    let (gl_fwd, gl_mpsc) = GlForwarder::new();
+                    self.state = AppState::Loaded {
+                        tree: DockState::new(vec![GraphTab {
+                            closeable: false,
+                            title: "Graphe".to_string(),
+                            state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),
+                        }]),
+                        string_tables: file.strings,
+                    };
+                    thread::spawn(move || {
+                        let mut min = Point::new(f32::INFINITY, f32::INFINITY);
+                        let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
+                        log!(status_tx, "Calcul des limites du graphes...");
+                        for p in &file.viewer.persons {
+                            min.x = min.x.min(p.position.x);
+                            min.y = min.y.min(p.position.y);
+                            max.x = max.x.max(p.position.x);
+                            max.y = max.y.max(p.position.y);
+                        }
+                        let center = (min + max) / 2.0;
+                        let mut cam = Camera::new(center);
+                        // cam is normalized on the [-1, 1] range
+                        // compute x and y scaling to fit the circle, take the best
+                        let fig_size = max - min;
+                        let scale_x = 1.0 / fig_size.x;
+                        let scale_y = 1.0 / fig_size.y;
+                        let scale = scale_x.min(scale_y) * 0.98;
+                        cam.transf.append_scaling_mut(scale);
+
+                        state_tx
+                            .send(create_tab(
+                                file.viewer,
+                                file.edges.iter(),
+                                gl_fwd,
+                                110,
+                                cam,
+                                UiState::default(),
+                                status_tx,
+                            ))
+                            .unwrap();
+                    });
+                }
+            }
+            AppState::Loaded {
+                tree,
+                string_tables,
+            } => {
+                DockArea::new(tree)
+                    .style({
+                        let style = Style::from_egui(ctx.style().as_ref());
+                        style
+                    })
+                    .show(
+                        ctx,
+                        &mut TabViewer {
+                            ctx,
+                            data: PhantomData,
+                            tab_request: &mut new_tab_request,
+                            top_bar: &mut self.top_bar,
+                            frame,
+                        },
+                    );
+                if let Some(request) = new_tab_request {
+                    tree.push_to_focused_leaf(request);
+                }
+            }
+        };
     }
 }
 
-impl<'a> GraphViewApp<'a> {
+impl GraphViewApp {
     fn show_top_bar(&mut self, ctx: &Context) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.add_space(10.0);
@@ -586,11 +808,13 @@ pub struct RenderedGraph {
 
 impl RenderedGraph {
     pub fn new<'a>(
-        gl: &glow::Context,
-        viewer: &ViewerData<'_>,
+        gl: GlForwarder,
+        viewer: &ViewerData,
         edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
+        status_tx: StatusWriter,
     ) -> Self {
         use glow::HasContext as _;
+        use GlWorkResult::*;
 
         let shader_version = if cfg!(target_arch = "wasm32") {
             "#version 300 es"
@@ -620,45 +844,49 @@ impl RenderedGraph {
                 ],
             ];
 
-            log::info!("Compiling shaders");
-            let [program_basic, program_edge, program_node] = programs.map(|shader_sources| {
-                let program = gl.create_program().expect("Cannot create program");
+            log!(status_tx, "Compiling shaders");
+            let Shaders([program_basic, program_edge, program_node]) = gl.run(move |gl| {
+                Shaders(programs.map(|shader_sources| {
+                    let program = gl.create_program().expect("Cannot create program");
 
-                let shaders: Vec<_> = shader_sources
-                    .iter()
-                    .map(|(shader_type, shader_source)| {
-                        let shader = gl
-                            .create_shader(*shader_type)
-                            .expect("Cannot create shader");
-                        gl.shader_source(shader, &format!("{shader_version}\n{shader_source}"));
-                        gl.compile_shader(shader);
-                        assert!(
-                            gl.get_shader_compile_status(shader),
-                            "Failed to compile {shader_type}: {}",
-                            gl.get_shader_info_log(shader)
-                        );
-                        gl.attach_shader(program, shader);
-                        shader
-                    })
-                    .collect();
+                    let shaders: Vec<_> = shader_sources
+                        .iter()
+                        .map(|(shader_type, shader_source)| {
+                            let shader = gl
+                                .create_shader(*shader_type)
+                                .expect("Cannot create shader");
+                            gl.shader_source(shader, &format!("{shader_version}\n{shader_source}"));
+                            gl.compile_shader(shader);
+                            assert!(
+                                gl.get_shader_compile_status(shader),
+                                "Failed to compile {shader_type}: {}",
+                                gl.get_shader_info_log(shader)
+                            );
+                            gl.attach_shader(program, shader);
+                            shader
+                        })
+                        .collect();
 
-                gl.link_program(program);
-                assert!(
-                    gl.get_program_link_status(program),
-                    "{}",
-                    gl.get_program_info_log(program)
-                );
+                    gl.link_program(program);
+                    assert!(
+                        gl.get_program_link_status(program),
+                        "{}",
+                        gl.get_program_info_log(program)
+                    );
 
-                for shader in shaders {
-                    gl.detach_shader(program, shader);
-                    gl.delete_shader(shader);
-                }
+                    for shader in shaders {
+                        gl.detach_shader(program, shader);
+                        gl.delete_shader(shader);
+                    }
 
-                program
-            });
+                    program
+                }))
+            }) else {
+                panic!("Failed to compile shaders");
+            };
 
             let edges_count = edges.len();
-            log::info!("Creating vertice list");
+            log!(status_tx, "Creating vertice list");
             let vertices = viewer
                 .persons
                 .iter()
@@ -733,81 +961,89 @@ impl RenderedGraph {
                 )
                 .collect_vec();
 
-            log::info!("Sending data to GPU");
-            let vertices_array = gl
-                .create_vertex_array()
-                .expect("Cannot create vertex array");
-            gl.bind_vertex_array(Some(vertices_array));
-            let vertices_buffer = gl.create_buffer().expect("Cannot create buffer");
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices_buffer));
-            log::info!("Buffering {} vertices", vertices.len());
-            gl.buffer_data_u8_slice(
-                glow::ARRAY_BUFFER,
-                std::slice::from_raw_parts(
-                    vertices.as_ptr() as *const u8,
-                    vertices.len() * std::mem::size_of::<PersonVertex>(),
-                ),
-                glow::STATIC_DRAW,
-            );
+            log!(status_tx, "Buffering {} vertices", vertices.len());
+            let VertArray(vertices_array, vertices_buffer) = gl.run(move |gl| {
+                let vertices_array = gl
+                    .create_vertex_array()
+                    .expect("Cannot create vertex array");
+                gl.bind_vertex_array(Some(vertices_array));
+                let vertices_buffer = gl.create_buffer().expect("Cannot create buffer");
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices_buffer));
+                gl.buffer_data_u8_slice(
+                    glow::ARRAY_BUFFER,
+                    std::slice::from_raw_parts(
+                        vertices.as_ptr() as *const u8,
+                        vertices.len() * std::mem::size_of::<PersonVertex>(),
+                    ),
+                    glow::STATIC_DRAW,
+                );
 
-            log::info!("Configuring buffers");
+                gl.vertex_attrib_pointer_f32(
+                    0,
+                    2,
+                    glow::FLOAT,
+                    false,
+                    std::mem::size_of::<PersonVertex>() as i32,
+                    0,
+                );
+                gl.enable_vertex_attrib_array(0);
+                gl.vertex_attrib_pointer_f32(
+                    1,
+                    3,
+                    glow::FLOAT,
+                    false,
+                    std::mem::size_of::<PersonVertex>() as i32,
+                    std::mem::size_of::<Point>() as i32,
+                );
+                gl.enable_vertex_attrib_array(1);
+                gl.vertex_attrib_pointer_i32(
+                    2,
+                    1,
+                    glow::UNSIGNED_INT,
+                    std::mem::size_of::<PersonVertex>() as i32,
+                    std::mem::size_of::<Vertex>() as i32,
+                );
+                gl.enable_vertex_attrib_array(2);
 
-            gl.vertex_attrib_pointer_f32(
-                0,
-                2,
-                glow::FLOAT,
-                false,
-                std::mem::size_of::<PersonVertex>() as i32,
-                0,
-            );
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(
-                1,
-                3,
-                glow::FLOAT,
-                false,
-                std::mem::size_of::<PersonVertex>() as i32,
-                std::mem::size_of::<Point>() as i32,
-            );
-            gl.enable_vertex_attrib_array(1);
-            gl.vertex_attrib_pointer_i32(
-                2,
-                1,
-                glow::UNSIGNED_INT,
-                std::mem::size_of::<PersonVertex>() as i32,
-                std::mem::size_of::<Vertex>() as i32,
-            );
-            gl.enable_vertex_attrib_array(2);
+                VertArray(vertices_array, vertices_buffer)
+            }) else {
+                panic!("Failed to create vertices array");
+            };
 
-            log::info!("Creating path array");
-            let path_array = gl
-                .create_vertex_array()
-                .expect("Cannot create vertex array");
-            let path_buffer = gl.create_buffer().expect("Cannot create buffer");
+            log!(status_tx, "Creating path array");
+            let PathArray(path_array, path_buffer) = gl.run(|gl| {
+                let path_array = gl
+                    .create_vertex_array()
+                    .expect("Cannot create vertex array");
+                let path_buffer = gl.create_buffer().expect("Cannot create buffer");
 
-            gl.bind_vertex_array(Some(path_array));
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(path_buffer));
+                gl.bind_vertex_array(Some(path_array));
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(path_buffer));
+                gl.vertex_attrib_pointer_f32(
+                    0,
+                    2,
+                    glow::FLOAT,
+                    false,
+                    std::mem::size_of::<Vertex>() as i32,
+                    0,
+                );
+                gl.enable_vertex_attrib_array(0);
+                gl.vertex_attrib_pointer_f32(
+                    1,
+                    3,
+                    glow::FLOAT,
+                    false,
+                    std::mem::size_of::<Vertex>() as i32,
+                    std::mem::size_of::<Point>() as i32,
+                );
+                gl.enable_vertex_attrib_array(1);
 
-            log::info!("Configuring path buffers");
-            gl.vertex_attrib_pointer_f32(
-                0,
-                2,
-                glow::FLOAT,
-                false,
-                std::mem::size_of::<Vertex>() as i32,
-                0,
-            );
-            gl.enable_vertex_attrib_array(0);
-            gl.vertex_attrib_pointer_f32(
-                1,
-                3,
-                glow::FLOAT,
-                false,
-                std::mem::size_of::<Vertex>() as i32,
-                std::mem::size_of::<Point>() as i32,
-            );
-            gl.enable_vertex_attrib_array(1);
-            log::info!("Done");
+                PathArray(path_array, path_buffer)
+            }) else {
+                panic!("Failed to create path array");
+            };
+
+            log!(status_tx, "Done");
 
             Self {
                 program_basic,

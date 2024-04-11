@@ -1,8 +1,13 @@
-use crate::app::{create_tab, NewTabRequest, Person, RenderedGraph, Vertex, ViewerData};
+use crate::app::{
+    create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph,
+    StatusWriter, Vertex, ViewerData,
+};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
+use crate::log;
 use derivative::*;
 
+use crate::app::thread;
 use crate::camera::Camera;
 use eframe::Frame;
 use egui::ahash::{AHashMap, AHashSet};
@@ -13,6 +18,7 @@ use itertools::Itertools;
 use nalgebra::{Matrix4, Vector2};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
+use std::sync::{mpsc, Arc};
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -69,7 +75,7 @@ fn set_bg_color_tinted(base: Color32, ui: &mut Ui) {
 }
 
 impl PathSection {
-    fn do_pathfinding(&mut self, data: &ViewerData<'_>, graph: &mut RenderedGraph) {
+    fn do_pathfinding(&mut self, data: &ViewerData, graph: &mut RenderedGraph) {
         let src_id = self.path_src.unwrap();
         let dest_id = self.path_dest.unwrap();
         let src = &data.persons[src_id];
@@ -163,7 +169,7 @@ impl PathSection {
 
     fn person_button(
         &self,
-        data: &ViewerData<'_>,
+        data: &ViewerData,
         ui: &mut Ui,
         id: &usize,
         selected: &mut Option<usize>,
@@ -178,7 +184,7 @@ impl PathSection {
 
     fn show(
         &mut self,
-        data: &ViewerData<'_>,
+        data: &ViewerData,
         graph: &mut RenderedGraph,
         ui: &mut Ui,
         infos: &mut InfosSection,
@@ -326,8 +332,8 @@ impl InfosSection {
 
     fn show<'data>(
         &mut self,
-        data: &ViewerData<'data>,
-        tab_request: &mut Option<NewTabRequest<'data>>,
+        data: &Arc<ViewerData>,
+        tab_request: &mut Option<NewTabRequest>,
         frame: &mut Frame,
         ui: &mut Ui,
         camera: &Camera,
@@ -399,102 +405,128 @@ impl InfosSection {
                         if ui.button("Afficher voisinage")
                             .on_hover_text("Afficher les amis jusqu'à une certaine distance de la personne. Le degré 1 affichera les amis directs, le degré 2 les amis des amis, etc.")
                             .clicked() {
-                            let mut new_included = AHashSet::from([id]);
-                            let mut last_batch = AHashSet::from([id]);
-                            for i in 0..self.neighborhood_degree {
-                                let mut new_friends = AHashSet::new();
-                                for person in last_batch.iter() {
-                                    new_friends.extend(
-                                        data.persons[*person]
-                                            .neighbors
-                                            .iter()
-                                            .copied()
-                                            .filter(|&i| !new_included.contains(&i)),
-                                    );
-                                }
-                                if new_friends.is_empty() {
-                                    log::info!("No new friends at degree {}", i + 1);
-                                    if last_batch.len() < 50 {
-                                        log::info!("At {}: {:?}", i, last_batch.iter().map(|i| data.persons[*i].name).collect::<Vec<_>>());
+
+                            let (status_tx, status_rx) = status_pipe(ui.ctx());
+                            let (state_tx, state_rx) = mpsc::channel();
+                            let (gl_fwd, gl_mpsc) = GlForwarder::new();
+                            let title = format!("{}-voisinage de {}", self.neighborhood_degree, person.name);
+
+                            *tab_request = Some(NewTabRequest {
+                                title,
+                                closeable: true,
+                                state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),
+                            });
+
+                            let neighborhood_degree = self.neighborhood_degree;
+                            let infos_current = self.infos_current;
+                            let path_src = path_section.path_src;
+                            let path_dest = path_section.path_dest;
+                            let camera = camera.clone();
+                            // SAFETY: the tab can't be closed while it's loading, and the tab stays
+                            // in the loading state until the thread stops. Therefore, for the
+                            // thread's duration, data stays alive.
+                            //let data = unsafe { std::mem::transmute::<&ViewerData, &'static ViewerData>(data) };
+                            // huh? seems like it's being moved around. I put Arcs everywhere, now
+                            // it works fine, and there doesn't seem to be a huge overhead
+                            let data = data.clone();
+                            thread::spawn(move || {
+                                let mut new_included = AHashSet::from([id]);
+                                let mut last_batch = AHashSet::from([id]);
+                                for i in 0..neighborhood_degree {
+                                    let mut new_friends = AHashSet::new();
+                                    for person in last_batch.iter() {
+                                        new_friends.extend(
+                                            data.persons[*person]
+                                                .neighbors
+                                                .iter()
+                                                .copied()
+                                                .filter(|&i| !new_included.contains(&i)),
+                                        );
                                     }
-                                    break;
+                                    if new_friends.is_empty() {
+                                        log!(status_tx, "No new friends at degree {}", i + 1);
+                                        if last_batch.len() < 50 {
+                                            log!(status_tx, "At {}: {:?}", i, last_batch.iter().map(|i| data.persons[*i].name).collect::<Vec<_>>());
+                                        }
+                                        break;
+                                    }
+                                    new_included.extend(new_friends.iter().copied());
+                                    log!(status_tx, "{} new friends at degree {}", new_friends.len(), i + 1);
+                                    last_batch = new_friends;
                                 }
-                                new_included.extend(new_friends.iter().copied());
-                                log::info!("{} new friends at degree {}", new_friends.len(), i + 1);
-                                last_batch = new_friends;
-                            }
 
-                            log::info!("Got {} persons total", new_included.len());
+                                log!(status_tx, "Got {} persons total", new_included.len());
 
-                            let mut new_persons =
-                                Vec::with_capacity(new_included.len());
+                                let mut new_persons =
+                                    Vec::with_capacity(new_included.len());
 
-                            let mut id_map = AHashMap::new();
-                            let mut class_list = AHashSet::new();
+                                let mut id_map = AHashMap::new();
+                                let mut class_list = AHashSet::new();
 
-                            log::info!("Processing person list and creating ID map");
-                            for &id in new_included.iter() {
-                                let pers = &data.persons[id];
-                                id_map.insert(id, new_persons.len());
-                                class_list.insert(pers.modularity_class);
-                                new_persons.push(Person {
-                                    neighbors: vec![],
-                                    ..*pers
-                                });
-                            }
-
-                            let mut edges = AHashSet::new();
-
-                            log::info!("Creating new neighbor lists and edge list");
-                            for (&old_id, &new_id) in id_map.iter() {
-                                new_persons[new_id].neighbors.extend(
-                                    data.persons[old_id]
-                                        .neighbors
-                                        .iter()
-                                        .filter_map(|&i| id_map.get(&i)),
-                                );
-                                for &nb in new_persons[new_id].neighbors.iter() {
-                                    let [a, b] = std::cmp::minmax(new_id, nb);
-                                    edges.insert(EdgeStore {
-                                        a: a as u32,
-                                        b: b as u32,
+                                log!(status_tx, "Processing person list and creating ID map");
+                                for &id in new_included.iter() {
+                                    let pers = &data.persons[id];
+                                    id_map.insert(id, new_persons.len());
+                                    class_list.insert(pers.modularity_class);
+                                    new_persons.push(Person {
+                                        neighbors: vec![],
+                                        ..*pers
                                     });
                                 }
-                            }
 
-                            let mut filter = 1;
-                            while new_persons.iter().filter(|p| p.neighbors.len() as u16 >= filter).count() > 10000 {
-                                filter += 1;
-                            }
+                                let mut edges = AHashSet::new();
 
-                            let viewer = ViewerData::new(new_persons, data.modularity_classes.clone());
+                                log!(status_tx, "Creating new neighbor lists and edge list");
+                                for (&old_id, &new_id) in id_map.iter() {
+                                    new_persons[new_id].neighbors.extend(
+                                        data.persons[old_id]
+                                            .neighbors
+                                            .iter()
+                                            .filter_map(|&i| id_map.get(&i)),
+                                    );
+                                    for &nb in new_persons[new_id].neighbors.iter() {
+                                        let [a, b] = std::cmp::minmax(new_id, nb);
+                                        edges.insert(EdgeStore {
+                                            a: a as u32,
+                                            b: b as u32,
+                                        });
+                                    }
+                                }
 
-                            let mut new_ui = UiState::default();
+                                let mut filter = 1;
+                                while new_persons.iter().filter(|p| p.neighbors.len() as u16 >= filter).count() > 10000 {
+                                    filter += 1;
+                                }
 
-                            // match path and selection
-                            macro_rules! match_id {
-                                ($field:expr, $self_expr:expr) => {
-                                    if let Some(current) = $self_expr {
-                                        if let Some(new_id) = id_map.get(&current) {
-                                            $field = Some(*new_id);
+                                let viewer = ViewerData::new(new_persons, data.modularity_classes.clone(), &status_tx);
+
+                                let mut new_ui = UiState::default();
+
+                                // match path and selection
+                                macro_rules! match_id {
+                                    ($field:expr, $self_expr:expr) => {
+                                        if let Some(current) = $self_expr {
+                                            if let Some(new_id) = id_map.get(&current) {
+                                                $field = Some(*new_id);
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            match_id!(new_ui.infos.infos_current, self.infos_current);
-                            match_id!(new_ui.path.path_src, path_section.path_src);
-                            match_id!(new_ui.path.path_dest, path_section.path_dest);
-                            new_ui.path.path_dirty = true;
+                                match_id!(new_ui.infos.infos_current, infos_current);
+                                match_id!(new_ui.path.path_src, path_src);
+                                match_id!(new_ui.path.path_dest, path_dest);
+                                new_ui.path.path_dirty = true;
 
-                            *tab_request = Some(create_tab(
-                                format!("{}-voisinage de {}", self.neighborhood_degree, person.name),
-                                viewer,
-                                edges.iter(),
-                                &frame.gl().unwrap().clone(),
-                                filter,
-                                camera.clone(),
-                                new_ui
-                            ));
+                                state_tx.send(create_tab(
+                                    viewer,
+                                    edges.iter(),
+                                    gl_fwd,
+                                    filter,
+                                    camera,
+                                    new_ui,
+                                    status_tx
+                                )).unwrap();
+                            });
                         }
                     });
                 }
@@ -570,7 +602,7 @@ fn percent_parser(s: &str) -> Option<f64> {
 }
 
 impl ClassSection {
-    fn show(&mut self, data: &ViewerData<'_>, ui: &mut Ui) {
+    fn show(&mut self, data: &ViewerData, ui: &mut Ui) {
         CollapsingHeader::new("Classes")
             .default_open(false)
             .show(ui, |ui| {
@@ -668,7 +700,7 @@ impl DisplaySection {
 }
 
 impl UiState {
-    fn refresh_node_count(&mut self, data: &ViewerData<'_>, graph: &mut RenderedGraph) {
+    fn refresh_node_count(&mut self, data: &ViewerData, graph: &mut RenderedGraph) {
         let mut count_classes = vec![0; data.modularity_classes.len()];
         self.display.node_count = 0;
         for p in &data.persons {
@@ -692,12 +724,12 @@ impl UiState {
             .collect_vec();
     }
 
-    pub fn draw_ui<'a>(
+    pub fn draw_ui(
         &mut self,
         ui: &mut Ui,
-        data: &ViewerData<'a>,
+        data: &Arc<ViewerData>,
         graph: &mut RenderedGraph,
-        tab_request: &mut Option<NewTabRequest<'a>>,
+        tab_request: &mut Option<NewTabRequest>,
         frame: &mut Frame,
         camera: &Camera,
     ) {

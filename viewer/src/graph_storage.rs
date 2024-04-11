@@ -1,4 +1,4 @@
-use crate::app::{ModularityClass, Person, StringTables, ViewerData};
+use crate::app::{ModularityClass, Person, StatusWriter, StringTables, ViewerData};
 
 use graph_format::{EdgeStore, GraphFile, Point};
 use itertools::Itertools;
@@ -8,6 +8,7 @@ use speedy::Readable;
 
 use crate::utils::{str_from_null_terminated_utf8, SliceExt};
 
+use crate::log;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -20,34 +21,77 @@ pub fn load_file() -> GraphFile {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn load_file() -> GraphFile {
-    let wnd = eframe::web_sys::window().unwrap();
-    let resp = wnd.get("graph");
-    if let Some(val) = resp {
-        if !val.is_undefined() {
-            let u8a = js_sys::Uint8Array::new(&val);
-            let bytes = u8a.to_vec();
-            return GraphFile::read_from_buffer(bytes.as_slice()).unwrap();
-        }
-    }
-    panic!("Cannot load graph file");
+#[wasm_bindgen]
+pub async fn download_file() -> JsValue {
+    use eframe::web_sys::{Request, RequestInit, RequestMode, Response};
+    use wasm_bindgen_futures::JsFuture;
+    let url = "https://domino.zdimension.fr/web/network5/graph_n4j.bin.br";
+    let window = js_sys::global()
+        .dyn_into::<eframe::web_sys::WorkerGlobalScope>()
+        .unwrap();
+    let resp_value = JsFuture::from(window.fetch_with_str(url)).await.unwrap();
+    let resp: Response = resp_value.dyn_into().unwrap();
+    let buffer = JsFuture::from(resp.array_buffer().unwrap()).await.unwrap();
+    buffer
 }
 
-pub struct ProcessedData<'graph> {
+#[cfg(target_arch = "wasm32")]
+
+pub fn load_file() -> GraphFile {
+    let buffer = download_file();
+    let u8a = js_sys::Uint8Array::new(&buffer);
+    let vec = u8a.to_vec();
+    return GraphFile::read_from_buffer(&vec).unwrap();
+
+    /*use std::sync::{Arc, Mutex};
+    let request = ehttp::Request::get("https://domino.zdimension.fr/web/network5/graph_n4j.bin.br");
+    let bytes = Arc::new(Mutex::new(Vec::new()));
+    let bytes_clone = bytes.clone();
+    ehttp::streaming::fetch(
+        request,
+        move |result: ehttp::Result<ehttp::streaming::Part>| {
+            let part = match result {
+                Ok(part) => part,
+                Err(err) => {
+                    log::error!("Failed to fetch graph file: {:?}", err);
+                    return std::ops::ControlFlow::Break(());
+                }
+            };
+            match part {
+                ehttp::streaming::Part::Response(response) => {
+                    log::info!("Status code: {:?}", response.status);
+                    if response.ok {
+                        std::ops::ControlFlow::Continue(())
+                    } else {
+                        std::ops::ControlFlow::Break(())
+                    }
+                }
+                ehttp::streaming::Part::Chunk(chunk) => {
+                    let mut bytes = bytes_clone.lock().unwrap();
+                    bytes.extend_from_slice(&chunk);
+                    std::ops::ControlFlow::Continue(())
+                }
+            }
+        },
+    );
+    return GraphFile::read_from_buffer(bytes.lock().unwrap().as_slice()).unwrap();*/
+}
+
+pub struct ProcessedData {
     pub strings: StringTables,
-    pub viewer: ViewerData<'graph>,
+    pub viewer: ViewerData,
     pub edges: Vec<EdgeStore>,
 }
 
-pub fn load_binary<'graph>() -> ProcessedData<'graph> {
-    log::info!("Loading binary");
+pub fn load_binary(status_tx: StatusWriter) -> ProcessedData {
+    log!(status_tx, "Loading binary");
     let content: GraphFile = load_file();
-    log::info!("Binary content loaded");
-    log::info!("Class count: {}", content.class_count);
-    log::info!("Node count: {}", content.node_count);
-    log::info!("Edge count: {}", content.edge_count);
+    log!(status_tx, "Binary content loaded");
+    log!(status_tx, "Class count: {}", content.class_count);
+    log!(status_tx, "Node count: {}", content.node_count);
+    log!(status_tx, "Edge count: {}", content.edge_count);
 
-    log::info!("Processing modularity classes");
+    log!(status_tx, "Processing modularity classes");
 
     let modularity_classes = content
         .classes
@@ -56,7 +100,7 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
         .map(|(id, color)| ModularityClass::new(color.to_f32(), id as u16))
         .collect_vec();
 
-    log::info!("Processing nodes");
+    log!(status_tx, "Processing nodes");
 
     let start = chrono::Local::now();
     let mut person_data: Vec<_> = content
@@ -75,12 +119,13 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
         })
         .collect();
 
-    log::info!(
+    log!(
+        status_tx,
         "Done, took {}ms",
         (chrono::Local::now() - start).num_milliseconds()
     );
 
-    log::info!("Generating neighbor lists");
+    log!(status_tx, "Generating neighbor lists");
 
     let start = chrono::Local::now();
     for (_i, edge) in content.edges.iter().enumerate() {
@@ -93,7 +138,8 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
         p2.neighbors.push(edge.a as usize);
     }
 
-    log::info!(
+    log!(
+        status_tx,
         "Done, took {}ms",
         (chrono::Local::now() - start).num_milliseconds()
     );
@@ -103,7 +149,7 @@ pub fn load_binary<'graph>() -> ProcessedData<'graph> {
             ids: content.ids,
             names: content.names,
         },
-        viewer: ViewerData::new(person_data, modularity_classes),
+        viewer: ViewerData::new(person_data, modularity_classes, &status_tx),
         edges: content.edges,
     }
 }

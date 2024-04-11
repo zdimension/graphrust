@@ -2,3 +2,6 @@
         Header append Content-Encoding br
         Header append Vary Accept-Encoding
 </FilesMatch>
+
+Header append Cross-Origin-Opener-Policy same-origin
+Header append Cross-Origin-Embedder-Policy require-corp

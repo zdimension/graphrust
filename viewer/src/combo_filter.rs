@@ -82,7 +82,7 @@ pub fn combo_with_filter(
     ui: &mut Ui,
     label: &str,
     current_item: &mut Option<usize>,
-    viewer_data: &ViewerData<'_>,
+    viewer_data: &ViewerData,
 ) -> Response {
     #[derive(Default, Clone)]
     struct ComboFilterState {
