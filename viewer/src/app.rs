@@ -422,11 +422,15 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                 for work in gl_mpsc.0.try_iter() {
                     work.0(self.frame.gl().unwrap().deref(), &gl_mpsc.1);
                 }
+                ui.spinner();
                 ui.label(status_rx.recv());
                 if let Ok(state) = state_rx.try_recv() {
                     tab.state = GraphTabState::Loaded(state);
                     ctx.request_repaint();
                 }
+                // TODO: https://github.com/emilk/egui/issues/4368
+                #[cfg(target_arch = "wasm32")]
+                ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
             GraphTabState::Loaded(tab) => {
                 let cid = Id::from("camera").with(ui.id());
@@ -662,6 +666,7 @@ impl eframe::App for GraphViewApp {
         match &mut self.state {
             AppState::Loading { status_rx, file_rx } => {
                 egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.spinner();
                     ui.label(status_rx.recv());
                 });
                 if let Ok(file) = file_rx.try_recv() {
@@ -709,6 +714,12 @@ impl eframe::App for GraphViewApp {
                             .unwrap();
                     });
                 }
+                // TODO: https://github.com/emilk/egui/issues/4368
+                // since on WASM we can't send request_repaint from the worker (because eframe uses
+                // the JS Window object), we just force the app to run at 60fps continuous while
+                // it's loading
+                #[cfg(target_arch = "wasm32")]
+                ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
             AppState::Loaded {
                 tree,
