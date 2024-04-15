@@ -37,6 +37,14 @@ fn main() -> eframe::Result<()> {
     )
 }
 
+#[cfg(target_arch = "wasm32")]
+use eframe::web_sys;
+use log::{LevelFilter, Log};
+use std::{env, io};
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+
 // When compiling to web using trunk:
 #[cfg(target_arch = "wasm32")]
 fn main() {
@@ -46,19 +54,12 @@ fn main() {
     use eframe::WebLogger;
 
     WebLogger::init(LevelFilter::Debug).expect("Failed to initialize WebLogger");
-}
 
-#[cfg(target_arch = "wasm32")]
-use eframe::web_sys;
-use log::{LevelFilter, Log};
-use std::{env, io};
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
+    log::info!("Setting panic hook");
+    use std::panic;
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn start() {
-    log::info!("Start called");
+    log::info!("Start called {}", chrono::Local::now().format("%H:%M:%S.%3f"));
     let web_options = eframe::WebOptions::default();
 
     wasm_bindgen_futures::spawn_local(async {
@@ -72,3 +73,12 @@ pub fn start() {
             .expect("failed to start eframe");
     });
 }
+
+
+/*
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn start() {
+
+}
+*/

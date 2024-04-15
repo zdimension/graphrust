@@ -16,31 +16,33 @@ use wasm_bindgen::prelude::*;
 const GRAPH_NAME: &str = "graph_n4j.bin";
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn load_file() -> GraphFile {
+pub fn load_file(_status_tx: &StatusWriter) -> GraphFile {
     GraphFile::read_from_file(format!("{}/../{}", env!("CARGO_MANIFEST_DIR"), GRAPH_NAME)).unwrap()
 }
-
+/*
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub async fn download_file() -> JsValue {
-    use eframe::web_sys::{Request, RequestInit, RequestMode, Response};
-    use wasm_bindgen_futures::JsFuture;
-    let url = "https://domino.zdimension.fr/web/network5/graph_n4j.bin.br";
-    let window = js_sys::global()
-        .dyn_into::<eframe::web_sys::WorkerGlobalScope>()
-        .unwrap();
-    let resp_value = JsFuture::from(window.fetch_with_str(url)).await.unwrap();
-    let resp: Response = resp_value.dyn_into().unwrap();
-    let buffer = JsFuture::from(resp.array_buffer().unwrap()).await.unwrap();
-    buffer
+extern "C" {
+    #[wasm_bindgen(catch, method, structural, js_class = "XMLHttpRequest", js_name = open)]
+    pub fn open(
+        this: &web_sys::XmlHttpRequest,
+        method: &str,
+        url: &str,
+        async_: bool,
+    ) -> Result<(), JsValue>;
+}
+*/
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(inline_js = "export function req(url) { const xhr = new XMLHttpRequest(); xhr.open('GET', url, false); xhr.responseType = 'arraybuffer'; xhr.send(); console.log(xhr.response.byteLength); return new Uint8Array(xhr.response); }")]
+extern "C" {
+    fn req(url: &str) -> js_sys::Uint8Array;
 }
 
 #[cfg(target_arch = "wasm32")]
-
-pub fn load_file() -> GraphFile {
-    let buffer = download_file();
-    let u8a = js_sys::Uint8Array::new(&buffer);
-    let vec = u8a.to_vec();
+pub fn load_file(_status_tx: &StatusWriter) -> GraphFile {
+    let url = "https://domino.zdimension.fr/web/network5/graph_n4j.bin.br";
+    let vec = req(url).to_vec();
     return GraphFile::read_from_buffer(&vec).unwrap();
 
     /*use std::sync::{Arc, Mutex};
@@ -85,7 +87,7 @@ pub struct ProcessedData {
 
 pub fn load_binary(status_tx: StatusWriter) -> ProcessedData {
     log!(status_tx, "Loading binary");
-    let content: GraphFile = load_file();
+    let content: GraphFile = load_file(&status_tx);
     log!(status_tx, "Binary content loaded");
     log!(status_tx, "Class count: {}", content.class_count);
     log!(status_tx, "Node count: {}", content.node_count);

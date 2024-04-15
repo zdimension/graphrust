@@ -275,6 +275,7 @@ impl<T: Send + FnOnce(&glow::Context) -> () + 'static> GlWorkGetter<()> for T {
 }
 
 pub struct GlWork(Box<dyn Send + FnOnce(&glow::Context, &Sender<GlWorkResult>)>);
+
 type GlMpsc = (Receiver<GlWork>, Sender<GlWorkResult>);
 
 pub struct GlForwarder {
@@ -303,7 +304,7 @@ impl GlForwarder {
 
 pub fn create_tab<'a>(
     viewer: ViewerData,
-    edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
+    edges: impl ExactSizeIterator<Item=&'a EdgeStore>,
     gl: GlForwarder,
     default_filter: u16,
     camera: Camera,
@@ -333,7 +334,7 @@ pub fn create_tab<'a>(
                 g_opac_edges: (400000.0 / edges.len() as f32).min(0.22),
                 g_opac_nodes: ((70000.0 / viewer.persons.len() as f32)
                     * if hide_edges { 5.0 } else { 2.0 })
-                .min(0.58),
+                    .min(0.58),
                 max_degree,
                 g_show_edges: !hide_edges,
                 ..DisplaySection::default()
@@ -400,7 +401,7 @@ struct TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
 }
 
 impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
-    for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
+for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
 {
     type Tab = GraphTab;
 
@@ -507,7 +508,7 @@ impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
                             tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
                             let pos_world = (tab.camera.get_inverse_matrix()
                                 * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
-                            .xy();
+                                .xy();
                             tab.ui_state.details.mouse_pos_world = Some(pos_world);
 
                             if response.clicked() {
@@ -810,7 +811,7 @@ impl RenderedGraph {
     pub fn new<'a>(
         gl: GlForwarder,
         viewer: &ViewerData,
-        edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
+        edges: impl ExactSizeIterator<Item=&'a EdgeStore>,
         status_tx: StatusWriter,
     ) -> Self {
         use glow::HasContext as _;
@@ -1043,7 +1044,7 @@ impl RenderedGraph {
                 panic!("Failed to create path array");
             };
 
-            log!(status_tx, "Done");
+            log!(status_tx, "Done: {}", chrono::Local::now().format("%H:%M:%S.%3f"));
 
             Self {
                 program_basic,
@@ -1122,7 +1123,7 @@ impl RenderedGraph {
                 let verts = 2 * 3 * self.edges_count as i32;
                 // if wasm, clamp verts at 30M, because Firefox refuses to draw anything above that
                 #[cfg(target_arch = "wasm32")]
-                let verts = verts.min(30_000_000);
+                    let verts = verts.min(30_000_000);
                 gl.draw_arrays(glow::TRIANGLES, self.nodes_count as i32, verts);
             }
             if nodes.0 {
