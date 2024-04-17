@@ -974,7 +974,7 @@ impl RenderedGraph {
                 .collect_vec();
 
             log!(status_tx, "Buffering {} vertices", vertices.len());
-            let VertArray(vertices_array, vertices_buffer) = gl.run(move |gl| {
+            let VertArray(vertices_array, vertices_buffer) = gl.run(move |gl: &glow::Context| {
                 let vertices_array = gl
                     .create_vertex_array()
                     .expect("Cannot create vertex array");
@@ -1077,15 +1077,19 @@ impl RenderedGraph {
     }
 
     fn destroy(&mut self, gl: &glow::Context) {
+        log::info!("Destroying graph");
         self.destroyed = true;
         use glow::HasContext as _;
         unsafe {
+            log::info!("Deleting programs");
             gl.delete_program(self.program_basic);
             gl.delete_program(self.program_edge);
             gl.delete_program(self.program_node);
+            log::info!("Deleting buffers");
             gl.delete_buffer(self.nodes_buffer);
-            gl.delete_vertex_array(self.nodes_array);
             gl.delete_buffer(self.path_buffer);
+            log::info!("Deleting arrays");
+            gl.delete_vertex_array(self.nodes_array);
             gl.delete_vertex_array(self.path_array);
         }
     }
