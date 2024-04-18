@@ -422,8 +422,10 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                 for work in gl_mpsc.0.try_iter() {
                     work.0(self.frame.gl().unwrap().deref(), &gl_mpsc.1);
                 }
-                ui.spinner();
-                ui.label(status_rx.recv());
+                ui.vertical_centered(|ui| {
+                    ui.spinner();
+                    ui.label(status_rx.recv());
+                });
                 if let Ok(state) = state_rx.try_recv() {
                     tab.state = GraphTabState::Loaded(state);
                     ctx.request_repaint();
@@ -666,8 +668,10 @@ impl eframe::App for GraphViewApp {
         match &mut self.state {
             AppState::Loading { status_rx, file_rx } => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.spinner();
-                    ui.label(status_rx.recv());
+                    ui.vertical_centered(|ui| {
+                        ui.spinner();
+                        ui.label(status_rx.recv());
+                    });
                 });
                 if let Ok(file) = file_rx.try_recv() {
                     let (status_tx, status_rx) = status_pipe(ctx);
