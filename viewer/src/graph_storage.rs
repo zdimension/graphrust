@@ -32,17 +32,22 @@ extern "C" {
     ) -> Result<(), JsValue>;
 }
 */
-
+/*
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(inline_js = "export function req(url) { const xhr = new XMLHttpRequest(); xhr.open('GET', url, false); xhr.responseType = 'arraybuffer'; xhr.send(); console.log(xhr.response.byteLength); return new Uint8Array(xhr.response); }")]
 extern "C" {
     fn req(url: &str) -> js_sys::Uint8Array;
-}
+}*/
 
 #[cfg(target_arch = "wasm32")]
 pub fn load_file(_status_tx: &StatusWriter) -> GraphFile {
     let url = "https://domino.zdimension.fr/web/network5/graph_n4j.bin.br";
-    let vec = req(url).to_vec();
+    let xhr = web_sys::XmlHttpRequest::new().unwrap();
+    xhr.open_with_async("GET", url, false).unwrap();
+    xhr.set_response_type(web_sys::XmlHttpRequestResponseType::Arraybuffer);
+    xhr.send().unwrap();
+    let array_buffer = xhr.response().unwrap();
+    let vec = js_sys::Uint8Array::new(&array_buffer).to_vec();
     return GraphFile::read_from_buffer(&vec).unwrap();
 
     /*use std::sync::{Arc, Mutex};
