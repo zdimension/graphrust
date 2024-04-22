@@ -12,4 +12,5 @@ rustflags = [
     "-C", "panic=abort",
     "-C", "target-feature=+atomics,+bulk-memory,+mutable-globals",
     "-C", "link-arg=--max-memory=4294967296",
+    "--cfg=web_sys_unstable_apis"
 ]
