@@ -351,13 +351,24 @@ impl InfosSection {
 
                     egui::Grid::new("#infos").show(ui, |ui| {
                         ui.label("ID Facebook :");
-                        ui.add(
-                            Hyperlink::from_label_and_url(
-                                person.id,
-                                format!("https://facebook.com/{}", person.id),
-                            )
-                                .open_in_new_tab(true),
-                        );
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                Hyperlink::from_label_and_url(
+                                    person.id,
+                                    format!("https://facebook.com/{}", person.id),
+                                )
+                                    .open_in_new_tab(true),
+                            );
+                            let copy = ui.button("🗐");
+                            if copy.clicked() {
+                                let text = if ui.input(|is| is.modifiers.shift) {
+                                    format!("bfs(\"{}\", 1)", person.id)
+                                } else {
+                                    person.id.to_string()
+                                };
+                                ui.output_mut(|out| out.copied_text = text);
+                            }
+                        });
                         ui.end_row();
                         ui.label("Amis :");
                         ui.label(format!("{}", person.neighbors.len()));
