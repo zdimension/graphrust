@@ -901,9 +901,12 @@ impl RenderedGraph {
                 panic!("Failed to compile shaders");
             };
 
+            #[cfg(target_arch = "wasm32")]
+                let edges = edges.take(10_000_000);
+
             let edges_count = edges.len();
             log!(status_tx, "Creating vertice list");
-            let vertices = viewer
+            let node_vertices = viewer
                 .persons
                 .iter()
                 .map(|p| {
@@ -913,68 +916,68 @@ impl RenderedGraph {
                         p.neighbors.len() as u16,
                         p.modularity_class,
                     )
+                });
+            let edge_vertices = edges
+                .map(|e| {
+                    let pa = &viewer.persons[e.a as usize];
+                    let pb = &viewer.persons[e.b as usize];
+                    (pa, pb)
                 })
-                .chain(
-                    edges
-                        .map(|e| {
-                            let pa = &viewer.persons[e.a as usize];
-                            let pb = &viewer.persons[e.b as usize];
-                            (pa, pb)
-                        })
-                        //.filter(|(pa, pb)| pa.neighbors.len() > 5 && pb.neighbors.len() > 5)
-                        .flat_map(|(pa, pb)| {
-                            let a = pa.position;
-                            let b = pb.position;
-                            const EDGE_HALF_WIDTH: f32 = 0.75;
-                            let ortho = (b - a).ortho().normalized() * EDGE_HALF_WIDTH;
-                            let v0 = a + ortho;
-                            let v1 = a - ortho;
-                            let v2 = b - ortho;
-                            let v3 = b + ortho;
-                            let color_a =
-                                viewer.modularity_classes[pa.modularity_class as usize].color;
-                            let color_b =
-                                viewer.modularity_classes[pb.modularity_class as usize].color;
-                            [
-                                PersonVertex::new(
-                                    v0,
-                                    color_a,
-                                    pa.neighbors.len() as u16,
-                                    pa.modularity_class,
-                                ),
-                                PersonVertex::new(
-                                    v1,
-                                    color_a,
-                                    pa.neighbors.len() as u16,
-                                    pa.modularity_class,
-                                ),
-                                PersonVertex::new(
-                                    v2,
-                                    color_b,
-                                    pb.neighbors.len() as u16,
-                                    pb.modularity_class,
-                                ),
-                                PersonVertex::new(
-                                    v2,
-                                    color_b,
-                                    pb.neighbors.len() as u16,
-                                    pb.modularity_class,
-                                ),
-                                PersonVertex::new(
-                                    v3,
-                                    color_b,
-                                    pb.neighbors.len() as u16,
-                                    pb.modularity_class,
-                                ),
-                                PersonVertex::new(
-                                    v0,
-                                    color_a,
-                                    pa.neighbors.len() as u16,
-                                    pa.modularity_class,
-                                ),
-                            ]
-                        }),
-                )
+                //.filter(|(pa, pb)| pa.neighbors.len() > 5 && pb.neighbors.len() > 5)
+                .flat_map(|(pa, pb)| {
+                    let a = pa.position;
+                    let b = pb.position;
+                    const EDGE_HALF_WIDTH: f32 = 0.75;
+                    let ortho = (b - a).ortho().normalized() * EDGE_HALF_WIDTH;
+                    let v0 = a + ortho;
+                    let v1 = a - ortho;
+                    let v2 = b - ortho;
+                    let v3 = b + ortho;
+                    let color_a =
+                        viewer.modularity_classes[pa.modularity_class as usize].color;
+                    let color_b =
+                        viewer.modularity_classes[pb.modularity_class as usize].color;
+                    [
+                        PersonVertex::new(
+                            v0,
+                            color_a,
+                            pa.neighbors.len() as u16,
+                            pa.modularity_class,
+                        ),
+                        PersonVertex::new(
+                            v1,
+                            color_a,
+                            pa.neighbors.len() as u16,
+                            pa.modularity_class,
+                        ),
+                        PersonVertex::new(
+                            v2,
+                            color_b,
+                            pb.neighbors.len() as u16,
+                            pb.modularity_class,
+                        ),
+                        PersonVertex::new(
+                            v2,
+                            color_b,
+                            pb.neighbors.len() as u16,
+                            pb.modularity_class,
+                        ),
+                        PersonVertex::new(
+                            v3,
+                            color_b,
+                            pb.neighbors.len() as u16,
+                            pb.modularity_class,
+                        ),
+                        PersonVertex::new(
+                            v0,
+                            color_a,
+                            pa.neighbors.len() as u16,
+                            pa.modularity_class,
+                        ),
+                    ]
+                });
+            let vertices = node_vertices
+                .chain(edge_vertices)
                 .collect_vec();
 
             log!(status_tx, "Buffering {} vertices", vertices.len());
