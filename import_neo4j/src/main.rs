@@ -60,7 +60,7 @@ fn run_command(cmd: &mut Command) -> ExitStatus {
     if let Some(stdout) = res.stdout.take() {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
-            println!("{}", line.unwrap());
+            log!(">>> {}", line.unwrap());
         }
     }
     res.wait().unwrap()
@@ -223,7 +223,7 @@ async fn main() {
                 query(
                     "match (n)-->(m) where count { (n)--() } >= $mind and count { (m)--() } >= $mind return n.uid, m.uid",
                 )
-                .param("mind", config.min_degree)
+                    .param("mind", config.min_degree)
             },
         )
         .await
