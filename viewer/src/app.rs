@@ -311,7 +311,7 @@ pub fn create_tab<'a>(
     ui_state: UiState,
     status_tx: StatusWriter,
 ) -> GraphTabLoaded {
-    log!(status_tx, "Creating tab");
+    log!(status_tx, "Creating tab with {} nodes and {} edges", viewer.persons.len(), edges.len());
     log!(status_tx, "Computing maximum degree...");
     let max_degree = viewer
         .persons
