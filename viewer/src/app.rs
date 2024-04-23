@@ -211,9 +211,6 @@ pub struct StatusReader {
 impl StatusWriter {
     pub fn send(&self, s: String) {
         self.tx.send(s).unwrap();
-        // this tries to get the current time but it crashes since on wasm, the thread runs in a
-        // web worker which doesn't have access to Window
-        #[cfg(not(target_arch = "wasm32"))]
         self.ctx.request_repaint();
     }
 }
@@ -430,9 +427,6 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                     tab.state = GraphTabState::Loaded(state);
                     ctx.request_repaint();
                 }
-                // TODO: https://github.com/emilk/egui/issues/4368
-                #[cfg(target_arch = "wasm32")]
-                ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
             GraphTabState::Loaded(tab) => {
                 let cid = Id::from("camera").with(ui.id());
@@ -718,12 +712,6 @@ impl eframe::App for GraphViewApp {
                             .unwrap();
                     });
                 }
-                // TODO: https://github.com/emilk/egui/issues/4368
-                // since on WASM we can't send request_repaint from the worker (because eframe uses
-                // the JS Window object), we just force the app to run at 60fps continuous while
-                // it's loading
-                #[cfg(target_arch = "wasm32")]
-                ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
             AppState::Loaded {
                 tree,
