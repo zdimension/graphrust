@@ -200,13 +200,12 @@ pub fn combo_with_filter(
             let txt = &txt_resp.response;
             if !state.first_open {
                 state.first_open = true;
-                state.pattern.clear();
                 ui.memory_mut(|m| m.request_focus(txt.id));
-                // TODO: doesn't work so we just clear the pattern
                 txt_resp.state.cursor.set_char_range(Some(CCursorRange::two(
                     CCursor::new(0),
-                    CCursor::new(state.pattern.len()),
+                    CCursor::new(state.pattern.chars().count()),
                 )));
+                txt_resp.state.store(ui.ctx(), txt_resp.response.id);
             }
             let changed = txt.changed();
             let mut is_need_filter = false;
