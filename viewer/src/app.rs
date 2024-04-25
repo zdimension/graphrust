@@ -211,9 +211,6 @@ pub struct StatusReader {
 impl StatusWriter {
     pub fn send(&self, s: String) {
         self.tx.send(s).unwrap();
-        // this ends up using a lock which uses ThreadParker which doesn't work on Firefox
-        // see https://github.com/emilk/egui/issues/4405
-        #[cfg(not(target_arch = "wasm32"))]
         self.ctx.request_repaint();
     }
 }
@@ -430,9 +427,6 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                     tab.state = GraphTabState::Loaded(state);
                     ctx.request_repaint();
                 }
-                // TODO: https://github.com/emilk/egui/issues/4405
-                #[cfg(target_arch = "wasm32")]
-                ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
             GraphTabState::Loaded(tab) => {
                 let cid = Id::from("camera").with(ui.id());
@@ -718,9 +712,6 @@ impl eframe::App for GraphViewApp {
                             .unwrap();
                     });
                 }
-                // TODO: https://github.com/emilk/egui/issues/4405
-                #[cfg(target_arch = "wasm32")]
-                ctx.request_repaint_after(std::time::Duration::from_millis(16));
             }
             AppState::Loaded {
                 tree,

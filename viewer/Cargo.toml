@@ -41,6 +41,7 @@ wasm-bindgen-futures = "0.4"
 wasm-bindgen = "*"
 js-sys = "*"
 web-sys = { version = "*", features = ["XmlHttpRequest", "XmlHttpRequestResponseType", "WorkerGlobalScope"] }
+parking_lot = { version = "*", features = ["nightly"] }
 wasm-logger = "0.2.0"
 wasm_thread = "0.3.0"
 console_error_panic_hook = "0.1.7"

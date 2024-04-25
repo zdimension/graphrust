@@ -26,3 +26,8 @@ members = [
     "test_format"
 ]
 resolver = "2"
+
+[patch.crates-io]
+# TODO: update this when parking_lot_core > 0.9.9 is released
+# https://github.com/Amanieu/parking_lot/pull/435#issuecomment-2072218790
+parking_lot_core = { git = "https://github.com/Amanieu/parking_lot" }
