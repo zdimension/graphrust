@@ -1,7 +1,7 @@
 // Ugly unsafe code ahead
 // here be dragons
 
-use crate::app::ViewerData;
+use crate::app::{thread, ViewerData};
 use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
 use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
@@ -180,8 +180,6 @@ pub fn combo_with_filter(
         ui.memory_mut(|mem| mem.toggle_popup(popup_id));
     }
 
-    //let total_rect = button_response.rect.set_height(button_response.rect + )
-
     let mut sel_changed = false;
     let inner = egui::popup::popup_below_widget(ui, popup_id, &button_response, |ui| {
         ui.vertical(|ui| {
@@ -208,18 +206,25 @@ pub fn combo_with_filter(
                 txt_resp.state.store(ui.ctx(), txt_resp.response.id);
             }
             let changed = txt.changed();
-            let mut is_need_filter = false;
 
-            if !state.pattern.is_empty() {
-                is_need_filter = true;
+            if changed && !state.pattern.is_empty() {
+                let pattern = state.pattern.clone();
+                let engine = viewer_data.engine.clone();
+                let state = binding.clone();
+                let ctx = ui.ctx().clone();
+                thread::spawn(move || {
+                    let res = engine.search(pattern.as_str());
+                    let mut state = state.lock().unwrap();
+                    if state.pattern.eq(&pattern) {
+                        state.item_score_vector = res.iter().take(100).map(|i| (*i, 0_isize)).collect();
+                        ctx.request_repaint();
+                    }
+                });
             }
 
-            if changed && is_need_filter {
-                let res = viewer_data.engine.search(state.pattern.as_str());
-                state.item_score_vector = res.iter().take(100).map(|i| (*i, 0_isize)).collect();
-            }
+            let filtered_results = !state.item_score_vector.is_empty();
 
-            let show_count = 100.min(if is_need_filter {
+            let show_count = 100.min(if filtered_results {
                 state.item_score_vector.len()
             } else {
                 viewer_data.persons.len()
@@ -229,7 +234,7 @@ pub fn combo_with_filter(
                 .max_height(ui.spacing().combo_height)
                 .show(ui, |ui| {
                     for i in 0..show_count {
-                        let idx = if is_need_filter {
+                        let idx = if filtered_results {
                             state.item_score_vector[i].0
                         } else {
                             i

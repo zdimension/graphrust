@@ -124,7 +124,7 @@ impl ModularityClass {
 pub struct ViewerData {
     pub persons: Vec<Person>,
     pub modularity_classes: Vec<ModularityClass>,
-    pub engine: SimSearch<usize>,
+    pub engine: Arc<SimSearch<usize>>,
 }
 
 impl ViewerData {
@@ -143,7 +143,7 @@ impl ViewerData {
         ViewerData {
             persons,
             modularity_classes,
-            engine,
+            engine: Arc::new(engine),
         }
     }
 }
