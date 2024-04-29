@@ -1,4 +1,4 @@
-use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass};
+use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::log;
@@ -381,12 +381,12 @@ impl InfosSection {
                                     format!("Classe {}", class),
                                     data.clone(), tab_request, camera, path_section, ui,
                                     move |_, data| {
-                                        data.persons
+                                        Ok(data.persons
                                             .iter()
                                             .enumerate()
                                             .filter(|(_, p)| p.modularity_class == class)
                                             .map(|(i, _)| i)
-                                            .collect()
+                                            .collect())
                                     });
                             }
                         });
@@ -460,7 +460,7 @@ impl InfosSection {
                                     }
 
                                     log!(status_tx, "Got {} persons total", new_included.len());
-                                    new_included
+                                    Ok(new_included)
                                 });
                         }
                     });
@@ -475,7 +475,7 @@ impl InfosSection {
                        camera: &Camera,
                        path_section: &PathSection,
                        ui: &mut Ui,
-                       x: impl FnOnce(&StatusWriter, &ViewerData) -> AHashSet<usize> + Send + 'static) {
+                       x: impl FnOnce(&StatusWriter, &ViewerData) -> Cancelable<AHashSet<usize>> + Send + 'static) {
         let (status_tx, status_rx) = status_pipe(ui.ctx());
         let (state_tx, state_rx) = mpsc::channel();
         let (gl_fwd, gl_mpsc) = GlForwarder::new();
@@ -496,9 +496,9 @@ impl InfosSection {
         //let data = unsafe { std::mem::transmute::<&ViewerData, &'static ViewerData>(data) };
         // huh? seems like it's being moved around. I put Arcs everywhere, now
         // it works fine, and there doesn't seem to be a huge overhead
-        thread::spawn(move || {
+        spawn_cancelable(move || {
             let data = data;
-            let new_included = x(&status_tx, &data);
+            let new_included = x(&status_tx, &data)?;
 
             let mut new_persons =
                 Vec::with_capacity(new_included.len());
@@ -541,7 +541,7 @@ impl InfosSection {
                 filter += 1;
             }
 
-            let viewer = ViewerData::new(new_persons, data.modularity_classes.clone(), &status_tx);
+            let viewer = ViewerData::new(new_persons, data.modularity_classes.clone(), &status_tx)?;
 
             let mut new_ui = UiState::default();
 
@@ -568,7 +568,9 @@ impl InfosSection {
                 camera,
                 new_ui,
                 status_tx,
-            )).unwrap();
+            )?)?;
+
+            Ok(())
         });
     }
 }

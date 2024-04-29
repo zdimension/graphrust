@@ -1,4 +1,4 @@
-use crate::app::{ModularityClass, Person, StatusWriter, StringTables, ViewerData};
+use crate::app::{Cancelable, ModularityClass, Person, StatusWriter, StringTables, ViewerData};
 
 use graph_format::{EdgeStore, GraphFile, Point};
 use itertools::Itertools;
@@ -90,7 +90,7 @@ pub struct ProcessedData {
     pub edges: Vec<EdgeStore>,
 }
 
-pub fn load_binary(status_tx: StatusWriter) -> ProcessedData {
+pub fn load_binary(status_tx: StatusWriter) -> Cancelable<ProcessedData> {
     log!(status_tx, "Loading binary");
     let content: GraphFile = load_file(&status_tx);
     log!(status_tx, "Binary content loaded");
@@ -151,12 +151,12 @@ pub fn load_binary(status_tx: StatusWriter) -> ProcessedData {
         (chrono::Local::now() - start).num_milliseconds()
     );
 
-    ProcessedData {
+    Ok(ProcessedData {
         strings: StringTables {
             ids: content.ids,
             names: content.names,
         },
-        viewer: ViewerData::new(person_data, modularity_classes, &status_tx),
+        viewer: ViewerData::new(person_data, modularity_classes, &status_tx)?,
         edges: content.edges,
-    }
+    })
 }

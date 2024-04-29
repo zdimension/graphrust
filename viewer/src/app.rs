@@ -1,3 +1,4 @@
+use std::error::Error;
 use crate::camera::Camera;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -32,7 +33,7 @@ macro_rules! log {
         {
             let msg = format!($($arg)*);
             log::info!("{}", &msg);
-            $ch.send(msg.clone());
+            $ch.send(msg.clone())?;
         }
     }
 }
@@ -120,6 +121,16 @@ impl ModularityClass {
     }*/
 }
 
+pub struct CancelableError;
+
+impl<T: Error> From<T> for CancelableError {
+    fn from(_: T) -> Self {
+        CancelableError
+    }
+}
+
+pub type Cancelable<T> = Result<T, CancelableError>;
+
 #[derive(Clone)]
 pub struct ViewerData {
     pub persons: Vec<Person>,
@@ -132,7 +143,7 @@ impl ViewerData {
         persons: Vec<Person>,
         modularity_classes: Vec<ModularityClass>,
         status_tx: &StatusWriter,
-    ) -> ViewerData {
+    ) -> Cancelable<ViewerData> {
         log!(status_tx, "Initializing search engine");
         let mut engine: SimSearch<usize> =
             SimSearch::new_with(SearchOptions::new().stop_words(vec!["-".into()]));
@@ -140,11 +151,11 @@ impl ViewerData {
             engine.insert(i, person.name);
         }
         log!(status_tx, "Done");
-        ViewerData {
+        Ok(ViewerData {
             persons,
             modularity_classes,
             engine: Arc::new(engine),
-        }
+        })
     }
 }
 
@@ -209,9 +220,12 @@ pub struct StatusReader {
 }
 
 impl StatusWriter {
-    pub fn send(&self, s: String) {
-        self.tx.send(s).unwrap();
+    pub fn send(&self, s: String) -> Result<(), mpsc::SendError<String>> {
+        if let Err(e) = self.tx.send(s) {
+            return Err(e);
+        }
         self.ctx.request_repaint();
+        Ok(())
     }
 }
 
@@ -307,7 +321,7 @@ pub fn create_tab<'a>(
     camera: Camera,
     ui_state: UiState,
     status_tx: StatusWriter,
-) -> GraphTabLoaded {
+) -> Cancelable<GraphTabLoaded> {
     log!(status_tx, "Creating tab with {} nodes and {} edges", viewer.persons.len(), edges.len());
     log!(status_tx, "Computing maximum degree...");
     let max_degree = viewer
@@ -322,7 +336,7 @@ pub fn create_tab<'a>(
     } else {
         false
     };
-    GraphTabLoaded {
+    Ok(GraphTabLoaded {
         camera,
         cam_animating: None,
         ui_state: UiState {
@@ -340,10 +354,10 @@ pub fn create_tab<'a>(
         },
         rendered_graph: Arc::new(Mutex::new(RenderedGraph {
             degree_filter: (default_filter, u16::MAX),
-            ..RenderedGraph::new(gl, &viewer, edges, status_tx)
+            ..RenderedGraph::new(gl, &viewer, edges, status_tx)?
         })),
         viewer_data: Arc::from(viewer),
-    }
+    })
 }
 
 pub struct GraphViewApp {
@@ -378,8 +392,9 @@ impl GraphViewApp {
         let (status_tx, status_rx) = status_pipe(&cc.egui_ctx);
         let (file_tx, file_rx) = mpsc::channel();
 
-        thread::spawn(move || {
-            file_tx.send(load_binary(status_tx)).unwrap();
+        spawn_cancelable(move || {
+            file_tx.send(load_binary(status_tx)?)?;
+            Ok(())
         });
 
         return Self {
@@ -387,6 +402,14 @@ impl GraphViewApp {
             state: AppState::Loading { status_rx, file_rx },
         };
     }
+}
+
+pub fn spawn_cancelable(f: impl FnOnce() -> Cancelable<()> + Send + 'static) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        if let Err(_) = f() {
+            log::info!("Tab closed; cancelled");
+        };
+    })
 }
 
 struct TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
@@ -679,7 +702,7 @@ impl eframe::App for GraphViewApp {
                         }]),
                         string_tables: file.strings,
                     };
-                    thread::spawn(move || {
+                    spawn_cancelable(move || {
                         let mut min = Point::new(f32::INFINITY, f32::INFINITY);
                         let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
                         log!(status_tx, "Calcul des limites du graphes...");
@@ -699,17 +722,19 @@ impl eframe::App for GraphViewApp {
                         let scale = scale_x.min(scale_y) * 0.98;
                         cam.transf.append_scaling_mut(scale);
 
-                        state_tx
-                            .send(create_tab(
-                                file.viewer,
-                                file.edges.iter(),
-                                gl_fwd,
-                                110,
-                                cam,
-                                UiState::default(),
-                                status_tx,
-                            ))
-                            .unwrap();
+                        let tab = create_tab(
+                            file.viewer,
+                            file.edges.iter(),
+                            gl_fwd,
+                            110,
+                            cam,
+                            UiState::default(),
+                            status_tx,
+                        )?;
+
+                        state_tx.send(tab)?;
+
+                        Ok(())
                     });
                 }
             }
@@ -816,7 +841,7 @@ impl RenderedGraph {
         viewer: &ViewerData,
         edges: impl ExactSizeIterator<Item=&'a EdgeStore>,
         status_tx: StatusWriter,
-    ) -> Self {
+    ) -> Cancelable<Self> {
         use glow::HasContext as _;
         use GlWorkResult::*;
 
@@ -1052,7 +1077,7 @@ impl RenderedGraph {
 
             log!(status_tx, "Done: {}", chrono::Local::now().format("%H:%M:%S.%3f"));
 
-            Self {
+            Ok(Self {
                 program_basic,
                 program_edge,
                 program_node,
@@ -1067,7 +1092,7 @@ impl RenderedGraph {
                 degree_filter: (0, u16::MAX),
                 filter_nodes: false,
                 destroyed: false,
-            }
+            })
         }
     }
 
