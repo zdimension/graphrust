@@ -155,6 +155,7 @@ fn do_modularity(file: &mut GraphFile, config: &Config) {
         b: (color.blue * 255.0) as u8,
     }));
 
+    log!("Applying modularity classes");
     for (i, comm) in comm_file.nodes.iter().copied().enumerate() {
         file.nodes[i].class = comm;
     }
