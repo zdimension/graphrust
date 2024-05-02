@@ -41,17 +41,33 @@ static LAST_LOG_TIME: Mutex<std::time::Instant> =
 #[macro_export]
 macro_rules! log
 {
-    ($($arg:tt)*) =>
+    (@disp $elapsed:expr, $($arg:tt)*) =>
+    {
+        let formatted = format!("{}", format_args!($($arg)*));
+        println!("[{}] [{:>5}ms] [{}:{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S.%3f"),
+                $elapsed,
+                file!(), line!(), formatted);
+    };
+
+    (@stopwatch $($arg:tt)*) =>
     {
         {
             let mut last_log_time = $crate::LAST_LOG_TIME.lock().unwrap();
             let now = std::time::Instant::now();
             let elapsed = now - *last_log_time;
             *last_log_time = now;
-            println!("[{}] [{:>5}ms] [{}:{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S.%3f"),
-                elapsed.as_millis(),
-                file!(), line!(), format_args!($($arg)*));
+            log!(@disp elapsed.as_millis(), $($arg)*);
         }
+    };
+
+    (# $($arg:tt)*) =>
+    {
+        log!(@disp "...", $($arg)*);
+    };
+
+    ($($arg:tt)*) =>
+    {
+        log!(@stopwatch $($arg)*);
     }
 }
 
@@ -60,7 +76,7 @@ fn run_command(cmd: &mut Command) -> ExitStatus {
     if let Some(stdout) = res.stdout.take() {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
-            log!(">>> {}", line.unwrap());
+            log!(# ">>> {}", line.unwrap());
         }
     }
     res.wait().unwrap()
