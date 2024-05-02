@@ -135,7 +135,7 @@ pub type Cancelable<T> = Result<T, CancelableError>;
 pub struct ViewerData {
     pub persons: Vec<Person>,
     pub modularity_classes: Vec<ModularityClass>,
-    pub engine: Arc<SimSearch<usize>>,
+    pub engine: SimSearch<usize>,
 }
 
 impl ViewerData {
@@ -154,7 +154,7 @@ impl ViewerData {
         Ok(ViewerData {
             persons,
             modularity_classes,
-            engine: Arc::new(engine),
+            engine,
         })
     }
 }
@@ -563,13 +563,13 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                                             tab.ui_state.infos.infos_open = true;
                                         }
                                         SelectedUserField::PathSource => {
-                                            tab.ui_state.path.path_src = Some(closest);
+                                            tab.ui_state.path.path_settings.path_src = Some(closest);
                                             tab.ui_state.path.path_dirty = true;
                                             tab.ui_state.selected_user_field =
                                                 SelectedUserField::PathDest;
                                         }
                                         SelectedUserField::PathDest => {
-                                            tab.ui_state.path.path_dest = Some(closest);
+                                            tab.ui_state.path.path_settings.path_dest = Some(closest);
                                             tab.ui_state.path.path_dirty = true;
                                         }
                                     }
@@ -706,7 +706,7 @@ impl eframe::App for GraphViewApp {
                         let mut min = Point::new(f32::INFINITY, f32::INFINITY);
                         let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
                         log!(status_tx, "Calcul des limites du graphes...");
-                        for p in &file.viewer.persons {
+                        for p in &*file.viewer.persons {
                             min.x = min.x.min(p.position.x);
                             min.y = min.y.min(p.position.y);
                             max.x = max.x.max(p.position.x);

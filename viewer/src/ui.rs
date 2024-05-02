@@ -8,7 +8,7 @@ use crate::app::thread;
 use crate::camera::Camera;
 use eframe::Frame;
 use egui::ahash::{AHashMap, AHashSet};
-use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals};
+use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals, Context};
 use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f, EdgeStore};
 use itertools::Itertools;
@@ -35,15 +35,36 @@ pub struct DisplaySection {
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct PathSection {
+    pub path_settings: PathSectionSettings,
+    pub found_path: Option<Vec<usize>>,
+    pub path_dirty: bool,
+    pub path_status: Option<PathStatus>,
+    pub path_vbuf: Option<Vec<Vertex>>,
+    pub path_channel: Option<mpsc::Receiver<Option<PathSectionResults>>>,
+}
+
+#[derive(Default)]
+pub enum PathStatus {
+    #[default]
+    SameSrcDest,
+    Loading,
+    NoPath,
+    PathFound(usize),
+}
+
+#[derive(Derivative)]
+#[derivative(Default, Clone)]
+pub struct PathSectionSettings {
     pub path_src: Option<usize>,
     pub path_dest: Option<usize>,
-    pub found_path: Option<Vec<usize>>,
     pub exclude_ids: Vec<usize>,
-    pub path_dirty: bool,
     pub path_no_direct: bool,
     pub path_no_mutual: bool,
-    pub path_status: String,
-    pub path_vbuf: Option<Vec<Vertex>>,
+}
+
+pub struct PathSectionResults {
+    pub path: Vec<usize>,
+    pub verts: Vec<Vertex>,
 }
 
 fn set_bg_color_tinted(base: Color32, ui: &mut Ui) {
@@ -72,13 +93,13 @@ fn set_bg_color_tinted(base: Color32, ui: &mut Ui) {
 }
 
 impl PathSection {
-    fn do_pathfinding(&mut self, data: &ViewerData, graph: &mut RenderedGraph) {
-        let src_id = self.path_src.unwrap();
-        let dest_id = self.path_dest.unwrap();
+    fn do_pathfinding(settings: PathSectionSettings, data: &ViewerData, tx: mpsc::Sender<Option<PathSectionResults>>, ctx: Context) {
+        let src_id = settings.path_src.unwrap();
+        let dest_id = settings.path_dest.unwrap();
         let src = &data.persons[src_id];
         let dest = &data.persons[dest_id];
 
-        let intersect: AHashSet<usize> = if self.path_no_mutual {
+        let intersect: AHashSet<usize> = if settings.path_no_mutual {
             AHashSet::<_>::from_iter(src.neighbors.iter().copied())
                 .intersection(&AHashSet::<_>::from_iter(dest.neighbors.iter().copied()))
                 .copied()
@@ -87,7 +108,7 @@ impl PathSection {
             AHashSet::new()
         };
 
-        let exclude_set: AHashSet<usize> = AHashSet::from_iter(self.exclude_ids.iter().cloned());
+        let exclude_set: AHashSet<usize> = AHashSet::from_iter(settings.exclude_ids.iter().cloned());
 
         let mut queue = VecDeque::new();
         let mut visited = vec![false; data.persons.len()];
@@ -98,75 +119,85 @@ impl PathSection {
         dist[src_id] = 0;
         queue.push_back(src_id);
 
-        while let Some(id) = queue.pop_front() {
-            let person = &data.persons[id];
-            for &i in person.neighbors.iter() {
-                if self.path_no_direct && id == src_id && i == dest_id {
-                    continue;
-                }
+        let result = 'path_result: {
+            while let Some(id) = queue.pop_front() {
+                let person = &data.persons[id];
+                for &i in person.neighbors.iter() {
+                    if settings.path_no_direct && id == src_id && i == dest_id {
+                        continue;
+                    }
 
-                if self.path_no_mutual && intersect.contains(&i) {
-                    continue;
-                }
+                    if settings.path_no_mutual && intersect.contains(&i) {
+                        continue;
+                    }
 
-                if exclude_set.contains(&i) {
-                    continue;
-                }
+                    if exclude_set.contains(&i) {
+                        continue;
+                    }
 
-                if !visited[i] {
-                    visited[i] = true;
-                    dist[i] = dist[id] + 1;
-                    pred[i] = Some(id);
-                    queue.push_back(i);
+                    if !visited[i] {
+                        visited[i] = true;
+                        dist[i] = dist[id] + 1;
+                        pred[i] = Some(id);
+                        queue.push_back(i);
 
-                    if i == dest_id {
-                        let mut path = Vec::new();
+                        if i == dest_id {
+                            let mut path = Vec::new();
 
-                        let mut verts = Vec::new();
+                            let mut verts = Vec::new();
 
-                        path.push(dest_id);
+                            path.push(dest_id);
 
-                        let mut cur = dest_id;
-                        while let Some(p) = pred[cur] {
-                            verts.extend(create_rectangle(
-                                data.persons[p].position,
-                                data.persons[*path.last().unwrap()].position,
-                                Color3f::new(1.0, 0.0, 0.0),
-                                Color3f::new(1.0, 0.0, 0.0),
-                                20.0,
-                            ));
-                            path.push(p);
-                            cur = p;
-                        }
-
-                        verts.extend(path.iter().flat_map(|&i| {
-                            create_circle_tris(
-                                data.persons[i].position,
-                                30.0,
-                                Color3f::new(0.0, 0.0, 0.0),
-                            )
-                                .into_iter()
-                                .chain(create_circle_tris(
-                                    data.persons[i].position,
-                                    20.0,
+                            let mut cur = dest_id;
+                            while let Some(p) = pred[cur] {
+                                verts.extend(create_rectangle(
+                                    data.persons[p].position,
+                                    data.persons[*path.last().unwrap()].position,
                                     Color3f::new(1.0, 0.0, 0.0),
-                                ))
-                        }));
+                                    Color3f::new(1.0, 0.0, 0.0),
+                                    20.0,
+                                ));
+                                path.push(p);
+                                cur = p;
+                            }
 
-                        self.found_path = Some(path);
+                            verts.extend(path.iter().flat_map(|&i| {
+                                create_circle_tris(
+                                    data.persons[i].position,
+                                    30.0,
+                                    Color3f::new(0.0, 0.0, 0.0),
+                                )
+                                    .into_iter()
+                                    .chain(create_circle_tris(
+                                        data.persons[i].position,
+                                        20.0,
+                                        Color3f::new(1.0, 0.0, 0.0),
+                                    ))
+                            }));
 
-                        graph.new_path = Some(verts);
+                            /*self.found_path = Some(path);
 
-                        return;
+                            graph.new_path = Some(verts);*/
+
+                            /*let _ = tx.send(Some(PathSectionResults { path, verts }));
+
+                            return;*/
+
+                            break 'path_result Some(PathSectionResults { path, verts });
+                        }
                     }
                 }
             }
-        }
+            None
+        };
+
+        let _ = tx.send(result);
+        ctx.request_repaint();
     }
 
     fn person_button(
         &self,
-        data: &ViewerData,
+        data: &Arc<ViewerData>,
         ui: &mut Ui,
         id: &usize,
         selected: &mut Option<usize>,
@@ -181,24 +212,37 @@ impl PathSection {
 
     fn show(
         &mut self,
-        data: &ViewerData,
+        data: &Arc<ViewerData>,
         graph: &mut RenderedGraph,
         ui: &mut Ui,
         infos: &mut InfosSection,
         sel_field: &mut SelectedUserField,
     ) {
+        if let Some(rx) = self.path_channel.as_ref() {
+            if let Ok(res) = rx.try_recv() {
+                if let Some(res) = res {
+                    self.path_status = Some(PathStatus::PathFound(res.path.len()));
+                    self.found_path = Some(res.path);
+                    graph.new_path = Some(res.verts);
+                } else {
+                    self.path_status = Some(PathStatus::NoPath);
+                }
+                self.path_channel = None;
+            }
+        }
+
         CollapsingHeader::new("Chemin le plus court")
             .default_open(true)
             .show(ui, |ui| {
                 let c1 = ui
                     .horizontal(|ui| {
                         ui.radio_value(sel_field, SelectedUserField::PathSource, "");
-                        let c = combo_with_filter(ui, "#path_src", &mut self.path_src, data);
+                        let c = combo_with_filter(ui, "#path_src", &mut self.path_settings.path_src, data);
                         if c.changed() {
-                            infos.set_infos_current(self.path_src);
+                            infos.set_infos_current(self.path_settings.path_src);
                         }
                         if ui.button("x").clicked() {
-                            self.path_src = None;
+                            self.path_settings.path_src = None;
                             self.found_path = None;
                             graph.new_path = Some(vec![]);
                         }
@@ -209,12 +253,12 @@ impl PathSection {
                 let c2 = ui
                     .horizontal(|ui| {
                         ui.radio_value(sel_field, SelectedUserField::PathDest, "");
-                        let c = combo_with_filter(ui, "#path_dest", &mut self.path_dest, data);
+                        let c = combo_with_filter(ui, "#path_dest", &mut self.path_settings.path_dest, data);
                         if c.changed() {
-                            infos.set_infos_current(self.path_dest);
+                            infos.set_infos_current(self.path_settings.path_dest);
                         }
                         if ui.button("x").clicked() {
-                            self.path_dest = None;
+                            self.path_settings.path_dest = None;
                             self.found_path = None;
                             graph.new_path = Some(vec![]);
                         }
@@ -225,7 +269,7 @@ impl PathSection {
                 ui.horizontal(|ui| {
                     ui.label("Exclure :");
                     if ui.button("x").clicked() {
-                        self.exclude_ids.clear();
+                        self.path_settings.exclude_ids.clear();
                         self.path_dirty = true;
                     }
                 });
@@ -233,7 +277,7 @@ impl PathSection {
                 {
                     let mut cur_excl = None;
                     let mut del_excl = None;
-                    for (i, id) in self.exclude_ids.iter().enumerate() {
+                    for (i, id) in self.path_settings.exclude_ids.iter().enumerate() {
                         ui.horizontal(|ui| {
                             self.person_button(data, ui, id, &mut cur_excl);
                             if ui.button("x").clicked() {
@@ -246,38 +290,49 @@ impl PathSection {
                     }
                     if let Some(i) = del_excl {
                         self.path_dirty = true;
-                        self.exclude_ids.remove(i);
+                        self.path_settings.exclude_ids.remove(i);
                     }
                 }
 
                 if (self.path_dirty || c1.changed() || c2.changed())
-                    | ui.checkbox(&mut self.path_no_direct, "Éviter chemin direct")
+                    | ui.checkbox(&mut self.path_settings.path_no_direct, "Éviter chemin direct")
                     .changed()
-                    | ui.checkbox(&mut self.path_no_mutual, "Éviter amis communs")
+                    | ui.checkbox(&mut self.path_settings.path_no_mutual, "Éviter amis communs")
                     .changed()
                 {
                     self.path_dirty = false;
                     self.found_path = None;
                     graph.new_path = Some(vec![]);
-                    self.path_status = match (self.path_src, self.path_dest) {
-                        (Some(x), Some(y)) if x == y => {
-                            String::from("Source et destination sont identiques")
-                        }
-                        (None, _) | (_, None) => String::from(""),
+                    self.path_status = match (self.path_settings.path_src, self.path_settings.path_dest) {
+                        (Some(x), Some(y)) if x == y => Some(PathStatus::SameSrcDest),
+                        (None, _) | (_, None) => None,
                         _ => {
-                            self.do_pathfinding(data, graph);
-                            match self.found_path {
-                                Some(ref path) => {
-                                    format!("Chemin trouvé, longueur {}", path.len())
-                                }
-                                None => String::from("Aucun chemin trouvé"),
-                            }
+                            let (tx, rx) = mpsc::channel();
+                            self.path_channel = Some(rx);
+                            let settings = self.path_settings.clone();
+                            let data = data.clone();
+                            let ctx = ui.ctx().clone();
+                            thread::spawn(move || {
+                                Self::do_pathfinding(settings, &data, tx, ctx);
+                            });
+                            Some(PathStatus::Loading)
                         }
                     }
                 }
 
-                if !self.path_status.is_empty() {
-                    ui.label(self.path_status.as_str());
+                if let Some(st) = &self.path_status {
+                    use PathStatus::*;
+                    match st {
+                        SameSrcDest => { ui.label("🚫 Source et destination sont identiques"); }
+                        Loading => {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label("Calcul...");
+                            });
+                        }
+                        NoPath => { ui.label("🗙 Aucun chemin entre les deux nœuds"); }
+                        PathFound(len) => { ui.label(format!("✔ Chemin trouvé, distance {}", len - 1)); }
+                    }
                 }
 
                 let mut del_path = None;
@@ -300,7 +355,7 @@ impl PathSection {
                 }
                 if let Some(i) = del_path {
                     self.path_dirty = true;
-                    self.exclude_ids.push(i);
+                    self.path_settings.exclude_ids.push(i);
                 }
             });
     }
@@ -487,8 +542,8 @@ impl InfosSection {
         });
 
         let infos_current = self.infos_current;
-        let path_src = path_section.path_src;
-        let path_dest = path_section.path_dest;
+        let path_src = path_section.path_settings.path_src;
+        let path_dest = path_section.path_settings.path_dest;
         let camera = camera.clone();
         // SAFETY: the tab can't be closed while it's loading, and the tab stays
         // in the loading state until the thread stops. Therefore, for the
@@ -556,8 +611,8 @@ impl InfosSection {
                                     }
                                 }
             match_id!(new_ui.infos.infos_current, infos_current);
-            match_id!(new_ui.path.path_src, path_src);
-            match_id!(new_ui.path.path_dest, path_dest);
+            match_id!(new_ui.path.path_settings.path_src, path_src);
+            match_id!(new_ui.path.path_settings.path_dest, path_dest);
             new_ui.path.path_dirty = true;
 
             state_tx.send(create_tab(
@@ -748,7 +803,7 @@ impl UiState {
     fn refresh_node_count(&mut self, data: &ViewerData, graph: &mut RenderedGraph) {
         let mut count_classes = vec![0; data.modularity_classes.len()];
         self.display.node_count = 0;
-        for p in &data.persons {
+        for p in &*data.persons {
             let ok = if graph.filter_nodes {
                 let deg = p.neighbors.len() as u16;
                 deg >= graph.degree_filter.0 && deg <= graph.degree_filter.1

@@ -82,7 +82,7 @@ pub fn combo_with_filter(
     ui: &mut Ui,
     label: &str,
     current_item: &mut Option<usize>,
-    viewer_data: &ViewerData,
+    viewer_data: &Arc<ViewerData>,
 ) -> Response {
     #[derive(Default, Clone)]
     struct ComboFilterState {
@@ -209,11 +209,11 @@ pub fn combo_with_filter(
 
             if changed && !state.pattern.is_empty() {
                 let pattern = state.pattern.clone();
-                let engine = viewer_data.engine.clone();
+                let viewer_data = viewer_data.clone();
                 let state = binding.clone();
                 let ctx = ui.ctx().clone();
                 thread::spawn(move || {
-                    let res = engine.search(pattern.as_str());
+                    let res = viewer_data.engine.search(pattern.as_str());
                     let mut state = state.lock().unwrap();
                     if state.pattern.eq(&pattern) {
                         state.item_score_vector = res.iter().take(100).map(|i| (*i, 0_isize)).collect();
