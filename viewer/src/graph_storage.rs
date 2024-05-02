@@ -8,7 +8,7 @@ use speedy::Readable;
 
 use crate::utils::{str_from_null_terminated_utf8, SliceExt};
 
-use crate::log;
+use crate::{for_progress, log, log_progress};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -135,7 +135,8 @@ pub fn load_binary(status_tx: StatusWriter) -> Cancelable<ProcessedData> {
     log!(status_tx, "Generating neighbor lists");
 
     let start = chrono::Local::now();
-    for (_i, edge) in content.edges.iter().enumerate() {
+    /*let how_often = (content.edges.len() / 100).max(1);
+    for (i, edge) in content.edges.iter().enumerate() {
         if edge.a == edge.b {
             //panic!("Self edge detected"); TODO
             continue;
@@ -143,7 +144,20 @@ pub fn load_binary(status_tx: StatusWriter) -> Cancelable<ProcessedData> {
         let (p1, p2) = person_data.get_two_mut(edge.a as usize, edge.b as usize);
         p1.neighbors.push(edge.b as usize);
         p2.neighbors.push(edge.a as usize);
-    }
+        if i % how_often == 0 {
+            log_progress!(status_tx, i, content.edges.len());
+        }
+    }*/
+
+    for_progress!(status_tx, edge in content.edges.iter(), {
+        if edge.a == edge.b {
+            //panic!("Self edge detected"); TODO
+            continue;
+        }
+        let (p1, p2) = person_data.get_two_mut(edge.a as usize, edge.b as usize);
+        p1.neighbors.push(edge.b as usize);
+        p2.neighbors.push(edge.a as usize);
+    });
 
     log!(
         status_tx,

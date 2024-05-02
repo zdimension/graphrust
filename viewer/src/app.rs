@@ -38,6 +38,43 @@ macro_rules! log {
     }
 }
 
+#[macro_export]
+macro_rules! log_progress {
+    ($ch: expr, $val:expr, $max:expr) => {
+        {
+            $ch.send($crate::app::Progress {
+                max: $max,
+                val: $val,
+            })?;
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! for_progress {
+    ($ch:expr, $var:pat in $iter:expr, $block:block) => {
+        {
+            let max = ExactSizeIterator::len(&$iter);
+            let how_often = (max / 100).max(1);
+            for (i, $var) in $iter.enumerate() {
+                $block;
+                if i % how_often == 0 {
+                    log_progress!($ch, i, max);
+                }
+            }
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! ignore_error {
+    ($e:expr) => {
+        {
+            let _: Result<_, std::sync::mpsc::SendError<_>> = try { let _ = $e; () };
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Person {
     pub position: Point,
@@ -210,18 +247,42 @@ pub struct GraphTab {
 }
 
 pub struct StatusWriter {
-    tx: Sender<String>,
+    tx: Sender<StatusData>,
     ctx: Context,
+}
+
+#[derive(Copy, Clone)]
+pub struct Progress {
+    pub max: usize,
+    pub val: usize,
 }
 
 pub struct StatusReader {
     status: String,
-    rx: Receiver<String>,
+    progress: Option<Progress>,
+    rx: Receiver<StatusData>,
+}
+
+pub enum StatusData {
+    Message(String),
+    Progress(Progress),
+}
+
+impl From<String> for StatusData {
+    fn from(s: String) -> Self {
+        StatusData::Message(s)
+    }
+}
+
+impl From<Progress> for StatusData {
+    fn from(p: Progress) -> Self {
+        StatusData::Progress(p)
+    }
 }
 
 impl StatusWriter {
-    pub fn send(&self, s: String) -> Result<(), mpsc::SendError<String>> {
-        if let Err(e) = self.tx.send(s) {
+    pub fn send(&self, s: impl Into<StatusData>) -> Result<(), mpsc::SendError<StatusData>> {
+        if let Err(e) = self.tx.send(s.into()) {
             return Err(e);
         }
         self.ctx.request_repaint();
@@ -232,8 +293,18 @@ impl StatusWriter {
 impl StatusReader {
     pub fn recv(&mut self) -> &str {
         if let Ok(s) = self.rx.try_recv() {
-            self.status.push_str(&s);
-            self.status.push('\n');
+            match s {
+                StatusData::Message(s) => {
+                    self.progress = None;
+                    if !self.status.is_empty() {
+                        self.status.push('\n');
+                    }
+                    self.status.push_str(&s);
+                }
+                StatusData::Progress(p) => {
+                    self.progress = Some(p);
+                }
+            }
         }
         &self.status
     }
@@ -248,6 +319,7 @@ pub fn status_pipe(ctx: &Context) -> (StatusWriter, StatusReader) {
         },
         StatusReader {
             status: "".to_string(),
+            progress: None,
             rx,
         },
     )
@@ -404,6 +476,16 @@ impl GraphViewApp {
     }
 }
 
+fn show_status(ui: &mut Ui, status_rx: &mut StatusReader) {
+    ui.vertical_centered(|ui| {
+        ui.spinner();
+        ui.label(status_rx.recv());
+        if let Some(p) = status_rx.progress {
+            ui.add(egui::ProgressBar::new(p.val as f32 / p.max as f32).desired_height(12.0).desired_width(230.0));
+        }
+    });
+}
+
 pub fn spawn_cancelable(f: impl FnOnce() -> Cancelable<()> + Send + 'static) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         if let Err(_) = f() {
@@ -442,10 +524,7 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                 for work in gl_mpsc.0.try_iter() {
                     work.0(self.frame.gl().unwrap().deref(), &gl_mpsc.1);
                 }
-                ui.vertical_centered(|ui| {
-                    ui.spinner();
-                    ui.label(status_rx.recv());
-                });
+                show_status(ui, status_rx);
                 if let Ok(state) = state_rx.try_recv() {
                     tab.state = GraphTabState::Loaded(state);
                     ctx.request_repaint();
@@ -685,10 +764,7 @@ impl eframe::App for GraphViewApp {
         match &mut self.state {
             AppState::Loading { status_rx, file_rx } => {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.spinner();
-                        ui.label(status_rx.recv());
-                    });
+                    show_status(ui, status_rx);
                 });
                 if let Ok(file) = file_rx.try_recv() {
                     let (status_tx, status_rx) = status_pipe(ctx);

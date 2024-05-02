@@ -1,7 +1,7 @@
-use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable};
+use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable, Progress};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
-use crate::log;
+use crate::{for_progress, log, log_progress};
 use derivative::*;
 
 use crate::app::thread;
@@ -575,7 +575,7 @@ impl InfosSection {
             let mut edges = AHashSet::new();
 
             log!(status_tx, "Creating new neighbor lists and edge list");
-            for (&old_id, &new_id) in id_map.iter() {
+            for_progress!(status_tx, (i, (&old_id, &new_id)) in id_map.iter().enumerate(), {
                 new_persons[new_id].neighbors.extend(
                     data.persons[old_id]
                         .neighbors
@@ -589,7 +589,7 @@ impl InfosSection {
                         b: b as u32,
                     });
                 }
-            }
+            });
 
             let mut filter = 1;
             while new_persons.iter().filter(|p| p.neighbors.len() as u16 >= filter).count() > 10000 {

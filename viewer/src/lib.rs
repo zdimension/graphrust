@@ -1,5 +1,6 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![feature(cmp_minmax)]
+#![feature(try_blocks)]
 
 mod app;
 mod camera;
