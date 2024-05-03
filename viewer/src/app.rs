@@ -248,7 +248,48 @@ pub struct GraphTab {
 
 pub struct StatusWriter {
     tx: Sender<StatusData>,
+    ctx: ContextUpdater,
+}
+
+pub struct ContextUpdater {
+    #[cfg(target_arch = "wasm32")]
+    tx_ctx: tokio::sync::mpsc::UnboundedSender<()>,
+    #[cfg(not(target_arch = "wasm32"))]
     ctx: Context,
+}
+
+impl ContextUpdater {
+    pub fn new(ctx: &Context) -> Self {
+        let ctx = ctx.clone();
+        #[cfg(target_arch = "wasm32")]
+        {
+            let (tx_ctx, mut rx_ctx) = tokio::sync::mpsc::unbounded_channel();
+            wasm_bindgen_futures::spawn_local(async move {
+                loop {
+                    let Some(()) = rx_ctx.recv().await else {
+                        break;
+                    };
+                    ctx.request_repaint();
+                }
+            });
+            ContextUpdater { tx_ctx }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            ContextUpdater { ctx }
+        }
+    }
+
+    pub fn update(&self) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = self.tx_ctx.send(());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.ctx.request_repaint();
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -285,7 +326,7 @@ impl StatusWriter {
         if let Err(e) = self.tx.send(s.into()) {
             return Err(e);
         }
-        self.ctx.request_repaint();
+        self.ctx.update();
         Ok(())
     }
 }
@@ -315,7 +356,7 @@ pub fn status_pipe(ctx: &Context) -> (StatusWriter, StatusReader) {
     (
         StatusWriter {
             tx,
-            ctx: ctx.clone(),
+            ctx: ContextUpdater::new(ctx),
         },
         StatusReader {
             status: "".to_string(),

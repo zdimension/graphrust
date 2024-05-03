@@ -3111,6 +3111,7 @@ dependencies = [
  "rayon",
  "simsearch",
  "speedy",
+ "tokio",
  "vergen",
  "wasm-bindgen",
  "wasm-bindgen-futures",

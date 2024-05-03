@@ -1,7 +1,7 @@
 // Ugly unsafe code ahead
 // here be dragons
 
-use crate::app::{thread, ViewerData};
+use crate::app::{ContextUpdater, thread, ViewerData};
 use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
 use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
@@ -211,13 +211,14 @@ pub fn combo_with_filter(
                 let pattern = state.pattern.clone();
                 let viewer_data = viewer_data.clone();
                 let state = binding.clone();
-                let ctx = ui.ctx().clone();
+                //let ctx = ui.ctx().clone();
+                let ctx = ContextUpdater::new(ui.ctx());
                 thread::spawn(move || {
                     let res = viewer_data.engine.search(pattern.as_str());
                     let mut state = state.lock().unwrap();
                     if state.pattern.eq(&pattern) {
                         state.item_score_vector = res.iter().take(100).map(|i| (*i, 0_isize)).collect();
-                        ctx.request_repaint();
+                        ctx.update();
                     }
                 });
             }

@@ -1,4 +1,4 @@
-use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable, Progress};
+use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable, Progress, ContextUpdater};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
@@ -93,7 +93,7 @@ fn set_bg_color_tinted(base: Color32, ui: &mut Ui) {
 }
 
 impl PathSection {
-    fn do_pathfinding(settings: PathSectionSettings, data: &ViewerData, tx: mpsc::Sender<Option<PathSectionResults>>, ctx: Context) {
+    fn do_pathfinding(settings: PathSectionSettings, data: &ViewerData, tx: mpsc::Sender<Option<PathSectionResults>>, ctx: ContextUpdater) {
         let src_id = settings.path_src.unwrap();
         let dest_id = settings.path_dest.unwrap();
         let src = &data.persons[src_id];
@@ -192,7 +192,7 @@ impl PathSection {
         };
 
         let _ = tx.send(result);
-        ctx.request_repaint();
+        ctx.update();
     }
 
     fn person_button(
@@ -311,7 +311,7 @@ impl PathSection {
                             self.path_channel = Some(rx);
                             let settings = self.path_settings.clone();
                             let data = data.clone();
-                            let ctx = ui.ctx().clone();
+                            let ctx = ContextUpdater::new(ui.ctx());
                             thread::spawn(move || {
                                 Self::do_pathfinding(settings, &data, tx, ctx);
                             });
