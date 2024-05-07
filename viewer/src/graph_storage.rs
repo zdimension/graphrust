@@ -14,30 +14,12 @@ use wasm_bindgen::prelude::*;
 
 //const GRAPH_NAME: &str = "graph2.bin";
 const GRAPH_NAME: &str = "graph_n4j.bin";
+//const GRAPH_NAME: &str = "graph_n4j_5.57M_400k.bin";
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_file(_status_tx: &StatusWriter) -> GraphFile {
     GraphFile::read_from_file(format!("{}/../{}", env!("CARGO_MANIFEST_DIR"), GRAPH_NAME)).unwrap()
 }
-/*
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(catch, method, structural, js_class = "XMLHttpRequest", js_name = open)]
-    pub fn open(
-        this: &web_sys::XmlHttpRequest,
-        method: &str,
-        url: &str,
-        async_: bool,
-    ) -> Result<(), JsValue>;
-}
-*/
-/*
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(inline_js = "export function req(url) { const xhr = new XMLHttpRequest(); xhr.open('GET', url, false); xhr.responseType = 'arraybuffer'; xhr.send(); console.log(xhr.response.byteLength); return new Uint8Array(xhr.response); }")]
-extern "C" {
-    fn req(url: &str) -> js_sys::Uint8Array;
-}*/
 
 #[cfg(target_arch = "wasm32")]
 pub fn load_file(_status_tx: &StatusWriter) -> GraphFile {
@@ -49,39 +31,6 @@ pub fn load_file(_status_tx: &StatusWriter) -> GraphFile {
     let array_buffer = xhr.response().unwrap();
     let vec = js_sys::Uint8Array::new(&array_buffer).to_vec();
     return GraphFile::read_from_buffer(&vec).unwrap();
-
-    /*use std::sync::{Arc, Mutex};
-    let request = ehttp::Request::get("https://domino.zdimension.fr/web/network5/graph_n4j.bin.br");
-    let bytes = Arc::new(Mutex::new(Vec::new()));
-    let bytes_clone = bytes.clone();
-    ehttp::streaming::fetch(
-        request,
-        move |result: ehttp::Result<ehttp::streaming::Part>| {
-            let part = match result {
-                Ok(part) => part,
-                Err(err) => {
-                    log::error!("Failed to fetch graph file: {:?}", err);
-                    return std::ops::ControlFlow::Break(());
-                }
-            };
-            match part {
-                ehttp::streaming::Part::Response(response) => {
-                    log::info!("Status code: {:?}", response.status);
-                    if response.ok {
-                        std::ops::ControlFlow::Continue(())
-                    } else {
-                        std::ops::ControlFlow::Break(())
-                    }
-                }
-                ehttp::streaming::Part::Chunk(chunk) => {
-                    let mut bytes = bytes_clone.lock().unwrap();
-                    bytes.extend_from_slice(&chunk);
-                    std::ops::ControlFlow::Continue(())
-                }
-            }
-        },
-    );
-    return GraphFile::read_from_buffer(bytes.lock().unwrap().as_slice()).unwrap();*/
 }
 
 pub struct ProcessedData {
