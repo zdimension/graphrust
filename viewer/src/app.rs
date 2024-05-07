@@ -541,15 +541,14 @@ pub fn spawn_cancelable(f: impl FnOnce() -> Cancelable<()> + Send + 'static) -> 
     })
 }
 
-struct TabViewer<'graph, 'tab_request, 'frame> {
-    data: PhantomData<&'graph bool>,
+struct TabViewer<'tab_request, 'frame> {
     tab_request: &'tab_request mut Option<NewTabRequest>,
     top_bar: &'tab_request mut bool,
     frame: &'frame mut eframe::Frame,
 }
 
-impl<'graph, 'tab_request, 'frame> egui_dock::TabViewer
-for TabViewer<'graph, 'tab_request, 'frame>
+impl<'tab_request, 'frame> egui_dock::TabViewer
+for TabViewer<'tab_request, 'frame>
 {
     type Tab = GraphTab;
 
@@ -558,8 +557,6 @@ for TabViewer<'graph, 'tab_request, 'frame>
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
-        let ctx = ui.ctx();
-
         match &mut tab.state {
             GraphTabState::Loading {
                 status,
@@ -573,7 +570,7 @@ for TabViewer<'graph, 'tab_request, 'frame>
                 show_status(ui, status_rx);
                 if let Ok(state) = state_rx.try_recv() {
                     tab.state = GraphTabState::Loaded(state);
-                    ctx.request_repaint();
+                    ui.ctx().request_repaint();
                 }
             }
             GraphTabState::Loaded(tab) => {
@@ -618,7 +615,7 @@ for TabViewer<'graph, 'tab_request, 'frame>
                         if !response.is_pointer_button_down_on() {
                             if let Some(v) = tab.tab_camera.cam_animating {
                                 const DUR: f32 = 0.5;
-                                let anim = ctx.animate_bool_with_time(cid, false, DUR);
+                                let anim = ui.ctx().animate_bool_with_time(cid, false, DUR);
                                 if anim == 0.0 {
                                     tab.tab_camera.cam_animating = None;
                                     match v {
@@ -671,14 +668,14 @@ for TabViewer<'graph, 'tab_request, 'frame>
                                 tab.tab_camera.camera
                                     .pan(response.drag_delta().x, response.drag_delta().y);
 
-                                ctx.animate_bool_with_time(cid, true, 0.0);
+                                ui.ctx().animate_bool_with_time(cid, true, 0.0);
                                 tab.tab_camera.cam_animating = Some(CamAnimating::Pan(response.drag_delta()));
                             } else if response.dragged_by(egui::PointerButton::Secondary) {
                                 let prev_pos = centered_pos_raw - response.drag_delta();
                                 let rot = centered_pos_raw.angle() - prev_pos.angle();
                                 tab.tab_camera.camera.rotate(rot);
 
-                                ctx.animate_bool_with_time(cid, true, 0.0);
+                                ui.ctx().animate_bool_with_time(cid, true, 0.0);
                                 tab.tab_camera.cam_animating = Some(CamAnimating::Rot(rot));
                             }
 
@@ -902,7 +899,6 @@ impl eframe::App for GraphViewApp {
                     .show(
                         ctx,
                         &mut TabViewer {
-                            data: PhantomData,
                             tab_request: &mut new_tab_request,
                             top_bar: &mut self.top_bar,
                             frame,
