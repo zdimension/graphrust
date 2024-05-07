@@ -1,5 +1,5 @@
 use std::error::Error;
-use crate::camera::Camera;
+use crate::camera::{Camera, CamXform};
 use std::marker::PhantomData;
 use std::ops::Deref;
 
@@ -14,7 +14,7 @@ use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3f, EdgeStore, Point};
 use graphrust_macros::md;
 use itertools::Itertools;
-use nalgebra::{Matrix4, Vector4};
+use nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
 use simsearch::{SearchOptions, SimSearch};
 
 use egui::epaint::TextShape;
@@ -205,6 +205,7 @@ pub struct StringTables {
 pub enum CamAnimating {
     Pan(Vec2),
     Rot(f32),
+    PanTo { from: CamXform, to: CamXform },
 }
 
 
@@ -595,6 +596,7 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                             self.tab_request,
                             self.frame,
                             &mut tab.tab_camera,
+                            cid,
                         );
                     });
                 egui::CentralPanel::default()
@@ -608,6 +610,7 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                         let sz = rect.size();
                         if sz != tab.tab_camera.camera.size {
                             tab.tab_camera.camera.set_window_size(sz);
+                            tab.tab_camera.camera_default.set_window_size(sz);
                         }
 
                         let response =
@@ -615,9 +618,16 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
 
                         if !response.is_pointer_button_down_on() {
                             if let Some(v) = tab.tab_camera.cam_animating {
-                                let anim = ctx.animate_bool_with_time(cid, false, 0.5);
+                                const DUR: f32 = 0.5;
+                                let anim = ctx.animate_bool_with_time(cid, false, DUR);
                                 if anim == 0.0 {
                                     tab.tab_camera.cam_animating = None;
+                                    match v {
+                                        CamAnimating::PanTo { to, .. } => {
+                                            tab.tab_camera.camera.transf = to;
+                                        }
+                                        _ => {}
+                                    }
                                 } else {
                                     match v {
                                         CamAnimating::Pan(delta) => {
@@ -625,6 +635,25 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                                         }
                                         CamAnimating::Rot(rot) => {
                                             tab.tab_camera.camera.rotate(rot * anim);
+                                        }
+                                        CamAnimating::PanTo { from, to } => {
+                                            let t = 1.0 - anim;
+
+                                            fn blend(x: f32) -> f32 {
+                                                let sqr = x * x;
+                                                sqr / (2.0 * (sqr - x) + 1.0)
+                                            }
+
+                                            let t = blend(t);
+
+                                            fn lerp(from: f32, to: f32, t: f32) -> f32 {
+                                                from * (1.0 - t) + to * t
+                                            }
+
+                                            tab.tab_camera.camera.transf = Similarity3::from_isometry(
+                                                from.isometry.lerp_slerp(&to.isometry, t),
+                                                lerp(from.scaling(), to.scaling(), t),
+                                            );
                                         }
                                     }
                                 }

@@ -2,17 +2,19 @@ use egui::{vec2, Pos2, Vec2};
 use graph_format::Point;
 use nalgebra::{Matrix4, Orthographic3, Similarity3, Vector3};
 
+pub type CamXform = Similarity3<f32>;
+
 /// 2D planar camera
 #[derive(Copy, Clone)]
 pub struct Camera {
-    pub transf: Similarity3<f32>,
+    pub transf: CamXform,
     pub ortho: Orthographic3<f32>,
     pub size: Vec2,
 }
 
 impl Camera {
     pub fn new(center: Point) -> Camera {
-        let transf = Similarity3::new(
+        let transf = CamXform::new(
             Vector3::new(-center.x, -center.y, 0.0),
             Vector3::new(0.0, 0.0, 0.0),
             1.0,
@@ -79,7 +81,7 @@ impl Camera {
         // TODO: fuck quaternions all my homies uses euler angles
         //let center = self.transf.inverse_transform_point(&nalgebra::Point3::new(0.0, 0.0, 0.0));
         self.transf
-            .append_rotation_wrt_center_mut(&nalgebra::UnitQuaternion::from_euler_angles(
+            .append_rotation_mut(&nalgebra::UnitQuaternion::from_euler_angles(
                 0.0, 0.0, -rot,
             ));
     }

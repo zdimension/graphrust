@@ -1,4 +1,4 @@
-use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable, Progress, ContextUpdater, TabCamera};
+use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable, Progress, ContextUpdater, TabCamera, CamAnimating};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
@@ -8,7 +8,7 @@ use crate::app::thread;
 use crate::camera::Camera;
 use eframe::Frame;
 use egui::ahash::{AHashMap, AHashSet};
-use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals, Context};
+use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals, Context, Id};
 use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f, EdgeStore};
 use itertools::Itertools;
@@ -638,7 +638,7 @@ pub struct DetailsSection {
 }
 
 impl DetailsSection {
-    fn show(&mut self, ui: &mut Ui, camera: &mut TabCamera) {
+    fn show(&mut self, ui: &mut Ui, camera: &mut TabCamera, cid: Id) {
         CollapsingHeader::new("Détails")
             .default_open(false)
             .show(ui, |ui| {
@@ -666,6 +666,10 @@ impl DetailsSection {
                 });
                 if ui.button("Réinitialiser caméra").clicked() {
                     camera.camera = camera.camera_default;
+                }
+                if ui.button("Centrer caméra").clicked() {
+                    ui.ctx().animate_bool_with_time(cid, true, 0.0);
+                    camera.cam_animating = Some(CamAnimating::PanTo { from: camera.camera.transf, to: camera.camera_default.transf });
                 }
 
 
@@ -848,6 +852,7 @@ impl UiState {
         tab_request: &mut Option<NewTabRequest>,
         frame: &mut Frame,
         camera: &mut TabCamera,
+        cid: Id,
     ) {
         ui.spacing_mut().slider_width = 200.0;
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -877,7 +882,7 @@ impl UiState {
 
             self.classes.show(&data, ui);
 
-            self.details.show(ui, camera);
+            self.details.show(ui, camera, cid);
         });
     }
 }
