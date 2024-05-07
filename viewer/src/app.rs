@@ -541,16 +541,15 @@ pub fn spawn_cancelable(f: impl FnOnce() -> Cancelable<()> + Send + 'static) -> 
     })
 }
 
-struct TabViewer<'graph, 'ctx, 'tab_request, 'frame> {
-    ctx: &'ctx egui::Context,
+struct TabViewer<'graph, 'tab_request, 'frame> {
     data: PhantomData<&'graph bool>,
     tab_request: &'tab_request mut Option<NewTabRequest>,
     top_bar: &'tab_request mut bool,
     frame: &'frame mut eframe::Frame,
 }
 
-impl<'graph, 'ctx, 'tab_request, 'frame> egui_dock::TabViewer
-for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
+impl<'graph, 'tab_request, 'frame> egui_dock::TabViewer
+for TabViewer<'graph, 'tab_request, 'frame>
 {
     type Tab = GraphTab;
 
@@ -559,7 +558,7 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
-        let ctx = self.ctx;
+        let ctx = ui.ctx();
 
         match &mut tab.state {
             GraphTabState::Loading {
@@ -903,7 +902,6 @@ impl eframe::App for GraphViewApp {
                     .show(
                         ctx,
                         &mut TabViewer {
-                            ctx,
                             data: PhantomData,
                             tab_request: &mut new_tab_request,
                             top_bar: &mut self.top_bar,
