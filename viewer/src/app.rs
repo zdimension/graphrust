@@ -637,8 +637,10 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                                             tab.tab_camera.camera.rotate(rot * anim);
                                         }
                                         CamAnimating::PanTo { from, to } => {
+                                            // egui gives us a value going from 1 to 0, so we flip it.
                                             let t = 1.0 - anim;
 
+                                            /// Maps a linear value to a smooth blend curve (both [0, 1]).
                                             fn blend(x: f32) -> f32 {
                                                 let sqr = x * x;
                                                 sqr / (2.0 * (sqr - x) + 1.0)
@@ -646,6 +648,7 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
 
                                             let t = blend(t);
 
+                                            /// Linearly interpolates between two values.
                                             fn lerp(from: f32, to: f32, t: f32) -> f32 {
                                                 from * (1.0 - t) + to * t
                                             }
