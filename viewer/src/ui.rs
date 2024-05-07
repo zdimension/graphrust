@@ -642,6 +642,7 @@ impl DetailsSection {
         CollapsingHeader::new("Détails")
             .default_open(false)
             .show(ui, |ui| {
+                let trans = &camera.camera.transf;
                 egui::Grid::new("#mouse_pos").show(ui, |ui| {
                     ui.label("Position :");
                     ui.label(format!(
@@ -652,10 +653,22 @@ impl DetailsSection {
                     ui.label("Position (monde) :");
                     ui.label(format!("{:?}", self.mouse_pos_world));
                     ui.end_row();
+                    ui.label("Échelle :");
+                    ui.label(format!("{:.3}", trans.scaling()));
+                    ui.end_row();
+                    ui.label("Angle :");
+                    ui.label(format!("{:.3}", trans.isometry.rotation.angle()));
+                    ui.end_row();
+                    ui.label("Translation :");
+                    let offs = trans.isometry.translation;
+                    ui.label(format!("({:.3}, {:.3})", offs.x, offs.y));
+                    ui.end_row();
                 });
                 if ui.button("Réinitialiser caméra").clicked() {
                     camera.camera = camera.camera_default;
                 }
+
+
                 let matrix = camera.camera.get_matrix();
                 egui::Grid::new("#cammatrix").show(ui, move |ui| {
                     for i in 0..4 {
