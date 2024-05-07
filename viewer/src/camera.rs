@@ -60,11 +60,12 @@ impl Camera {
         let before = self.transf.inverse_transform_point(&diffpoint);
         self.transf.append_scaling_mut(scaling);
         let after = self.transf.inverse_transform_point(&diffpoint);
-        let scale = self.transf.scaling();
+        let diff = after - before;
+        let diff_transf = self.transf.transform_vector(&diff);
         self.transf
             .append_translation_mut(&nalgebra::Translation3::new(
-                (after.x - before.x) * scale,
-                -(after.y - before.y) * scale,
+                diff_transf.x,
+                -diff_transf.y,
                 0.0,
             ));
     }
