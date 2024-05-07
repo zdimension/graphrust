@@ -207,12 +207,18 @@ pub enum CamAnimating {
     Rot(f32),
 }
 
+
+pub struct TabCamera {
+    pub camera: Camera,
+    pub camera_default: Camera,
+    pub cam_animating: Option<CamAnimating>,
+}
+
 pub struct GraphTabLoaded {
     pub ui_state: UiState,
     pub viewer_data: Arc<ViewerData>,
     pub rendered_graph: Arc<Mutex<RenderedGraph>>,
-    pub camera: Camera,
-    pub cam_animating: Option<CamAnimating>,
+    pub tab_camera: TabCamera,
 }
 
 pub enum GraphTabState {
@@ -450,8 +456,7 @@ pub fn create_tab<'a>(
         false
     };
     Ok(GraphTabLoaded {
-        camera,
-        cam_animating: None,
+        tab_camera: TabCamera { camera, camera_default: camera, cam_animating: None },
         ui_state: UiState {
             display: DisplaySection {
                 node_count: viewer.persons.len(),
@@ -589,7 +594,7 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                             &mut *tab.rendered_graph.lock().unwrap(),
                             self.tab_request,
                             self.frame,
-                            &tab.camera,
+                            &mut tab.tab_camera,
                         );
                     });
                 egui::CentralPanel::default()
@@ -601,25 +606,25 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                         let (id, rect) = ui.allocate_space(ui.available_size());
 
                         let sz = rect.size();
-                        if sz != tab.camera.size {
-                            tab.camera.set_window_size(sz);
+                        if sz != tab.tab_camera.camera.size {
+                            tab.tab_camera.camera.set_window_size(sz);
                         }
 
                         let response =
                             ui.interact(rect, id, egui::Sense::click().union(egui::Sense::drag()));
 
                         if !response.is_pointer_button_down_on() {
-                            if let Some(v) = tab.cam_animating {
+                            if let Some(v) = tab.tab_camera.cam_animating {
                                 let anim = ctx.animate_bool_with_time(cid, false, 0.5);
                                 if anim == 0.0 {
-                                    tab.cam_animating = None;
+                                    tab.tab_camera.cam_animating = None;
                                 } else {
                                     match v {
                                         CamAnimating::Pan(delta) => {
-                                            tab.camera.pan(delta.x * anim, delta.y * anim);
+                                            tab.tab_camera.camera.pan(delta.x * anim, delta.y * anim);
                                         }
                                         CamAnimating::Rot(rot) => {
-                                            tab.camera.rotate(rot * anim);
+                                            tab.tab_camera.camera.rotate(rot * anim);
                                         }
                                     }
                                 }
@@ -632,24 +637,24 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                             let centered_pos = 2.0 * centered_pos_raw / rect.size();
 
                             if response.dragged_by(egui::PointerButton::Primary) {
-                                tab.camera
+                                tab.tab_camera.camera
                                     .pan(response.drag_delta().x, response.drag_delta().y);
 
                                 ctx.animate_bool_with_time(cid, true, 0.0);
-                                tab.cam_animating = Some(CamAnimating::Pan(response.drag_delta()));
+                                tab.tab_camera.cam_animating = Some(CamAnimating::Pan(response.drag_delta()));
                             } else if response.dragged_by(egui::PointerButton::Secondary) {
                                 let prev_pos = centered_pos_raw - response.drag_delta();
                                 let rot = centered_pos_raw.angle() - prev_pos.angle();
-                                tab.camera.rotate(rot);
+                                tab.tab_camera.camera.rotate(rot);
 
                                 ctx.animate_bool_with_time(cid, true, 0.0);
-                                tab.cam_animating = Some(CamAnimating::Rot(rot));
+                                tab.tab_camera.cam_animating = Some(CamAnimating::Rot(rot));
                             }
 
                             let zero_pos = (pos - rect.min).to_pos2();
 
                             tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
-                            let pos_world = (tab.camera.get_inverse_matrix()
+                            let pos_world = (tab.tab_camera.camera.get_inverse_matrix()
                                 * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
                                 .xy();
                             tab.ui_state.details.mouse_pos_world = Some(pos_world);
@@ -707,14 +712,14 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                                 } else {
                                     1.0 / zoom_speed
                                 };
-                                tab.camera.zoom(s, zero_pos);
+                                tab.tab_camera.camera.zoom(s, zero_pos);
                             }
                             if zoom_delta != 1.0 {
-                                tab.camera.zoom(zoom_delta, zero_pos);
+                                tab.tab_camera.camera.zoom(zoom_delta, zero_pos);
                             }
 
                             if let Some(multi_touch) = multi_touch {
-                                tab.camera.rotate(multi_touch.rotation_delta);
+                                tab.tab_camera.camera.rotate(multi_touch.rotation_delta);
                             }
                         } else {
                             tab.ui_state.details.mouse_pos = None;
@@ -727,8 +732,7 @@ for TabViewer<'graph, 'ctx, 'tab_request, 'frame>
                         let opac_edges = tab.ui_state.display.g_opac_edges;
                         let opac_nodes = tab.ui_state.display.g_opac_nodes;
 
-                        let cam = tab.camera.get_matrix();
-                        tab.ui_state.details.camera = cam;
+                        let cam = tab.tab_camera.camera.get_matrix();
                         let callback = egui::PaintCallback {
                             rect,
                             callback: Arc::new(egui_glow::CallbackFn::new(
