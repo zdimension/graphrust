@@ -1,8 +1,8 @@
 [alias]
 run-wasm = "run --release --package run-wasm --"
 
-#[target.x86_64-pc-windows-msvc]
-#rustflags = ["-Ctarget-feature=+avx2", "-Ctarget-cpu=native"]
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-Ctarget-cpu=native"]
 
 [target.wasm32-unknown-unknown]
 rustflags = [
