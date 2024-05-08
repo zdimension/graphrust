@@ -1,19 +1,19 @@
 // Ugly unsafe code ahead
 // here be dragons
 
+use std::ops::Add;
 use crate::app::{ContextUpdater, thread, ViewerData};
 use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
 use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
 use egui::style::WidgetVisuals;
 
-use egui::{
-    Align, Id, Layout, Painter, Response, ScrollArea, SelectableLabel, Sense, TextEdit, TextStyle,
-    Ui, WidgetText,
-};
+use egui::{Align, Color32, Id, Layout, Painter, Response, Rounding, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, WidgetText};
 
 use egui::text::{CCursor, CCursorRange};
 use std::sync::{Arc, Mutex};
+use derivative::Derivative;
+use egui::epaint::RectShape;
 
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
     let rect = Rect::from_center_size(
@@ -84,9 +84,12 @@ pub fn combo_with_filter(
     current_item: &mut Option<usize>,
     viewer_data: &Arc<ViewerData>,
 ) -> Response {
-    #[derive(Default, Clone)]
+    #[derive(Derivative, Clone)]
+    #[derivative(Default)]
     struct ComboFilterState {
-        item_score_vector: Vec<(usize, isize)>,
+        #[derivative(Default(value = "(0..100).collect()"))]
+        item_vector: Vec<usize>,
+        loading: bool,
         pattern: String,
         first_open: bool,
     }
@@ -188,13 +191,17 @@ pub fn combo_with_filter(
             let mut state = binding.lock().unwrap();
 
             let layout = Layout::centered_and_justified(ui.layout().main_dir());
-            let mut txt_resp = ui
+            let txt_box_resp = ui
                 .allocate_ui_with_layout(
                     (ui.available_size() * vec2(1.0, 0.0)).into(),
                     layout,
-                    |ui| TextEdit::singleline(&mut state.pattern).show(ui),
-                )
-                .inner;
+                    |ui| {
+                        let r = TextEdit::singleline(&mut state.pattern).show(ui);
+                        ui.add_space(2.0);
+                        r
+                    },
+                );
+            let mut txt_resp = txt_box_resp.inner;
             let txt = &txt_resp.response;
             if !state.first_open {
                 state.first_open = true;
@@ -207,60 +214,70 @@ pub fn combo_with_filter(
             }
             let changed = txt.changed();
 
-            if changed && !state.pattern.is_empty() {
-                let pattern = state.pattern.clone();
-                let viewer_data = viewer_data.clone();
-                let state = binding.clone();
-                //let ctx = ui.ctx().clone();
-                let ctx = ContextUpdater::new(ui.ctx());
-                thread::spawn(move || {
-                    let res = viewer_data.engine.search(pattern.as_str());
-                    let mut state = state.lock().unwrap();
-                    if state.pattern.eq(&pattern) {
-                        state.item_score_vector = res.iter().take(100).map(|i| (*i, 0_isize)).collect();
-                        ctx.update();
-                    }
-                });
+            if changed {
+                if state.pattern.is_empty() {
+                    state.loading = false;
+                    state.item_vector = ComboFilterState::default().item_vector;
+                } else {
+                    state.loading = true;
+                    let pattern = state.pattern.clone();
+                    let viewer_data = viewer_data.clone();
+                    let state = binding.clone();
+                    //let ctx = ui.ctx().clone();
+                    let ctx = ContextUpdater::new(ui.ctx());
+                    thread::spawn(move || {
+                        let mut res = viewer_data.engine.search(pattern.as_str());
+                        let mut state = state.lock().unwrap();
+                        if state.pattern.eq(&pattern) {
+                            res.truncate(100);
+                            state.item_vector = res;
+                            state.loading = false;
+                            ctx.update();
+                        }
+                    });
+                }
             }
 
-            let filtered_results = !state.item_score_vector.is_empty();
+            let show_count = 100.min(state.item_vector.len());
 
-            let show_count = 100.min(if filtered_results {
-                state.item_score_vector.len()
-            } else {
-                viewer_data.persons.len()
-            });
+            let loading = state.loading;
 
             ScrollArea::vertical()
                 .max_height(ui.spacing().combo_height)
                 .show(ui, |ui| {
-                    for i in 0..show_count {
-                        let idx = if filtered_results {
-                            state.item_score_vector[i].0
-                        } else {
-                            i
-                        };
+                    if show_count == 0 {
+                        ui.add_enabled(false, SelectableLabel::new(false, "Aucun résultat trouvé"));
+                    } else {
+                        for i in 0..show_count {
+                            let idx = state.item_vector[i];
 
-                        if ui
-                            .allocate_ui_with_layout(
-                                ui.available_size() * vec2(1.0, 0.0),
-                                Layout::centered_and_justified(ui.layout().main_dir())
-                                    .with_cross_align(Align::LEFT),
-                                |ui| {
-                                    ui.add(SelectableLabel::new(
-                                        *current_item == Some(idx),
-                                        viewer_data.persons[idx].name,
-                                    ))
-                                },
-                            )
-                            .inner
-                            .clicked()
-                        {
-                            *current_item = Some(idx);
-                            sel_changed = true;
+                            if ui
+                                .allocate_ui_with_layout(
+                                    ui.available_size() * vec2(1.0, 0.0),
+                                    Layout::centered_and_justified(ui.layout().main_dir())
+                                        .with_cross_align(Align::LEFT),
+                                    |ui| {
+                                        ui.add_enabled(!loading, SelectableLabel::new(
+                                            *current_item == Some(idx),
+                                            viewer_data.persons[idx].name,
+                                        ))
+                                    },
+                                )
+                                .inner
+                                .clicked()
+                            {
+                                *current_item = Some(idx);
+                                sel_changed = true;
+                            }
                         }
                     }
                 });
+
+            if loading {
+                let rect = ui.min_rect();
+                let txt_rect = txt_box_resp.response.rect;
+                Spinner::new().paint_at(ui, Rect::from_center_size(rect.center().add(vec2(0.0, txt_rect.height() / 2.0)), vec2(20.0, 20.0)));
+            }
         })
     });
     if let Some(frame_r) = inner {
