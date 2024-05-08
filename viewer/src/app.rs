@@ -775,6 +775,8 @@ for TabViewer<'tab_request, 'frame>
                         };
                         ui.painter().add(callback);
 
+                        let clipped_painter = ui.painter().with_clip_rect(rect);
+
                         let draw_person = |id, color| {
                             let person: &Person = &tab.viewer_data.persons[id];
                             let pos = person.position;
@@ -784,7 +786,7 @@ for TabViewer<'tab_request, 'frame>
                                 .color(Color32::WHITE);
                             let gal =
                                 txt.into_galley(ui, Some(false), f32::INFINITY, TextStyle::Heading);
-                            ui.painter().add(TextShape::new(
+                            clipped_painter.add(TextShape::new(
                                 rect.center()
                                     + vec2(pos_scr.x, -pos_scr.y) * rect.size() * 0.5
                                     + vec2(10.0, 10.0),
