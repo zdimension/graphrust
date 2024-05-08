@@ -571,7 +571,7 @@ impl InfosSection {
                 });
             }
 
-            let mut edges = AHashSet::new();
+            let mut edges = Vec::new();
 
             log!(status_tx, "Creating new neighbor lists and edge list");
             for_progress!(status_tx, (i, (&old_id, &new_id)) in id_map.iter().enumerate(), {
@@ -582,13 +582,18 @@ impl InfosSection {
                         .filter_map(|&i| id_map.get(&i)),
                 );
                 for &nb in new_persons[new_id].neighbors.iter() {
-                    let [a, b] = std::cmp::minmax(new_id, nb);
-                    edges.insert(EdgeStore {
-                        a: a as u32,
-                        b: b as u32,
-                    });
+                    if new_id < nb {
+                        edges.push(EdgeStore {
+                            a: new_id as u32,
+                            b: nb as u32,
+                        });
+                    } else {
+                        // we do nothing since we'll get it eventually
+                    }
                 }
             });
+
+            log!(status_tx, "Computing min edge filter");
 
             let mut filter = 1;
             while new_persons.iter().filter(|p| p.neighbors.len() as u16 >= filter).count() > 10000 {
