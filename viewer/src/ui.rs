@@ -596,7 +596,8 @@ impl InfosSection {
             log!(status_tx, "Computing min edge filter");
 
             let mut filter = 1;
-            while new_persons.iter().filter(|p| p.neighbors.len() as u16 >= filter).count() > 10000 {
+            const MAX: usize = 10000;
+            while new_persons.iter().filter(|p| p.neighbors.len() as u16 >= filter).take(MAX + 1).count() > MAX {
                 filter += 1;
             }
 
