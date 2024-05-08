@@ -386,7 +386,6 @@ impl InfosSection {
         &mut self,
         data: &Arc<ViewerData>,
         tab_request: &mut Option<NewTabRequest>,
-        frame: &mut Frame,
         ui: &mut Ui,
         camera: &Camera,
         path_section: &PathSection,
@@ -850,7 +849,6 @@ impl UiState {
         data: &Arc<ViewerData>,
         graph: &mut RenderedGraph,
         tab_request: &mut Option<NewTabRequest>,
-        frame: &mut Frame,
         camera: &mut TabCamera,
         cid: Id,
     ) {
@@ -873,7 +871,6 @@ impl UiState {
             self.infos.show(
                 &data,
                 tab_request,
-                frame,
                 ui,
                 &camera.camera,
                 &self.path,

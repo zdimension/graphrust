@@ -224,7 +224,6 @@ pub struct GraphTabLoaded {
 
 pub enum GraphTabState {
     Loading {
-        status: String,
         status_rx: StatusReader,
         state_rx: Receiver<GraphTabLoaded>,
         gl_mpsc: GlMpsc,
@@ -239,7 +238,6 @@ impl GraphTabState {
         gl_mpsc: GlMpsc,
     ) -> Self {
         GraphTabState::Loading {
-            status: "Chargement du graphe...".to_string(),
             status_rx,
             state_rx,
             gl_mpsc,
@@ -492,7 +490,10 @@ pub enum AppState {
     Loaded {
         tree: DockState<GraphTab>,
         #[allow(dead_code)]
-        // we do a little trolling
+        /// we do a little trolling
+        ///
+        /// this is for keeping the StringTables object allocated since the graph objects have
+        /// `&'static str`s pointing to it
         string_tables: StringTables,
     },
 }
@@ -559,7 +560,6 @@ for TabViewer<'tab_request, 'frame>
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
         match &mut tab.state {
             GraphTabState::Loading {
-                status,
                 status_rx,
                 state_rx,
                 gl_mpsc,
@@ -590,7 +590,6 @@ for TabViewer<'tab_request, 'frame>
                             &tab.viewer_data,
                             &mut *tab.rendered_graph.lock().unwrap(),
                             self.tab_request,
-                            self.frame,
                             &mut tab.tab_camera,
                             cid,
                         );
@@ -827,7 +826,7 @@ pub type NewTabRequest = GraphTab;
 
 impl eframe::App for GraphViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
         let mut new_tab_request = None;
 
         if self.top_bar {
@@ -889,7 +888,7 @@ impl eframe::App for GraphViewApp {
             }
             AppState::Loaded {
                 tree,
-                string_tables,
+                ..
             } => {
                 DockArea::new(tree)
                     .style({

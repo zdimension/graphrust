@@ -7,6 +7,7 @@
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {
+    use std::{env, io};
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
     }
@@ -40,8 +41,6 @@ fn main() -> eframe::Result<()> {
 
 #[cfg(target_arch = "wasm32")]
 use eframe::web_sys;
-use log::{LevelFilter, Log};
-use std::{env, io};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -74,12 +73,3 @@ fn main() {
             .expect("failed to start eframe");
     });
 }
-
-
-/*
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen]
-pub fn start() {
-
-}
-*/
