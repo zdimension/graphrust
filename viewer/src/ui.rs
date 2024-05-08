@@ -597,7 +597,9 @@ impl InfosSection {
 
             let mut filter = 1;
             const MAX: usize = 10000;
-            while new_persons.iter().filter(|p| p.neighbors.len() as u16 >= filter).take(MAX + 1).count() > MAX {
+            while new_persons.iter()
+                .filter(|p| p.neighbors.len() as u16 >= filter)
+                .enumerate().any(|(i, _)| i >= MAX) { // count() would iterate all the nodes
                 filter += 1;
             }
 
