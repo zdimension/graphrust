@@ -75,6 +75,20 @@ macro_rules! ignore_error {
     }
 }
 
+pub fn iter_progress<'a, T>(iter: T, ch: &'a StatusWriter) -> impl Iterator<Item=T::Item> + 'a
+    where
+        T: ExactSizeIterator + 'a,
+{
+    let max = ExactSizeIterator::len(&iter);
+    let how_often = (max / 100).max(1);
+    iter.enumerate().map(move |(i, x)| {
+        if i % how_often == 0 {
+            ignore_error!(log_progress!(ch, i, max));
+        }
+        x
+    })
+}
+
 #[derive(Clone)]
 pub struct Person {
     pub position: Point,
@@ -92,6 +106,7 @@ impl Person {
         modularity_class: u16,
         id: &'static str,
         name: &'static str,
+        total_edge_count: usize,
     ) -> Person {
         Person {
             position,
@@ -99,7 +114,7 @@ impl Person {
             modularity_class,
             id,
             name,
-            neighbors: Vec::with_capacity(4),
+            neighbors: Vec::with_capacity(total_edge_count),
         }
     }
 }
@@ -251,11 +266,13 @@ pub struct GraphTab {
     pub state: GraphTabState,
 }
 
+#[derive(Clone)]
 pub struct StatusWriter {
     tx: Sender<StatusData>,
     ctx: ContextUpdater,
 }
 
+#[derive(Clone)]
 pub struct ContextUpdater {
     #[cfg(target_arch = "wasm32")]
     tx_ctx: tokio::sync::mpsc::UnboundedSender<()>,

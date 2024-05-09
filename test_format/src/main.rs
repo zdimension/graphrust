@@ -3,6 +3,8 @@
 use graph_format::{Color3b, EdgeStore, GraphFile, LenType, NodeStore, Point, Readable, Writable};
 use speedy::*;
 use std::collections::{HashMap, HashSet};
+use std::ffi::CStr;
+use std::process::Command;
 
 #[derive(Readable, Writable)]
 pub struct NodeStore2 {
@@ -11,6 +13,7 @@ pub struct NodeStore2 {
     pub class: u16,
     pub offset_id: u32,
     pub offset_name: u32,
+    pub total_edge_count: u16,
     pub edge_count: u16,
     #[speedy(length = edge_count)]
     pub edges: Vec<u32>,
@@ -41,7 +44,7 @@ struct UniqueCounter {
 }
 
 impl FromIterator<u32> for UniqueCounter {
-    fn from_iter<I: IntoIterator<Item = u32>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item=u32>>(iter: I) -> Self {
         let mut val = HashMap::new();
         for i in iter {
             *val.entry(i).or_insert(0) += 1;
@@ -66,6 +69,10 @@ impl UniqueCounter {
     fn add_one(&mut self, key: u32) {
         *self.val.entry(key).or_insert(0) += 1;
     }
+}
+
+pub unsafe fn str_from_null_terminated_utf8<'a>(s: *const u8) -> &'a str {
+    CStr::from_ptr(s as *const _).to_str().unwrap()
 }
 
 fn main() {
@@ -99,6 +106,7 @@ fn main() {
                 class: n.class,
                 offset_id: n.offset_id,
                 offset_name: n.offset_name,
+                total_edge_count: 0,
                 edge_count: 0,
                 edges: vec![],
             })
@@ -172,7 +180,11 @@ fn main() {
     );*/
 
     for e in edges {
-        f2.nodes[e.b as usize].edges.push(e.a);
+        let node_b = &mut f2.nodes[e.b as usize];
+        node_b.edges.push(e.a);
+        node_b.total_edge_count += 1;
+        f2.nodes[e.a as usize].total_edge_count += 1;
+
         //f2.nodes[e.a as usize].edges.push(e.b);
     }
 
@@ -181,5 +193,13 @@ fn main() {
         n.edge_count = n.edges.len() as u16;
     }
 
-    f2.write_to_file("graph_n4j_alt_b.bin").unwrap();
+    f2.write_to_file("graph_n4j_0805.bin").unwrap();
+
+    Command::new("bash")
+        .arg("-c")
+        .arg("brotli -f -o graph_n4j_0805.bin.br graph_n4j_0805.bin -q 5")
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
 }

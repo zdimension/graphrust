@@ -222,6 +222,9 @@ async fn main() {
             class: 0,
             offset_id: file.ids.len() as u32,
             offset_name: file.names.len() as u32,
+            total_edge_count: 0,
+            edge_count: 0,
+            edges: vec![],
         };
         nodes_ids.insert(uid.clone(), file.nodes.len());
         file.nodes.push(pers);
@@ -264,13 +267,27 @@ async fn main() {
             continue;
         };
         edges.push((a, b));
-        file.edges.push(EdgeStore {
+        /*file.edges.push(EdgeStore {
             a: a as u32,
             b: b as u32,
-        });
+        });*/
         //writeln!(&mut edges_writer, "{} {}", a, b).unwrap();
     }
     log!("{} edges", edges.len());
+
+    log!("Sorting edges");
+    edges.sort_unstable_by_key(|e| (e.0, e.1));
+
+    log!("Writing neighbour lists");
+    for (a, b) in edges.iter().copied() {
+        file.nodes[a].total_edge_count += 1;
+        file.nodes[b].edges.push(a as u32);
+        file.nodes[b].total_edge_count += 1;
+    }
+
+    for n in file.nodes.iter_mut() {
+        n.edge_count = n.edges.len() as u16;
+    }
 
     log!("Computing adjacency matrix");
     let adj = file.get_adjacency();
@@ -317,7 +334,7 @@ async fn main() {
     let edges_file = std::fs::File::create("edges.txt").unwrap();
     let mut edges_writer = std::io::BufWriter::new(&edges_file);
     writeln!(&mut edges_writer, "{} {}", file.nodes.len(), edges.len()).unwrap();
-    for EdgeStore { a, b } in file.edges.iter() {
+    for (a, b) in edges.iter() {
         writeln!(&mut edges_writer, "{} {}", a, b).unwrap();
     }
 
@@ -343,7 +360,6 @@ async fn main() {
 
     file.class_count = file.classes.len() as u16;
     file.node_count = file.nodes.len() as LenType;
-    file.edge_count = file.edges.len() as LenType;
     file.ids_size = file.ids.len() as LenType;
     file.names_size = file.names.len() as LenType;
 
