@@ -20,6 +20,10 @@ pub struct Color3f {
 }
 
 impl Color3b {
+    pub fn new(r: u8, g: u8, b: u8) -> Color3b {
+        Color3b { r, g, b }
+    }
+
     pub fn to_f32(self) -> Color3f {
         Color3f {
             r: self.r as f32 / 255.0,

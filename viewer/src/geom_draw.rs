@@ -1,13 +1,13 @@
 use crate::app::Vertex;
-use graph_format::{Color3f, Point};
+use graph_format::{Color3b, Color3f, Point};
 
 /// Draws a line between a and b with the specified thickness and color.
 /// Result is a list of vertices to be used as a GL TriangleList.
 pub fn create_rectangle(
     a: Point,
     b: Point,
-    color_a: Color3f,
-    color_b: Color3f,
+    color_a: Color3b,
+    color_b: Color3b,
     size: f32,
 ) -> [Vertex; 6] {
     let ortho = (b - a).ortho().normalized() * size;
@@ -27,7 +27,7 @@ pub fn create_rectangle(
 
 /// Draws a circle with the specified radius and color.
 /// Result is a list of vertices to be used as a GL TriangleFan.
-pub fn create_circle_fan(center: Point, radius: f32, color: Color3f) -> Vec<Vertex> {
+pub fn create_circle_fan(center: Point, radius: f32, color: Color3b) -> Vec<Vertex> {
     const NUM_SEGMENTS: usize = 32;
 
     vec![Vertex::new(center, color)]
@@ -41,7 +41,7 @@ pub fn create_circle_fan(center: Point, radius: f32, color: Color3f) -> Vec<Vert
 
 /// Draws a circle with the specified radius and color.
 /// Result is a list of vertices to be used as a GL TriangleList.
-pub fn create_circle_tris(center: Point, radius: f32, color: Color3f) -> Vec<Vertex> {
+pub fn create_circle_tris(center: Point, radius: f32, color: Color3b) -> Vec<Vertex> {
     const NUM_SEGMENTS: usize = 32;
 
     let verts = create_circle_fan(center, radius, color);

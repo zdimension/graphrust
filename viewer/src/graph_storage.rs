@@ -52,8 +52,9 @@ pub fn load_binary(status_tx: StatusWriter) -> Cancelable<ProcessedData> {
     let modularity_classes = content
         .classes
         .iter()
+        .copied()
         .enumerate()
-        .map(|(id, color)| ModularityClass::new(color.to_f32(), id as u16))
+        .map(|(id, color)| ModularityClass::new(color, id as u16))
         .collect_vec();
 
     log!(status_tx, "Processing nodes");

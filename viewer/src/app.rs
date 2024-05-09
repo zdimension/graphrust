@@ -11,7 +11,7 @@ use egui::{
     pos2, vec2, Color32, Context, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText,
 };
 use egui_dock::{DockArea, DockState, Style};
-use graph_format::{Color3f, EdgeStore, Point};
+use graph_format::{Color3b, Color3f, EdgeStore, Point};
 use graphrust_macros::md;
 use itertools::Itertools;
 use nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
@@ -123,7 +123,7 @@ impl Person {
 #[derive(Copy, Clone)]
 pub struct Vertex {
     pub position: Point,
-    pub color: Color3f,
+    pub color: Color3b,
 }
 
 #[repr(C)]
@@ -134,7 +134,7 @@ pub struct PersonVertex {
 }
 
 impl PersonVertex {
-    pub fn new(position: Point, color: Color3f, degree: u16, class: u16) -> PersonVertex {
+    pub fn new(position: Point, color: Color3b, degree: u16, class: u16) -> PersonVertex {
         PersonVertex {
             vertex: Vertex::new(position, color),
             degree_and_class: ((class as u32) << 16) | (degree as u32),
@@ -144,20 +144,20 @@ impl PersonVertex {
 //implement_vertex!(Vertex, position, color);
 
 impl Vertex {
-    pub fn new(position: Point, color: Color3f) -> Vertex {
+    pub fn new(position: Point, color: Color3b) -> Vertex {
         Vertex { position, color }
     }
 }
 
 #[derive(Clone)]
 pub struct ModularityClass {
-    pub color: Color3f,
+    pub color: Color3b,
     pub id: u16,
     pub name: String,
 }
 
 impl ModularityClass {
-    pub fn new(color: Color3f, id: u16) -> ModularityClass {
+    pub fn new(color: Color3b, id: u16) -> ModularityClass {
         ModularityClass {
             color,
             id,
@@ -1084,6 +1084,7 @@ impl RenderedGraph {
 
             let edges_count = edges.len();
             log!(status_tx, "Creating vertice list");
+            const VERTS_PER_NODE: usize = 1;
             let node_vertices = viewer
                 .persons
                 .iter()
@@ -1095,6 +1096,7 @@ impl RenderedGraph {
                         p.modularity_class,
                     )
                 });
+            const VERTS_PER_EDGE: usize = 6; // change this if below changes!
             let edge_vertices = edges
                 .map(|e| {
                     let pa = &viewer.persons[e.a as usize];
@@ -1154,9 +1156,26 @@ impl RenderedGraph {
                         ),
                     ]
                 });
+
             let vertices = node_vertices
-                .chain(edge_vertices)
-                .collect_vec();
+                .chain(edge_vertices);
+
+            #[cfg(target_arch = "wasm32")]
+                let vertices = {
+                const ONE_GIG: usize = 1024 * 1024 * 1024;
+                const MAX_VERTS_IN_ONE_GIG: usize = ONE_GIG / std::mem::size_of::<PersonVertex>();
+                let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * VERTS_PER_EDGE;
+                if num_vertices > MAX_VERTS_IN_ONE_GIG {
+                    log!(status_tx, "More than 1GB of vertices ({}), truncating", num_vertices);
+                    vertices.take(MAX_VERTS_IN_ONE_GIG).collect_vec()
+                } else {
+                    log!(status_tx, "Less than 1GB of vertices ({}), not truncating", num_vertices);
+                    vertices.collect_vec()
+                }
+            };
+
+            #[cfg(not(target_arch = "wasm32"))]
+                let vertices = vertices.collect_vec();
 
             log!(status_tx, "Buffering {} vertices", vertices.len());
             let VertArray(vertices_array, vertices_buffer) = gl.run(move |gl: &glow::Context| {
@@ -1187,8 +1206,8 @@ impl RenderedGraph {
                 gl.vertex_attrib_pointer_f32(
                     1,
                     3,
-                    glow::FLOAT,
-                    false,
+                    glow::UNSIGNED_BYTE,
+                    true,
                     std::mem::size_of::<PersonVertex>() as i32,
                     std::mem::size_of::<Point>() as i32,
                 );
@@ -1228,8 +1247,8 @@ impl RenderedGraph {
                 gl.vertex_attrib_pointer_f32(
                     1,
                     3,
-                    glow::FLOAT,
-                    false,
+                    glow::UNSIGNED_BYTE,
+                    true,
                     std::mem::size_of::<Vertex>() as i32,
                     std::mem::size_of::<Point>() as i32,
                 );

@@ -153,8 +153,8 @@ impl PathSection {
                                 verts.extend(create_rectangle(
                                     data.persons[p].position,
                                     data.persons[*path.last().unwrap()].position,
-                                    Color3f::new(1.0, 0.0, 0.0),
-                                    Color3f::new(1.0, 0.0, 0.0),
+                                    Color3b::new(255, 0, 0),
+                                    Color3b::new(255, 0, 0),
                                     20.0,
                                 ));
                                 path.push(p);
@@ -165,13 +165,13 @@ impl PathSection {
                                 create_circle_tris(
                                     data.persons[i].position,
                                     30.0,
-                                    Color3f::new(0.0, 0.0, 0.0),
+                                    Color3b::new(0, 0, 0),
                                 )
                                     .into_iter()
                                     .chain(create_circle_tris(
                                         data.persons[i].position,
                                         20.0,
-                                        Color3f::new(1.0, 0.0, 0.0),
+                                        Color3b::new(255, 0, 0),
                                     ))
                             }));
 
@@ -756,7 +756,7 @@ impl ClassSection {
         let rad = 5.0;
         let size = Vec2::splat(2.0 * rad + 5.0);
         let (rect, _) = ui.allocate_at_least(size, Sense::hover());
-        let Color3b { r, g, b } = cl.color.to_u8();
+        let Color3b { r, g, b } = cl.color;
         ui.painter().circle_filled(
             rect.center(),
             rad,
