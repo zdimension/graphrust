@@ -957,17 +957,20 @@ impl GraphViewApp {
                         Hyperlink::from_label_and_url("zdimension", "https://zdimension.fr")
                             .open_in_new_tab(true),
                     );
-                    egui::widgets::global_dark_light_mode_switch(ui);
-                    if ui.button("Réduire").clicked() {
-                        self.top_bar = false;
-                    }
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 10.0;
+                        egui::widgets::global_dark_light_mode_buttons(ui);
+                        ui.add_space(15.0);
+                        if ui.button("Réduire l'en-tête").clicked() {
+                            self.top_bar = false;
+                        }
+                    });
                 });
                 ui.vertical(|ui| {
                     md!(ui, r#"
 Si l'interface est **lente**:
 - décocher **Afficher les liens**
-- augmenter **Degré minimum**
-                    "#);
+- augmenter **Degré minimum**"#);
                 });
                 ui.vertical(|ui| {
                     md!(ui, r#"
