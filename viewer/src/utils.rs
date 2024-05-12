@@ -38,7 +38,7 @@ macro_rules! log
 }*/
 
 pub unsafe fn str_from_null_terminated_utf8<'a>(s: *const u8) -> &'a str {
-    CStr::from_ptr(s as *const _).to_str().unwrap()
+    std::str::from_utf8_unchecked(CStr::from_ptr(s as *const _).to_bytes())
 }
 
 pub trait SliceExt {
