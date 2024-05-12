@@ -14,6 +14,7 @@ use egui::text::{CCursor, CCursorRange};
 use std::sync::{Arc, Mutex};
 use derivative::Derivative;
 use egui::epaint::RectShape;
+use zearch::Search;
 
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
     let rect = Rect::from_center_size(
@@ -226,11 +227,10 @@ pub fn combo_with_filter(
                     //let ctx = ui.ctx().clone();
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
-                        let mut res = viewer_data.engine.search(pattern.as_str());
+                        let mut res = viewer_data.engine.search(&Search::new(&pattern).with_limit(100));
                         let mut state = state.lock().unwrap();
                         if state.pattern.eq(&pattern) {
-                            res.truncate(100);
-                            state.item_vector = res;
+                            state.item_vector = res.iter().map(|&i| i as usize).collect();
                             state.loading = false;
                             ctx.update();
                         }

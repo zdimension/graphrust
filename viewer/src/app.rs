@@ -15,12 +15,12 @@ use graph_format::{Color3b, Color3f, EdgeStore, Point};
 use graphrust_macros::md;
 use itertools::Itertools;
 use nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
-use simsearch::{SearchOptions, SimSearch};
 
 use egui::epaint::TextShape;
 use egui::Event::PointerButton;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
+use zearch::Index;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread;
@@ -97,6 +97,12 @@ pub struct Person {
     pub id: &'static str,
     pub name: &'static str,
     pub neighbors: Vec<usize>,
+}
+
+impl AsRef<str> for Person {
+    fn as_ref(&self) -> &str {
+        self.name
+    }
 }
 
 impl Person {
@@ -183,11 +189,11 @@ impl<T: Error> From<T> for CancelableError {
 
 pub type Cancelable<T> = Result<T, CancelableError>;
 
-#[derive(Clone)]
 pub struct ViewerData {
     pub persons: Vec<Person>,
     pub modularity_classes: Vec<ModularityClass>,
-    pub engine: SimSearch<usize>,
+    pub index: Vec<u8>,
+    pub engine: Index<'static>,
 }
 
 impl ViewerData {
@@ -197,15 +203,24 @@ impl ViewerData {
         status_tx: &StatusWriter,
     ) -> Cancelable<ViewerData> {
         log!(status_tx, "Initializing search engine");
-        let mut engine: SimSearch<usize> =
+        /*let mut engine: SimSearch<usize> =
             SimSearch::new_with(SearchOptions::new().stop_words(vec!["-".into()]));
         for (i, person) in persons.iter().enumerate() {
             engine.insert(i, person.name);
-        }
+        }*/
+        let mut index = Vec::new();
+        Index::construct(
+            //&persons.iter().map(|p| p.name).collect::<Vec<_>>(),
+            &persons,
+            &mut index,
+        ).expect("Failed to construct index");
+        log!(status_tx, "Index built: {} bytes", index.len());
+        let engine = Index::from_bytes(unsafe { std::mem::transmute(&index[..]) }).expect("Failed to load index");
         log!(status_tx, "Done");
         Ok(ViewerData {
             persons,
             modularity_classes,
+            index,
             engine,
         })
     }

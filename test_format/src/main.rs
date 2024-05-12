@@ -78,7 +78,25 @@ pub unsafe fn str_from_null_terminated_utf8<'a>(s: *const u8) -> &'a str {
 fn main() {
     let f = GraphFile::read_from_file("graph_n4j.bin").unwrap();
 
-    let mut edges: Vec<EdgeStore> = f.edges;
+    let names = f.nodes.iter().map(|p| {
+        unsafe {
+            (
+                str_from_null_terminated_utf8(
+                    f.ids.as_ptr().offset(p.offset_id as isize),
+                ),
+                str_from_null_terminated_utf8(
+                    f.names.as_ptr().offset(p.offset_name as isize),
+                ))
+        }
+    }).filter(|s| s.1.len() > 255);
+
+    for name in names {
+        println!("{:?}", name);
+    }
+
+    //println!("max name length: {}", names.unwrap());
+
+    /*let mut edges: Vec<EdgeStore> = f.edges;
 
     let mut unique_a = edges.iter().map(|e| e.a).collect::<UniqueCounter>();
     let mut unique_b = edges.iter().map(|e| e.b).collect::<UniqueCounter>();
@@ -201,5 +219,5 @@ fn main() {
         .spawn()
         .unwrap()
         .wait()
-        .unwrap();
+        .unwrap();*/
 }

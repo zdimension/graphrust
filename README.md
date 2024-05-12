@@ -17,5 +17,6 @@ The import tool fetches the data from the Neo4j backend and performs multiple an
 ## Viewer
 
 The viewer uses [egui](https://github.com/emilk/egui) for the
-UI, [simsearch](https://github.com/andylokandy/simsearch-rs) for the search, and a handwritten OpenGL renderer
+UI, [zearch](https://github.com/irevoire/zearch) for the search (which was specially crafted for this use case!), and a
+handwritten OpenGL renderer
 using [glow](https://github.com/grovesNL/glow/).

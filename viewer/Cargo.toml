@@ -16,7 +16,6 @@ instant = "0.1"
 itertools = "0.12"
 nalgebra = "0.32"
 pollster = "0.3"
-simsearch = "0.2"
 speedy = "0.8"
 log = "0.4"
 graph_format = { path = "../graph_format" }
@@ -24,6 +23,7 @@ graphrust_macros = { path = "../macros" }
 egui_extras = "0.27"
 egui_dock = "0.12"
 rayon = "1.8"
+zearch = { git = "https://github.com/zdimension/zearch" }
 
 [dev-dependencies]
 log = "*"
