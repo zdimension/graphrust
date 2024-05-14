@@ -192,7 +192,6 @@ pub type Cancelable<T> = Result<T, CancelableError>;
 pub struct ViewerData {
     pub persons: Vec<Person>,
     pub modularity_classes: Vec<ModularityClass>,
-    pub index: Vec<u8>,
     pub engine: Index<'static>,
 }
 
@@ -208,19 +207,19 @@ impl ViewerData {
         for (i, person) in persons.iter().enumerate() {
             engine.insert(i, person.name);
         }*/
-        let mut index = Vec::new();
+        /*let mut index = Vec::new();
         Index::construct(
             //&persons.iter().map(|p| p.name).collect::<Vec<_>>(),
             &persons,
             &mut index,
-        ).expect("Failed to construct index");
-        log!(status_tx, "Index built: {} bytes", index.len());
-        let engine = Index::from_bytes(unsafe { std::mem::transmute(&index[..]) }).expect("Failed to load index");
+        ).expect("Failed to construct index");*/
+        //log!(status_tx, "Index built: {} bytes", index.len());
+        //let engine = Index::from_bytes(unsafe { std::mem::transmute(&index[..]) }).expect("Failed to load index");
+        let engine = Index::new_in_memory(unsafe { std::mem::transmute::<&[Person], &'static [Person]>(&persons[..]) });
         log!(status_tx, "Done");
         Ok(ViewerData {
             persons,
             modularity_classes,
-            index,
             engine,
         })
     }
