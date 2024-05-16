@@ -3781,6 +3781,7 @@ checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 [[package]]
 name = "zearch"
 version = "0.1.0"
+source = "git+https://github.com/zdimension/zearch#2ac57b671707374e3b2a6f3e7831a4224fe35360"
 dependencies = [
  "fst",
  "roaring",
