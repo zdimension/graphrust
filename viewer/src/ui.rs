@@ -11,11 +11,12 @@ use egui::ahash::{AHashMap, AHashSet};
 use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals, Context, Id};
 use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f, EdgeStore};
-use itertools::Itertools;
+use itertools::{Itertools, MinMaxResult};
 use nalgebra::{Matrix4, Vector2};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::sync::{mpsc, Arc};
+use itertools::MinMaxResult::NoElements;
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -374,6 +375,15 @@ pub struct InfosSection {
     pub infos_open: bool,
     #[derivative(Default(value = "1"))]
     pub neighborhood_degree: usize,
+    pub paradox: ParadoxState,
+}
+
+#[derive(Default)]
+struct ParadoxState {
+    current: Option<usize>,
+    sum: usize,
+    min: usize,
+    max: usize,
 }
 
 impl InfosSection {
@@ -470,6 +480,44 @@ impl InfosSection {
                                     }
                                 },
                             );
+                        });
+
+                    CollapsingHeader::new("Paradoxe de l'amitié")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            let update = || {};
+
+                            if self.paradox.current != self.infos_current {
+                                let mut sum = 0;
+                                let friends = person.neighbors.iter()
+                                    .map(|&i| data.persons[i].neighbors.len())
+                                    .inspect(|n| sum += n)
+                                    .minmax();
+                                use MinMaxResult::*;
+                                let (min, max) = match friends {
+                                    NoElements => (0, 0),
+                                    OneElement(n) => (n, n),
+                                    MinMax(min, max) => (min, max),
+                                };
+                                self.paradox = ParadoxState { current: Some(id), sum, min, max };
+                            }
+
+                            let state = &self.paradox;
+
+                            egui::Grid::new("#paradox").show(ui, |ui| {
+                                ui.label("Amis :");
+                                ui.label(format!("{}", person.neighbors.len()));
+                                ui.end_row();
+                                ui.label("Amis de mes amis (moy) :");
+                                ui.label(format!("{}", state.sum / person.neighbors.len()));
+                                ui.end_row();
+                                ui.label("Amis de mes amis (min) :");
+                                ui.label(format!("{}", state.min));
+                                ui.end_row();
+                                ui.label("Amis de mes amis (max) :");
+                                ui.label(format!("{}", state.max));
+                                ui.end_row();
+                            });
                         });
 
                     ui.horizontal(|ui| {
