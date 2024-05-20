@@ -103,77 +103,27 @@
 <!-- The WASM code will resize the canvas dynamically -->
 <!-- the id is hardcoded in main.rs . so, make sure both match. -->
 <canvas id="the_canvas_id"></canvas>
-<!--<div class="centered" id="center_text">
-    <p style="font-size:16px" id="center_message">
-        <span id="statustext">Loading</span>…
-    </p>
-    <div class="lds-dual-ring"></div>
-    <br/>
-    <progress id="pbar" max="100" value="0"></progress>
-</div>
 
-<script>
-    function log(msg) {
-        statustext.textContent = msg;
-    }
-
-    fetch("graph_n4j.bin.br")
-        .then(response => {
-            log("Downloading graph");
-
-            if (!response.ok) {
-                throw Error(response.status + ' ' + response.statusText)
-            }
-
-            if (!response.body) {
-                throw Error('ReadableStream not yet supported in this browser.')
-            }
-
-            const contentLength = response.headers.get('x-file-size');
-            if (contentLength === null) {
-                throw Error('Response size header unavailable');
-            }
-
-            const total = parseInt(contentLength, 10);
-            let loaded = 0;
-
-            return new Response(
-                new ReadableStream({
-                    start(controller) {
-                        const reader = response.body.getReader();
-
-                        read();
-
-                        function read() {
-                            reader.read().then(({done, value}) => {
-                                if (done) {
-                                    controller.close();
-                                    return;
-                                }
-                                loaded += value.byteLength;
-                                pbar.value = Math.round(loaded / total * 100);
-                                controller.enqueue(value);
-                                read();
-                            }).catch(error => {
-                                console.error(error);
-                                controller.error(error)
-                            })
-                        }
-                    }
-                })
-            );
-        })
-        .then(a => a.arrayBuffer())
-        .then(a => {
-            pbar.style.display = "none";
-            window.graph = a;
-            log("Processing graph");
-            setTimeout(function () {
-                window.wasmBindings.start();
-                center_text.innerHTML = "";
-            }, 10);
-        });
+<!-- Default Statcounter code for zdimension website
+https://zdimension.fr -->
+<script type="text/javascript">
+    var sc_project = 10597117;
+    var sc_invisible = 1;
+    var sc_security = "338cfd8d";
 </script>
+<script type="text/javascript"
+        src="https://www.statcounter.com/counter/counter.js"
+        async></script>
+<noscript>
+    <div class="statcounter"><a title="free web stats"
+                                href="https://statcounter.com/" target="_blank"><img
+            class="statcounter"
+            src="https://c.statcounter.com/10597117/0/338cfd8d/1/"
+            alt="free web stats"
+            referrerPolicy="no-referrer-when-downgrade"></a></div>
+</noscript>
+<!-- End of Statcounter Code -->
+
 </body>
 
 </html>
