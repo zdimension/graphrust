@@ -22,8 +22,12 @@ void main()
         // set position to nan so the vertex gets culled out of existence and the whole primitive is scrapped
         gl_Position = vec4(nan, nan, nan, nan);
     } else {
-        v_color = vec4(color, opacity);
         gl_Position = u_projection * vec4(position, 0.0, 1.0);
-        gl_PointSize = 16.0 * -u_projection[2][2];
+        float scale = sqrt(float(min(deg, 1000u)) / 1000.0);
+        v_color = vec4(color, min(1.0, opacity * (1.0 + 1.2 * scale)));
+        const float min_size = 12.0;
+        const float max_size = 100.0;
+        float size = (max_size - min_size) * scale + min_size;
+        gl_PointSize = size * -u_projection[2][2];
     }
 }
