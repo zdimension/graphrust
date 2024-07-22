@@ -24,6 +24,7 @@ use zearch::Index;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread;
+use eframe::epaint::text::TextWrapMode;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_thread as thread;
 
@@ -76,8 +77,8 @@ macro_rules! ignore_error {
 }
 
 pub fn iter_progress<'a, T>(iter: T, ch: &'a StatusWriter) -> impl Iterator<Item=T::Item> + 'a
-    where
-        T: ExactSizeIterator + 'a,
+where
+    T: ExactSizeIterator + 'a,
 {
     let max = ExactSizeIterator::len(&iter);
     let how_often = (max / 100).max(1);
@@ -823,7 +824,7 @@ for TabViewer<'tab_request, 'frame>
                                 .background_color(color)
                                 .color(Color32::WHITE);
                             let gal =
-                                txt.into_galley(ui, Some(false), f32::INFINITY, TextStyle::Heading);
+                                txt.into_galley(ui, Some(TextWrapMode::Extend), f32::INFINITY, TextStyle::Heading);
                             clipped_painter.add(TextShape::new(
                                 rect.center()
                                     + vec2(pos_scr.x, -pos_scr.y) * rect.size() * 0.5
@@ -1104,7 +1105,7 @@ impl RenderedGraph {
             };
 
             #[cfg(target_arch = "wasm32")]
-                let edges = edges.take(10_000_000);
+            let edges = edges.take(10_000_000);
 
             let edges_count = edges.len();
             log!(status_tx, "Creating vertice list");
@@ -1185,7 +1186,7 @@ impl RenderedGraph {
                 .chain(edge_vertices);
 
             #[cfg(target_arch = "wasm32")]
-                let vertices = {
+            let vertices = {
                 const THRESHOLD: usize = 1024 * 1024 * 1024;
                 const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / std::mem::size_of::<PersonVertex>();
                 let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * VERTS_PER_EDGE;
@@ -1199,7 +1200,7 @@ impl RenderedGraph {
             };
 
             #[cfg(not(target_arch = "wasm32"))]
-                let vertices = vertices.collect_vec();
+            let vertices = vertices.collect_vec();
 
             log!(status_tx, "Buffering {} vertices", vertices.len());
             let VertArray(vertices_array, vertices_buffer) = gl.run(move |gl: &glow::Context| {
@@ -1366,7 +1367,7 @@ impl RenderedGraph {
                 let verts = 2 * 3 * self.edges_count as i32;
                 // if wasm, clamp verts at 30M, because Firefox refuses to draw anything above that
                 #[cfg(target_arch = "wasm32")]
-                    let verts = verts.min(30_000_000);
+                let verts = verts.min(30_000_000);
                 gl.draw_arrays(glow::TRIANGLES, self.nodes_count as i32, verts);
             }
             if nodes.0 {

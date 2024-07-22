@@ -8,11 +8,12 @@ use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
 use egui::style::WidgetVisuals;
 
-use egui::{Align, Color32, Id, Layout, Painter, Response, Rounding, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, WidgetText};
+use egui::{Align, Color32, Id, Layout, Painter, PopupCloseBehavior, Response, Rounding, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, WidgetText};
 
 use egui::text::{CCursor, CCursorRange};
 use std::sync::{Arc, Mutex};
 use derivative::Derivative;
+use eframe::epaint::text::TextWrapMode;
 use egui::epaint::RectShape;
 use zearch::Search;
 
@@ -45,7 +46,7 @@ fn button_frame(
     outer_rect.set_height(outer_rect.height().at_least(interact_size.y));
 
     let inner_rect = outer_rect.shrink2(margin);
-    let mut content_ui = ui.child_ui(inner_rect, *ui.layout());
+    let mut content_ui = ui.child_ui(inner_rect, *ui.layout(), None);
     add_contents(&mut content_ui);
 
     let mut outer_rect = content_ui.min_rect().expand2(margin);
@@ -136,7 +137,11 @@ pub fn combo_with_filter(
         };
 
         let galley =
-            selected_text.into_galley(ui, Some(wrap_enabled), wrap_width, TextStyle::Button);
+            selected_text.into_galley(ui, Some(if wrap_enabled {
+                TextWrapMode::Wrap
+            } else {
+                TextWrapMode::Extend
+            }), wrap_width, TextStyle::Button);
 
         // The width necessary to contain the whole widget with the currently selected value's text.
         let width = if wrap_enabled {
@@ -185,7 +190,7 @@ pub fn combo_with_filter(
     }
 
     let mut sel_changed = false;
-    let inner = egui::popup::popup_below_widget(ui, popup_id, &button_response, |ui| {
+    let inner = egui::popup::popup_below_widget(ui, popup_id, &button_response, PopupCloseBehavior::CloseOnClickOutside, |ui| {
         ui.vertical(|ui| {
             let binding =
                 ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());

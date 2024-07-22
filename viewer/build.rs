@@ -1,7 +1,10 @@
 use anyhow::Result;
-use vergen::EmitBuilder;
+use vergen_gitcl::{BuildBuilder, Emitter, GitclBuilder};
 
 pub fn main() -> Result<()> {
-    EmitBuilder::builder().build_date().git_sha(true).emit()?;
+    Emitter::default()
+        .add_instructions(&BuildBuilder::default().build_date(true).build()?)?
+        .add_instructions(&GitclBuilder::default().sha(true).build()?)?
+        .emit()?;
     Ok(())
 }
