@@ -35,14 +35,15 @@ vergen = { version = "8.3.1", features = ["build", "git", "gitcl"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
+pollster = { version = "0.3" }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { version = "*", features = ["sync"] }
+tokio = { version = "*", features = ["sync", "time"] }
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "*"
 js-sys = "*"
-web-sys = { version = "*", features = ["XmlHttpRequest", "XmlHttpRequestResponseType", "WorkerGlobalScope", "Performance"] }
+web-sys = { version = "*", features = ["XmlHttpRequest", "XmlHttpRequestResponseType", "WorkerGlobalScope", "Performance", "ProgressEvent"] }
 parking_lot = { version = "*", features = ["nightly"] }
 wasm-logger = "0.2.0"
 wasm_thread = "0.3.0"

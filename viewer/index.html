@@ -104,6 +104,38 @@
 <!-- the id is hardcoded in main.rs . so, make sure both match. -->
 <canvas id="the_canvas_id"></canvas>
 
+<script>
+    function downloadGraph(progress) {
+        return new Promise(function (resolve, reject) {
+            let xhr = new XMLHttpRequest();
+            xhr.open('GET', 'graph_n4j.bin.br', true);
+            xhr.responseType = 'arraybuffer';
+            xhr.onprogress = function (event) {
+                if (event.lengthComputable) {
+                    progress(event.loaded / event.total);
+                }
+            };
+            xhr.onload = function () {
+                if (this.status >= 200 && this.status < 300) {
+                    resolve(xhr.response);
+                } else {
+                    reject({
+                        status: this.status,
+                        statusText: xhr.statusText
+                    });
+                }
+            };
+            xhr.onerror = function () {
+                reject({
+                    status: this.status,
+                    statusText: xhr.statusText
+                });
+            };
+            xhr.send();
+        });
+    }
+</script>
+
 <!-- Default Statcounter code for zdimension website
 https://zdimension.fr -->
 <script type="text/javascript">

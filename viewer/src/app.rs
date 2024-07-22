@@ -3,7 +3,7 @@ use crate::camera::{Camera, CamXform};
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-use crate::graph_storage::{load_binary, ProcessedData};
+use crate::graph_storage::{load_binary, ProcessedData, load_file};
 use crate::ui::{DisplaySection, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
@@ -179,6 +179,7 @@ impl ModularityClass {
     }*/
 }
 
+#[derive(Debug)]
 pub struct CancelableError;
 
 impl<T: Error> From<T> for CancelableError {
@@ -530,8 +531,27 @@ impl GraphViewApp {
         let (status_tx, status_rx) = status_pipe(&cc.egui_ctx);
         let (file_tx, file_rx) = mpsc::channel();
 
+        #[cfg(target_arch = "wasm32")]
+        wasm_bindgen_futures::spawn_local(async move {
+            let Ok(res) = load_file(&status_tx).await else {
+                log::info!("Error loading graph file");
+                return;
+            };
+
+            thread::spawn(move || {
+                let Ok(res) = load_binary(&status_tx, res) else {
+                    log::info!("Error processing graph file");
+                    return;
+                };
+                file_tx.send(res).unwrap();
+            });
+        });
+
+        #[cfg(not(target_arch = "wasm32"))]
         spawn_cancelable(move || {
-            file_tx.send(load_binary(status_tx)?)?;
+            let res = load_file(&status_tx)?;
+            let res = load_binary(&status_tx, res)?;
+            file_tx.send(res)?;
             Ok(())
         });
 
@@ -1166,14 +1186,14 @@ impl RenderedGraph {
 
             #[cfg(target_arch = "wasm32")]
                 let vertices = {
-                const ONE_GIG: usize = 1024 * 1024 * 1024;
-                const MAX_VERTS_IN_ONE_GIG: usize = ONE_GIG / std::mem::size_of::<PersonVertex>();
+                const THRESHOLD: usize = 1024 * 1024 * 1024;
+                const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / std::mem::size_of::<PersonVertex>();
                 let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * VERTS_PER_EDGE;
                 if num_vertices > MAX_VERTS_IN_ONE_GIG {
-                    log!(status_tx, "More than 1GB of vertices ({}), truncating", num_vertices);
+                    log!(status_tx, "More than {}MB of vertices ({}), truncating", THRESHOLD / 1024 / 1024, num_vertices);
                     vertices.take(MAX_VERTS_IN_ONE_GIG).collect_vec()
                 } else {
-                    log!(status_tx, "Less than 1GB of vertices ({}), not truncating", num_vertices);
+                    log!(status_tx, "Less than {}MB of vertices ({}), not truncating", THRESHOLD / 1024 / 1024, num_vertices);
                     vertices.collect_vec()
                 }
             };
