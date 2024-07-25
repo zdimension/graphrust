@@ -523,7 +523,7 @@ impl InfosSection {
                     ui.horizontal(|ui| {
                         ui.style_mut().spacing.slider_width = 100.0;
                         ui.add(
-                            egui::Slider::new(&mut self.neighborhood_degree, 1..=10)
+                            egui::Slider::new(&mut self.neighborhood_degree, 1..=13)
                                 .text("Degré")
                                 .clamp_to_range(true),
                         );
