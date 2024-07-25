@@ -190,7 +190,7 @@ pub fn combo_with_filter(
     }
 
     let mut sel_changed = false;
-    let inner = egui::popup::popup_below_widget(ui, popup_id, &button_response, PopupCloseBehavior::CloseOnClickOutside, |ui| {
+    let inner = egui::popup::popup_below_widget(ui, popup_id, &button_response, PopupCloseBehavior::CloseOnClick, |ui| {
         ui.vertical(|ui| {
             let binding =
                 ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
