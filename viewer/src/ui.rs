@@ -12,7 +12,7 @@ use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Vi
 use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f, EdgeStore};
 use itertools::{Itertools, MinMaxResult};
-use nalgebra::{Matrix4, Vector2};
+use graph_format::nalgebra::{Matrix4, Vector2};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::sync::{mpsc, Arc};

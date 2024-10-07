@@ -2,6 +2,8 @@ use nalgebra::Vector2;
 pub use speedy::{Readable, Writable};
 use std::iter::Sum;
 
+pub use nalgebra;
+
 // 24bpp color structure
 #[derive(Copy, Clone, Readable, Writable)]
 #[repr(C)]

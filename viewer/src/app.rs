@@ -14,7 +14,7 @@ use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3b, Color3f, EdgeStore, Point};
 use graphrust_macros::md;
 use itertools::Itertools;
-use nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
+use graph_format::nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
 
 use egui::epaint::TextShape;
 use egui::Event::PointerButton;

@@ -1,6 +1,6 @@
 use egui::{vec2, Pos2, Vec2};
 use graph_format::Point;
-use nalgebra::{Matrix4, Orthographic3, Similarity3, Vector3};
+use graph_format::nalgebra::{Matrix4, Orthographic3, Point3, Similarity3, Translation3, UnitQuaternion, Vector3};
 
 pub type CamXform = Similarity3<f32>;
 
@@ -54,7 +54,7 @@ impl Camera {
 
     /// Zooms the view in or out around the specified mouse location.
     pub fn zoom(&mut self, scaling: f32, mouse: Pos2) {
-        let diffpoint = nalgebra::Point3::new(
+        let diffpoint = Point3::new(
             mouse.x - self.ortho.right(),
             mouse.y - self.ortho.top(),
             0.0,
@@ -65,7 +65,7 @@ impl Camera {
         let diff = after - before;
         let diff_transf = self.transf.transform_vector(&diff);
         self.transf
-            .append_translation_mut(&nalgebra::Translation3::new(
+            .append_translation_mut(&Translation3::new(
                 diff_transf.x,
                 -diff_transf.y,
                 0.0,
@@ -75,11 +75,11 @@ impl Camera {
     /// Pans the view.
     pub fn pan(&mut self, dx: f32, dy: f32) {
         self.transf
-            .append_translation_mut(&nalgebra::Translation3::new(dx, -dy, 0.0));
+            .append_translation_mut(&Translation3::new(dx, -dy, 0.0));
     }
     pub fn rotate(&mut self, rot: f32) {
         self.transf
-            .append_rotation_mut(&nalgebra::UnitQuaternion::from_euler_angles(
+            .append_rotation_mut(&UnitQuaternion::from_euler_angles(
                 0.0, 0.0, -rot,
             ));
     }
