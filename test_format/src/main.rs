@@ -78,7 +78,62 @@ pub unsafe fn str_from_null_terminated_utf8<'a>(s: *const u8) -> &'a str {
 fn main() {
     let f = GraphFile::read_from_file("graph_n4j.bin").unwrap();
 
-    let names = f.nodes.iter().map(|p| {
+    const LIMIT: usize = 10000;
+
+    let mut new_graph = Vec::new();
+    let adj = f.get_adjacency();
+
+    let mut edges = HashSet::new();
+
+    for (node_id, neighbors) in adj[..LIMIT].into_iter().enumerate() {
+        // let mut new_neighbors = Vec::new();
+        // for neighbor in neighbors {
+        //     if (*neighbor as usize) < LIMIT {
+        //         new_neighbors.push(*neighbor);
+        //     }
+        // }
+        //
+        let new_neighbors: Vec<_> = neighbors.into_iter().filter(|n| **n < LIMIT as u32).map(|n| *n).collect();
+
+        edges.extend(new_neighbors.iter().map(|nb| {
+            let [a, b] = std::cmp::minmax(node_id, *nb as usize);
+            (a, b)
+        }));
+
+        new_graph.push(new_neighbors);
+    }
+
+    let adj = new_graph;
+
+    use std::io::Write;
+    let edges_file = std::fs::File::create(r"Z:\home\zdimension\graphrust_tools\Graph-Betweenness-Centrality\csr.txt").unwrap();
+    let mut edges_writer = std::io::BufWriter::new(&edges_file);
+    writeln!(&mut edges_writer, "{} {}", adj.len(), edges.len()).unwrap();
+    println!("{} {} {}", adj.len(), edges.len(), adj.len() * edges.len());
+
+    // cumsum of adj len
+    /*let mut cumsum = 0;
+    loop {
+        write!(&mut edges_writer, "{} ", cumsum).unwrap();
+
+    }*/
+    println!("Writing counts");
+    write!(&mut edges_writer, "0").unwrap();
+    let mut cum = 0;
+    for list in &adj {
+        cum += list.len();
+        write!(&mut edges_writer, " {}", cum).unwrap();
+    }
+    writeln!(&mut edges_writer).unwrap();
+
+    println!("Writing edges");
+    for list in adj {
+        for e in list {
+            write!(&mut edges_writer, "{} ", e).unwrap();
+        }
+    }
+
+    /*let names = f.nodes.iter().map(|p| {
         unsafe {
             (
                 str_from_null_terminated_utf8(
@@ -92,7 +147,7 @@ fn main() {
 
     for name in names {
         println!("{:?}", name);
-    }
+    }*/
 
     //println!("max name length: {}", names.unwrap());
 

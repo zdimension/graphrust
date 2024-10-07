@@ -3,6 +3,8 @@ use graph_format::{GraphFile, Readable};
 use inline_python::python;
 use rayon::prelude::*;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
+use std::collections::HashMap;
+use rand::Rng;
 
 #[macro_export]
 macro_rules! log
@@ -22,6 +24,32 @@ fn main() {
 
     let mut degrees = AHashMap::new();
     let persons = file.get_adjacency();
+
+    let total_edges = persons.iter().map(|p| p.len()).sum::<usize>() / 2;
+    println!("Total edges: {}", total_edges);
+
+    let average_friend_count = 2.0 * total_edges as f64 / persons.len() as f64;
+
+    const SCALE: f64 = 0.5;
+
+    let mut res_map = HashMap::<usize, usize>::new();
+
+    for freq in persons.iter().map(|p| {
+        (p.iter().map(|&f| persons[f as usize].len()).sum::<usize>() as f64 / p.len() as f64) / p.len() as f64
+    }) {
+        let key = (freq * SCALE) as usize;
+        *res_map.entry(key).or_default() += 1;
+    }
+
+    /*const SAMPLES: usize = 1000000;
+
+    let ids = rand::thread_rng().sample_iter(rand::distributions::Uniform::new(0, persons.len())).take(SAMPLES).collect::<Vec<_>>();
+
+    let samples = (0..SAMPLES)
+        .into_par_iter()
+        .map_init(|| rand::thread_rng(), |rng, _| {
+            todo!();
+        });*/
 
     /*let max_dist = |start_node| {
         let mut visited = vec![false; persons.len()];
@@ -71,7 +99,16 @@ fn main() {
         def power(x, b, c):
             return b*x**c
 
-        mind, maxd = 7, 80
+        bin_data = 'res_map
+
+        print(sorted(bin_data))
+
+        plt.hist(list(bin_data.keys()), bins=100, weights=list(bin_data.values()), density=True)
+        plt.show()
+
+        plt.clf()
+
+        mind, maxd = 6, 80
         dat = np.array('degrees_vec)[mind:maxd]
         deg_x = dat[:, 0]
         total_users = np.sum(dat[:, 1])

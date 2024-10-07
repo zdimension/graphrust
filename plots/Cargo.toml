@@ -9,3 +9,4 @@ chrono = "0.4.35"
 graph_format = { path = "../graph_format" }
 inline-python = "0.12"
 rayon = "1.9.0"
+rand = "0.8"

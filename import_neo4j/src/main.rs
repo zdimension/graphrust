@@ -201,7 +201,7 @@ async fn main() {
     log!("Start");
     let mut file = GraphFile::default();
     let mut nodes = graph
-        .execute(if config.only_bfs {
+        .execute(if false && config.only_bfs {
             query("match (n) return n.uid, n.name")
         } else {
             query("match (n) where count { (n)--() } >= $mind return n.uid, n.name")
@@ -237,7 +237,7 @@ async fn main() {
 
     let mut edges_q = graph
         .execute(
-            if config.only_bfs {
+            if false && config.only_bfs {
                 query("match (n)-->(m) return n.uid, m.uid")
             } else {
                 query(
