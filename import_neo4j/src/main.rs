@@ -89,7 +89,7 @@ fn do_layout(file: &mut GraphFile, config: &Config) {
             r"
             cd /home/zdimension/graphrust_tools/GPUGraphLayout/builds/linux;
             rm *.bin;
-            ./graph_viewer gpu {} 1 sg 1 1 approximate ../../../edges.txt . bin",
+            unbuffer ./graph_viewer gpu {} 1 sg 1 1 approximate ../../../edges.txt . bin",
             config.layout_iterations
         )))
     );
@@ -137,7 +137,7 @@ fn do_modularity(file: &mut GraphFile, config: &Config) {
             r"
             cd /home/zdimension/graphrust_tools/gpu-louvain;
             rm *.bin;
-            ./gpulouvain -f ../edges.txt -g {}",
+            unbuffer ./gpulouvain -f ../edges.txt -g {}",
             config.community_min_gain
         )))
     );
@@ -204,7 +204,7 @@ async fn main() {
         .execute(if false && config.only_bfs {
             query("match (n) return n.uid, n.name")
         } else {
-            query("match (n) where count { (n)--() } >= $mind return n.uid, n.name")
+            query("match (n) where count { (n)--() } >= $mind return n.uid, n.name, id(n)")
                 .param("mind", config.min_degree)
         })
         .await
@@ -212,10 +212,11 @@ async fn main() {
     let mut nodes_ids = AHashMap::new();
     log!("Processing node query");
     while let Ok(Some(row)) = nodes.next().await {
-        let uid: String = row.get("n.uid").unwrap();
-        let name: String = row
+        let uid: &str = row.get("n.uid").unwrap();
+        let name: &str = row
             .get("n.name")
             .expect(format!("Node without name: {}", uid).as_str());
+        let id: u64 = row.get("id(n)").unwrap();
         let pers = NodeStore {
             position: Point { x: 0.0, y: 0.0 },
             size: 0.0,
@@ -226,7 +227,7 @@ async fn main() {
             edge_count: 0,
             edges: vec![],
         };
-        nodes_ids.insert(uid.clone(), file.nodes.len());
+        nodes_ids.insert(id, file.nodes.len());
         file.nodes.push(pers);
         file.ids.extend(uid.as_bytes());
         file.ids.push(0);
@@ -241,7 +242,7 @@ async fn main() {
                 query("match (n)-->(m) return n.uid, m.uid")
             } else {
                 query(
-                    "match (n)-->(m) where count { (n)--() } >= $mind and count { (m)--() } >= $mind return n.uid, m.uid",
+                    "match (n)-->(m) where count { (n)--() } >= $mind and count { (m)--() } >= $mind return id(n), id(m)",
                 )
                     .param("mind", config.min_degree)
             },
@@ -254,8 +255,10 @@ async fn main() {
 
     log!("Processing edge query");
     while let Ok(Some(row)) = edges_q.next().await {
-        let uid1: String = row.get("n.uid").unwrap();
-        let uid2: String = row.get("m.uid").unwrap();
+        /*let uid1: &str = row.get("n.uid").unwrap();
+        let uid2: &str = row.get("m.uid").unwrap();*/
+        let uid1: u64 = row.get("id(n)").unwrap();
+        let uid2: u64 = row.get("id(m)").unwrap();
         /*let a = *nodes_ids.get(&uid1).expect(&uid1);
         let b = *nodes_ids.get(&uid2).expect(&uid2);*/
         let Some(&a) = nodes_ids.get(&uid1) else {
