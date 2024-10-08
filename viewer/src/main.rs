@@ -65,7 +65,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(async {
         eframe::WebRunner::new()
             .start(
-                "the_canvas_id", // hardcode it
+                web_sys::window().unwrap().document().unwrap().get_element_by_id("the_canvas_id").unwrap().dyn_into().unwrap(),
                 web_options,
                 Box::new(|cc| Ok(Box::new(viewer::GraphViewApp::new(cc)))),
             )
