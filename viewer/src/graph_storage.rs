@@ -24,60 +24,162 @@ pub fn load_file(_status_tx: &StatusWriter) -> Cancelable<GraphFile> {
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(inline_js = "export function downloadGraph(progressHandler) {
-    return fetch('graph_n4j.bin.br')
-        .then(response => {
-            if (!response.ok) {
-                throw Error(response.status + ' ' + response.statusText)
+#[wasm_bindgen(inline_js = "export function downloadGraph(filesize, progressHandler) {
+    const DB_NAME = 'graphCacheDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'files';
+
+    // Open the IndexedDB
+    return openIndexedDB().then(db => {
+        return getFileFromDB(db, filesize)
+            .then(cachedFile => {
+                if (cachedFile) {
+                    // If file is already in the cache and matches the size, return it
+                    return cachedFile;
+                } else {
+                    // If not cached or size mismatch, download and cache the file
+                    return fetchAndCacheFile(db, filesize, progressHandler);
+                }
+            })
+            .catch(() => {
+                // If any error occurs while checking the cache, fall back to download
+                return fetchAndCacheFile(null, filesize, progressHandler);
+            });
+    }).catch(() => {
+        // If any error occurs when opening the IndexedDB, fall back to download
+        return fetchAndCacheFile(null, filesize, progressHandler);
+    });
+
+    // Open IndexedDB and create object store if needed
+    function openIndexedDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+            request.onupgradeneeded = event => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                }
+            };
+
+            request.onsuccess = event => {
+                resolve(event.target.result);
+            };
+
+            request.onerror = event => {
+                reject('Error opening IndexedDB: ' + event.target.errorCode);
+            };
+        });
+    }
+
+    // Get file from IndexedDB
+    function getFileFromDB(db, filesize) {
+        return new Promise((resolve, reject) => {
+            if (!db) {
+                reject('No IndexedDB available');
+                return;
             }
 
-            if (!response.body) {
-                throw Error('ReadableStream not yet supported in this browser.')
-            }
+            const transaction = db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get('graph_n4j.bin.br');
 
-            const contentLength = response.headers.get('x-file-size');
-            if (contentLength === null) {
-                throw Error('Response size header unavailable');
-            }
+            request.onsuccess = event => {
+                const file = event.target.result;
+                if (file && file.size === filesize) {
+                    console.log('File found with correct size');
+                    resolve(file.data);
+                } else {
+                    console.log('File not found or size mismatch');
+                    resolve(null); // Return null if file not found or size mismatch
+                }
+            };
 
-            const total = parseInt(contentLength, 10);
-            let loaded = 0;
-            let progress = 0;
+            request.onerror = event => {
+                reject('Error retrieving file from IndexedDB: ' + event.target.errorCode);
+            };
+        });
+    }
 
-            return new Response(
-                new ReadableStream({
-                    start(controller) {
-                        const reader = response.body.getReader();
+    // Download file and cache it in IndexedDB
+    function fetchAndCacheFile(db, filesize, progressHandler) {
+        return fetch('graph_n4j.bin.br?size=' + filesize, {
+                cache: 'force-cache',
+                headers: {
+                    'Cache-Control': 'max-age=31536000',
+                    'Accept-Encoding': 'br'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw Error(response.status + ' ' + response.statusText);
+                }
 
-                        read();
+                const contentLength = response.headers.get('x-file-size');
+                if (contentLength === null) {
+                    throw Error('Response size header unavailable');
+                }
 
-                        function read() {
-                            reader.read().then(({done, value}) => {
-                                if (done) {
-                                    controller.close();
-                                    return;
-                                }
-                                loaded += value.byteLength;
-                                let newProgress = Math.round(loaded / total * 100);
-                                if (newProgress > progress) {
-                                    progress = newProgress;
-                                    progressHandler(progress);
-                                }
-                                controller.enqueue(value);
-                                read();
-                            }).catch(error => {
-                                console.error(error);
-                                controller.error(error)
-                            })
+                const total = parseInt(contentLength, 10);
+                let loaded = 0;
+                let progress = 0;
+
+                return new Response(
+                    new ReadableStream({
+                        start(controller) {
+                            const reader = response.body.getReader();
+
+                            read();
+
+                            function read() {
+                                reader.read().then(({ done, value }) => {
+                                    if (done) {
+                                        controller.close();
+                                        return;
+                                    }
+                                    loaded += value.byteLength;
+                                    let newProgress = Math.round(loaded / total * 100);
+                                    if (newProgress > progress) {
+                                        progress = newProgress;
+                                        progressHandler(progress);
+                                    }
+                                    controller.enqueue(value);
+                                    read();
+                                }).catch(error => {
+                                    console.error(error);
+                                    controller.error(error);
+                                });
+                            }
                         }
-                    }
-                })
-            );
-        })
-        .then(a => a.arrayBuffer());
-    }")]
+                    })
+                );
+            })
+            .then(a => a.arrayBuffer())
+            .then(arrayBuffer => {
+                if (db) {
+                    // Store the downloaded file in IndexedDB
+                    const transaction = db.transaction([STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    const request = store.put({
+                        id: 'graph_n4j.bin.br',
+                        size: filesize,
+                        data: arrayBuffer
+                    });
+
+                    request.onsuccess = () => {
+                        console.log('File cached in IndexedDB');
+                    };
+
+                    request.onerror = event => {
+                        console.error('Error caching file in IndexedDB: ' + event.target.errorCode);
+                    };
+                }
+                return arrayBuffer;
+            });
+    }
+}")]
 extern "C" {
-    fn downloadGraph(progress: &js_sys::Function) -> js_sys::Promise;
+    fn downloadGraph(filesize: u32, progress: &js_sys::Function) -> js_sys::Promise;
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -139,24 +241,21 @@ pub async fn load_file(status_tx: &StatusWriter) -> Cancelable<GraphFile> {
         .dyn_into::<js_sys::Function>()
         .unwrap();*/
     log!(status_tx, "Downloading file");
-    js_console_log("Debug 0");
     let status_tx_ = status_tx.clone();
-    js_console_log("Debug 1");
     let progress_handler = Closure::wrap(Box::new(move |progress: usize| {
-        //log_progress!(status_tx_, (progress * 100.0).round() as usize, 100).unwrap();
         status_tx_.send(crate::app::Progress { max: 100, val: progress }).unwrap()
     }) as Box<dyn FnMut(usize)>);
-    js_console_log("Debug 2");
-    let result = wasm_bindgen_futures::JsFuture::from(downloadGraph(progress_handler.as_ref().unchecked_ref()))
+    js_console_log("Awaiting JS promise");
+    let result = wasm_bindgen_futures::JsFuture::from(downloadGraph(include_str!("../file_size").parse().unwrap(), progress_handler.as_ref().unchecked_ref()))
         .await
         .unwrap();
-    js_console_log("Debug 3");
+    js_console_log("Converting to Uint8Array");
     let array_buffer = js_sys::Uint8Array::new(&result);
-    js_console_log("Debug 4");
+    js_console_log("Converting to Vec");
     let array_buffer = array_buffer.to_vec();
-    js_console_log("Debug 5");
+    js_console_log("Decoding to GraphFile object");
     let f = GraphFile::read_from_buffer(&array_buffer).map_err(Into::into);
-    js_console_log("Debug 6");
+    js_console_log("File read end");
     log!(status_tx, "File read");
     f
 }

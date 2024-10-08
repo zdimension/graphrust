@@ -1,6 +1,7 @@
 <FilesMatch "\.br$">
         Header append Content-Encoding br
         Header append Vary Accept-Encoding
+        Header append Cache-Control "max-age=31536000, immutable"
 </FilesMatch>
 
 Header append Cross-Origin-Opener-Policy same-origin

@@ -12,6 +12,9 @@ import os
 import subprocess
 
 try:
+    size = os.path.getsize("../graph_n4j.bin")
+    with open("file_size", "w") as f:
+        f.write(str(size))
     subprocess.run(["trunk", "build"], check=True)
     subprocess.run(["cmd", "/c", "del", "Z:\\web\\network5\\*", "/Q"], check=True)
     subprocess.run(["xcopy", "dist\\*.*", "Z:\\web\\network5\\", "/s", "/y"], check=True)
@@ -19,13 +22,14 @@ try:
         with open(".htaccess", "r") as htaccess:
             f.write(htaccess.read())
         f.write("<FilesMatch \"graph_n4j\\.bin\\.br\">\n")
-        size = os.path.getsize("../graph_n4j.bin")
         f.write(f"Header append X-file-size \"{size}\"\n")
         f.write("</FilesMatch>\n")
 except subprocess.CalledProcessError as e:
     print(e)
     raise e
 finally:
+    os.remove("file_size")
+
     with open("../.cargo/config.toml", "r") as f:
         config = f.read()
 
