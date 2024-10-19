@@ -1,15 +1,15 @@
+import os
+import subprocess
+
 with open("../.cargo/config.toml", "r") as f:
     config = f.read()
 
-STD_CODE = '\n[unstable]\nbuild-std = ["std", "panic_abort"]\n'
+STD_CODE = '\n[unstable]\nbuild-std = ["std", "panic_abort"]\n[build]\ntarget-dir = "' + os.path.abspath("../target/web").replace('\\', '\\\\') + '"'
 
 if "build-std" not in config:
     config += STD_CODE
     with open("../.cargo/config.toml", "w") as f:
         f.write(config)
-
-import os
-import subprocess
 
 try:
     size = os.path.getsize("../graph_n4j.bin")

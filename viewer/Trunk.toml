@@ -1,3 +1,6 @@
 [build]
 public_url = "./"
 release = true
+
+[tools]
+wasm_opt = "version_119"
