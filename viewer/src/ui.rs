@@ -11,8 +11,9 @@ use eframe::{glow, Frame};
 use egui::ahash::{AHashMap, AHashSet};
 use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Id, Pos2, Sense, SliderClamping, Ui, Vec2};
 use egui_extras::{Column, TableBuilder};
+use forceatlas2::{Layout, Node, Settings, VecN};
 use graph_format::nalgebra::{Matrix4, Vector2};
-use graph_format::{Color3b, EdgeStore};
+use graph_format::{Color3b, EdgeStore, Point};
 use itertools::MinMaxResult::NoElements;
 use itertools::{Itertools, MinMaxResult};
 use std::collections::VecDeque;
@@ -773,8 +774,41 @@ impl AlgosSection {
                             b: (b * 255.0) as u8,
                         }, (i + 1) as u16));
                     }
-                    let new_data = Arc::new(ViewerData::new(nodes, classes, &NullStatusWriter).unwrap());
-                    *data = new_data;
+
+                    *data = Arc::new(data.replace_data(nodes, classes));
+                }
+
+                if ui.button("ForceAtlas2").clicked() {
+                    self.algo_ran = true;
+                    let settings = Settings {
+                        theta: 0.5,
+                        ka: 0.1,
+                        kg: 0.1,
+                        kr: 0.02,
+                        lin_log: false,
+                        speed: 1.0,
+                        prevent_overlapping: None,
+                        strong_gravity: false,
+                    };
+
+                    let mut layout = Layout::<f32, 2>::from_position_graph(
+                        data.get_edges().map(|e| (e, 1.0)).collect(),
+                        data.persons.iter().map(|p| Node {
+                            pos: VecN(p.position.to_array()),
+                            ..Default::default()
+                        }).collect(),
+                        settings,
+                    );
+
+                    layout.iteration();
+
+                    let mut persons = data.persons.clone();
+
+                    for (person, node) in persons.iter_mut().zip(layout.nodes.iter()) {
+                        person.position = Point::new(node.pos[0], node.pos[1]);
+                    }
+
+                    *data = Arc::new(data.replace_data(persons, data.modularity_classes.clone()));
                 }
             });
     }
@@ -985,16 +1019,9 @@ impl UiState {
                         crate::geom_draw::create_node_vertex(p)
                     });
 
-                let edges = data
-                    .persons
-                    .iter()
-                    .enumerate()
-                    .flat_map(|(i, n)| {
-                        n.neighbors.iter()
-                            .filter(move |&&j| i < j)
-                            .map(move |&j| (i, j))
-                            .flat_map(|(a, b)| crate::geom_draw::create_edge_vertices(&data.persons[a], &data.persons[b]))
-                    });
+                let edges = data.get_edges().flat_map(
+                    |(a, b)| crate::geom_draw::create_edge_vertices(&data.persons[a], &data.persons[b])
+                );
 
                 let vertices = nodes.chain(edges).collect_vec();
 

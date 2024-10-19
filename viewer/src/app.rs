@@ -213,6 +213,30 @@ impl ViewerData {
             engine,
         })
     }
+
+    pub fn get_edges(&self) -> impl Iterator<Item=(usize, usize)> + '_ {
+        self
+            .persons
+            .iter()
+            .enumerate()
+            .flat_map(|(i, n)| {
+                n.neighbors.iter()
+                    .filter(move |&&j| i < j)
+                    .map(move |&j| (i, j))
+            })
+    }
+
+    pub fn replace_data(
+        &self,
+        persons: Vec<Person>,
+        modularity_classes: Vec<ModularityClass>,
+    ) -> ViewerData {
+        ViewerData {
+            persons,
+            modularity_classes,
+            engine: self.engine.clone(),
+        }
+    }
 }
 
 pub struct StringTables {
@@ -1291,9 +1315,7 @@ impl RenderedGraph {
         }
 
         while let Some(task) = self.tasks.pop_front() {
-            println!("running task");
             task(gl);
-            println!("done");
         }
 
         use glow::HasContext as _;

@@ -119,6 +119,10 @@ impl Point {
     pub fn normalized(&self) -> Point {
         *self / self.norm()
     }
+
+    pub fn to_array(&self) -> [f32; 2] {
+        [self.x, self.y]
+    }
 }
 
 impl std::ops::Add for Point {
