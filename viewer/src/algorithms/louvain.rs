@@ -1,12 +1,10 @@
-use crate::log;
+use crate::app::Person;
 use ahash::AHashMap;
-use itertools::Itertools;
 use rand::seq::SliceRandom;
 /// Louvain algorithm
 /// Ported from https://github.com/ledyba/cpp-louvain-fast
 /// Licensed under the AGPLv3 license, see https://github.com/ledyba/cpp-louvain-fast/blob/master/LICENSE
 use rand::thread_rng;
-use crate::app::Person;
 
 pub struct Graph {
     pub nodes: Vec<Community>,
@@ -195,7 +193,7 @@ impl Graph {
     }*/
 
     pub fn louvain(mut self) -> Self {
-        for i in 0..ITERATIONS {
+        for _ in 0..ITERATIONS {
             let old_stats = self.stats();
             self = self.next();
             /*log!(

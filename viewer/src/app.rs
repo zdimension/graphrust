@@ -1,31 +1,29 @@
+use crate::camera::{CamXform, Camera};
 use std::collections::VecDeque;
 use std::error::Error;
-use crate::camera::{Camera, CamXform};
-use std::marker::PhantomData;
 use std::ops::Deref;
 
-use crate::graph_storage::{load_binary, ProcessedData, load_file};
+use crate::graph_storage::{load_binary, load_file, ProcessedData};
 use crate::ui::{DisplaySection, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
 use egui::{
-    pos2, vec2, Color32, Context, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText,
+    vec2, Color32, Context, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText,
 };
 use egui_dock::{DockArea, DockState, Style};
+use graph_format::nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
 use graph_format::{Color3b, Color3f, EdgeStore, Point};
 use graphrust_macros::md;
 use itertools::Itertools;
-use graph_format::nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
 
 use egui::epaint::TextShape;
-use egui::Event::PointerButton;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Mutex};
 use zearch::Index;
 
+use eframe::epaint::text::TextWrapMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread;
-use eframe::epaint::text::TextWrapMode;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_thread as thread;
 
@@ -60,10 +58,10 @@ macro_rules! for_progress {
         {
             let max = ExactSizeIterator::len(&$iter);
             let how_often = (max / 100).max(1);
-            for (i, $var) in $iter.enumerate() {
+            for (i_, $var) in $iter.enumerate() {
                 $block;
-                if i % how_often == 0 {
-                    log_progress!($ch, i, max);
+                if i_ % how_often == 0 {
+                    log_progress!($ch, i_, max);
                 }
             }
         }
@@ -571,10 +569,10 @@ impl GraphViewApp {
             Ok(())
         });
 
-        return Self {
+        Self {
             top_bar: true,
             state: AppState::Loading { status_rx, file_rx },
-        };
+        }
     }
 }
 
@@ -1180,7 +1178,7 @@ impl RenderedGraph {
                     glow::ARRAY_BUFFER,
                     std::slice::from_raw_parts(
                         vertices.as_ptr() as *const u8,
-                        vertices.len() * std::mem::size_of::<PersonVertex>(),
+                        vertices.len() * size_of::<PersonVertex>(),
                     ),
                     glow::STATIC_DRAW,
                 );
@@ -1190,7 +1188,7 @@ impl RenderedGraph {
                     2,
                     glow::FLOAT,
                     false,
-                    std::mem::size_of::<PersonVertex>() as i32,
+                    size_of::<PersonVertex>() as i32,
                     0,
                 );
                 gl.enable_vertex_attrib_array(0);
@@ -1198,8 +1196,8 @@ impl RenderedGraph {
                     1,
                     1,
                     glow::UNSIGNED_INT,
-                    std::mem::size_of::<PersonVertex>() as i32,
-                    std::mem::size_of::<Point>() as i32,
+                    size_of::<PersonVertex>() as i32,
+                    size_of::<Point>() as i32,
                 );
                 gl.enable_vertex_attrib_array(1);
 
@@ -1222,7 +1220,7 @@ impl RenderedGraph {
                     2,
                     glow::FLOAT,
                     false,
-                    std::mem::size_of::<Vertex>() as i32,
+                    size_of::<Vertex>() as i32,
                     0,
                 );
                 gl.enable_vertex_attrib_array(0);
@@ -1231,8 +1229,8 @@ impl RenderedGraph {
                     3,
                     glow::UNSIGNED_BYTE,
                     true,
-                    std::mem::size_of::<Vertex>() as i32,
-                    std::mem::size_of::<Point>() as i32,
+                    size_of::<Vertex>() as i32,
+                    size_of::<Point>() as i32,
                 );
                 gl.enable_vertex_attrib_array(1);
 
@@ -1404,7 +1402,7 @@ impl RenderedGraph {
                         glow::ARRAY_BUFFER,
                         std::slice::from_raw_parts(
                             path.as_ptr() as *const u8,
-                            path.len() * std::mem::size_of::<Vertex>(),
+                            path.len() * size_of::<Vertex>(),
                         ),
                         glow::STATIC_DRAW,
                     );

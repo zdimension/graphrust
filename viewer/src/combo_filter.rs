@@ -1,20 +1,19 @@
 // Ugly unsafe code ahead
 // here be dragons
 
-use std::ops::Add;
-use crate::app::{ContextUpdater, thread, ViewerData};
+use crate::app::{thread, ContextUpdater, ViewerData};
 use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
 use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
 use egui::style::WidgetVisuals;
+use std::ops::Add;
 
-use egui::{Align, Color32, Id, Layout, Painter, PopupCloseBehavior, Response, Rounding, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText};
+use egui::{Align, Id, Layout, Painter, PopupCloseBehavior, Response, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText};
 
-use egui::text::{CCursor, CCursorRange};
-use std::sync::{Arc, Mutex};
 use derivative::Derivative;
 use eframe::epaint::text::TextWrapMode;
-use egui::epaint::RectShape;
+use egui::text::{CCursor, CCursorRange};
+use std::sync::{Arc, Mutex};
 use zearch::Search;
 
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
@@ -238,7 +237,7 @@ pub fn combo_with_filter(
                     //let ctx = ui.ctx().clone();
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
-                        let mut res = viewer_data.engine.search(&Search::new(&pattern).with_limit(RESULTS));
+                        let res = viewer_data.engine.search(&Search::new(&pattern).with_limit(RESULTS));
                         let mut state = state.lock().unwrap();
                         if state.pattern.eq(&pattern) {
                             state.item_vector = res.iter().map(|&i| i as usize).collect();

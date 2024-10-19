@@ -1,4 +1,4 @@
-use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable, Progress, ContextUpdater, TabCamera, CamAnimating, NullStatusWriter, PersonVertex};
+use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GraphTabState, ModularityClass, NewTabRequest, NullStatusWriter, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
@@ -6,19 +6,18 @@ use derivative::*;
 
 use crate::app::thread;
 use crate::camera::Camera;
+use eframe::glow::HasContext;
 use eframe::{glow, Frame};
 use egui::ahash::{AHashMap, AHashSet};
-use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals, Context, Id, SliderClamping};
+use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Id, Pos2, Sense, SliderClamping, Ui, Vec2};
 use egui_extras::{Column, TableBuilder};
-use graph_format::{Color3b, Color3f, EdgeStore};
-use itertools::{Itertools, MinMaxResult};
 use graph_format::nalgebra::{Matrix4, Vector2};
+use graph_format::{Color3b, EdgeStore};
+use itertools::MinMaxResult::NoElements;
+use itertools::{Itertools, MinMaxResult};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::sync::{mpsc, Arc};
-use eframe::glow::HasContext;
-use itertools::MinMaxResult::NoElements;
-use zearch::Index;
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -622,7 +621,7 @@ impl InfosSection {
             let mut edges = Vec::new();
 
             log!(status_tx, "Creating new neighbor lists and edge list");
-            for_progress!(status_tx, (i, (&old_id, &new_id)) in id_map.iter().enumerate(), {
+            for_progress!(status_tx, (&old_id, &new_id) in id_map.iter(), {
                 new_persons[new_id].neighbors.extend(
                     data.persons[old_id]
                         .neighbors

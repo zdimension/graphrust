@@ -1,7 +1,6 @@
-use std::future::Future;
 use crate::app::{Cancelable, iter_progress, ModularityClass, Person, StatusWriter, StringTables, ViewerData};
 
-use graph_format::{EdgeStore, GraphFile, Point};
+use graph_format::{EdgeStore, GraphFile};
 use itertools::Itertools;
 use rayon::prelude::*;
 
@@ -9,7 +8,7 @@ use speedy::Readable;
 
 use crate::utils::{str_from_null_terminated_utf8, SliceExt};
 
-use crate::{for_progress, ignore_error, log, log_progress};
+use crate::{for_progress, log, log_progress};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 

@@ -24,5 +24,5 @@ fn init_logs() {
 fn it_works() {
     // print the current directory
     println!("Current directory: {:?}", env::current_dir().unwrap());
-    load_binary();
+    let _ = load_binary();
 }
