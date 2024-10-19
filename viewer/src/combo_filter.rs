@@ -8,7 +8,7 @@ use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
 use egui::style::WidgetVisuals;
 
-use egui::{Align, Color32, Id, Layout, Painter, PopupCloseBehavior, Response, Rounding, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, WidgetText};
+use egui::{Align, Color32, Id, Layout, Painter, PopupCloseBehavior, Response, Rounding, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText};
 
 use egui::text::{CCursor, CCursorRange};
 use std::sync::{Arc, Mutex};
@@ -46,7 +46,11 @@ fn button_frame(
     outer_rect.set_height(outer_rect.height().at_least(interact_size.y));
 
     let inner_rect = outer_rect.shrink2(margin);
-    let mut content_ui = ui.child_ui(inner_rect, *ui.layout(), None);
+    let mut content_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(inner_rect)
+            .layout(*ui.layout())
+    );
     add_contents(&mut content_ui);
 
     let mut outer_rect = content_ui.min_rect().expand2(margin);
@@ -220,6 +224,8 @@ pub fn combo_with_filter(
             }
             let changed = txt.changed();
 
+            const RESULTS: usize = 100;
+
             if changed {
                 if state.pattern.is_empty() {
                     state.loading = false;
@@ -232,7 +238,7 @@ pub fn combo_with_filter(
                     //let ctx = ui.ctx().clone();
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
-                        let mut res = viewer_data.engine.search(&Search::new(&pattern).with_limit(100));
+                        let mut res = viewer_data.engine.search(&Search::new(&pattern).with_limit(RESULTS));
                         let mut state = state.lock().unwrap();
                         if state.pattern.eq(&pattern) {
                             state.item_vector = res.iter().map(|&i| i as usize).collect();
@@ -243,7 +249,7 @@ pub fn combo_with_filter(
                 }
             }
 
-            let show_count = 100.min(state.item_vector.len());
+            let show_count = RESULTS.min(state.item_vector.len());
 
             let loading = state.loading;
 

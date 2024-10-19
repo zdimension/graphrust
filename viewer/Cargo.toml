@@ -25,7 +25,7 @@ rayon = "1.10"
 zearch = { git = "https://github.com/zdimension/zearch" }
 ahash = "0.8.11"
 rand = "0.8"
-forceatlas2 = { version = "0.6", features = ["default"] }
+forceatlas2 = { version = "0.6", features = ["default"] } # 0.7 is broken
 colourado-iter = "1.2"
 #zearch = { path = "../../zearch" }
 

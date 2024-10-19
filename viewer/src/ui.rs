@@ -8,7 +8,7 @@ use crate::app::thread;
 use crate::camera::Camera;
 use eframe::{glow, Frame};
 use egui::ahash::{AHashMap, AHashSet};
-use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals, Context, Id};
+use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals, Context, Id, SliderClamping};
 use egui_extras::{Column, TableBuilder};
 use graph_format::{Color3b, Color3f, EdgeStore};
 use itertools::{Itertools, MinMaxResult};
@@ -487,8 +487,6 @@ impl InfosSection {
                     CollapsingHeader::new("Paradoxe de l'amitié")
                         .default_open(false)
                         .show(ui, |ui| {
-                            let update = || {};
-
                             if self.paradox.current != self.infos_current {
                                 let mut sum = 0;
                                 let friends = person.neighbors.iter()
@@ -527,7 +525,7 @@ impl InfosSection {
                         ui.add(
                             egui::Slider::new(&mut self.neighborhood_degree, 1..=13)
                                 .text("Degré")
-                                .clamp_to_range(true),
+                                .clamping(SliderClamping::Always),
                         );
 
                         if ui.button("Afficher voisinage")
@@ -867,7 +865,7 @@ impl DisplaySection {
                             .text("Opacité")
                             .custom_formatter(percent_formatter)
                             .custom_parser(percent_parser)
-                            .clamp_to_range(true),
+                            .clamping(SliderClamping::Always),
                     );
                 }
                 ui.checkbox(&mut self.g_show_edges, "Afficher les liens");
@@ -877,7 +875,7 @@ impl DisplaySection {
                             .text("Opacité")
                             .custom_formatter(percent_formatter)
                             .custom_parser(percent_parser)
-                            .clamp_to_range(true),
+                            .clamping(SliderClamping::Always),
                     );
                 }
 
@@ -887,7 +885,7 @@ impl DisplaySection {
                             .add(
                                 egui::DragValue::new(&mut graph.degree_filter.0)
                                     .speed(1)
-                                    .clamp_range(1..=graph.degree_filter.1)
+                                    .range(1..=graph.degree_filter.1)
                                     .prefix("Degré minimum : "),
                             )
                             .changed();
@@ -895,7 +893,7 @@ impl DisplaySection {
                             .add(
                                 egui::DragValue::new(&mut graph.degree_filter.1)
                                     .speed(1)
-                                    .clamp_range(graph.degree_filter.0..=self.max_degree)
+                                    .range(graph.degree_filter.0..=self.max_degree)
                                     .prefix("Degré maximum : "),
                             )
                             .changed();
@@ -1009,7 +1007,7 @@ impl UiState {
                         0,
                         std::slice::from_raw_parts(
                             vertices.as_ptr() as *const u8,
-                            vertices.len() * std::mem::size_of::<PersonVertex>(),
+                            vertices.len() * size_of::<PersonVertex>(),
                         ),
                     );
                 };

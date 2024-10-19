@@ -998,7 +998,7 @@ impl GraphViewApp {
                     );
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 10.0;
-                        egui::widgets::global_dark_light_mode_buttons(ui);
+                        egui::widgets::global_theme_preference_buttons(ui);
                         ui.add_space(15.0);
                         if ui.button("Réduire l'en-tête").clicked() {
                             self.top_bar = false;
