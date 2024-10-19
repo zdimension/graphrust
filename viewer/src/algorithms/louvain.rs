@@ -1,5 +1,6 @@
 use crate::app::Person;
 use ahash::AHashMap;
+use itertools::Itertools;
 use rand::seq::SliceRandom;
 /// Louvain algorithm
 /// Ported from https://github.com/ledyba/cpp-louvain-fast
@@ -20,14 +21,14 @@ const PRECISION: f32 = 0.0;
 const RESOLUTION: f32 = 1.0; // the lower the smaller the communities
 const ITERATIONS: usize = 100; // iterations before giving up
 
-fn merge(nodes: &Vec<Community>, idxs: &Vec<CommunityId>) -> Vec<PersonId> {
+fn merge(nodes: &[Community], idxs: &[CommunityId]) -> Vec<PersonId> {
     idxs.iter()
         .flat_map(|i| nodes[i.0].payload.as_ref().unwrap())
         .copied()
         .collect()
 }
 
-trait GraphNode {
+pub trait GraphNode {
     fn neighbors(&self) -> &Vec<usize>;
 }
 
@@ -38,7 +39,7 @@ impl GraphNode for Person {
 }
 
 impl Graph {
-    pub fn new(persons: &Vec<impl GraphNode>) -> Self {
+    pub fn new(persons: &[impl GraphNode]) -> Self {
         let mut nodes = Vec::with_capacity(persons.len());
         let mut total_links = 0;
         for (i, pers) in persons.iter().enumerate() {
@@ -54,16 +55,12 @@ impl Graph {
         const MAX: usize = 50;
 
         let n_nodes = self.nodes.len();
-        let mut tmp_comm = vec![0; n_nodes];
+        let mut tmp_comm = (0..n_nodes).collect_vec();
         {
             let g_total = self.total_links;
-            let mut comm_total = vec![0; n_nodes];
-            let mut order = vec![0; n_nodes];
-            for i in 0..n_nodes {
-                tmp_comm[i] = i;
-                order[i] = i;
-                comm_total[i] = self.nodes[i].degree;
-            }
+            let mut order = (0..n_nodes).collect_vec();
+            let mut comm_total = self.nodes.iter().map(|n| n.degree).collect_vec();
+
             let mut neigh_links = vec![0; n_nodes];
             let mut neigh_comm = Vec::with_capacity(n_nodes);
 
@@ -124,8 +121,7 @@ impl Graph {
         let mut old_comm_idx = Vec::with_capacity(self.nodes.len() / 10);
         let mut c2i = vec![0; n_nodes];
         let mut communities = Vec::with_capacity(self.nodes.len() / 10);
-        for i in 0..n_nodes {
-            let node_tmp_comm = tmp_comm[i];
+        for (i, node_tmp_comm) in tmp_comm.iter().copied().enumerate() {
             let c = c2i[node_tmp_comm];
             if c <= 0 {
                 c2i[node_tmp_comm] = communities.len() + 1;
@@ -138,8 +134,7 @@ impl Graph {
                 communities[c - 1].children.push(CommunityId(i));
             }
         }
-        for i in 0..communities.len() {
-            let comm = &mut communities[i];
+        for (i, comm) in communities.iter_mut().enumerate() {
             let old_comm = old_comm_idx[i];
             let mut links = AHashMap::new();
             for cidx in &comm.children {

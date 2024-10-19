@@ -590,7 +590,7 @@ impl InfosSection {
         let infos_current = self.infos_current;
         let path_src = path_section.path_settings.path_src;
         let path_dest = path_section.path_settings.path_dest;
-        let camera = camera.clone();
+        let camera = *camera;
         // SAFETY: the tab can't be closed while it's loading, and the tab stays
         // in the loading state until the thread stops. Therefore, for the
         // thread's duration, data stays alive.
@@ -964,7 +964,7 @@ impl UiState {
             );
 
             self.infos.show(
-                &data,
+                data,
                 tab_request,
                 ui,
                 &camera.camera,
@@ -972,7 +972,7 @@ impl UiState {
                 &mut self.selected_user_field,
             );
 
-            self.classes.show(&data, ui);
+            self.classes.show(data, ui);
 
             self.algorithms.show(data, ui);
             if self.algorithms.algo_ran {

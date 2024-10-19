@@ -202,7 +202,7 @@ pub fn combo_with_filter(
             let layout = Layout::centered_and_justified(ui.layout().main_dir());
             let txt_box_resp = ui
                 .allocate_ui_with_layout(
-                    (ui.available_size() * vec2(1.0, 0.0)).into(),
+                    ui.available_size() * vec2(1.0, 0.0),
                     layout,
                     |ui| {
                         let r = TextEdit::singleline(&mut state.pattern).show(ui);
@@ -237,7 +237,7 @@ pub fn combo_with_filter(
                     //let ctx = ui.ctx().clone();
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
-                        let res = viewer_data.engine.search(&Search::new(&pattern).with_limit(RESULTS));
+                        let res = viewer_data.engine.search(Search::new(&pattern).with_limit(RESULTS));
                         let mut state = state.lock().unwrap();
                         if state.pattern.eq(&pattern) {
                             state.item_vector = res.iter().map(|&i| i as usize).collect();

@@ -1,4 +1,4 @@
-use crate::app::{Cancelable, iter_progress, ModularityClass, Person, StatusWriter, StringTables, ViewerData};
+use crate::app::{iter_progress, Cancelable, ModularityClass, Person, StatusWriter, StringTables, ViewerData};
 
 use graph_format::{EdgeStore, GraphFile};
 use itertools::Itertools;
@@ -285,7 +285,7 @@ pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<P
     log!(status_tx, "Processing nodes");
 
     let start = chrono::Local::now();
-    let mut person_data: Vec<_> = iter_progress(content.nodes.iter(), &status_tx)
+    let mut person_data: Vec<_> = iter_progress(content.nodes.iter(), status_tx)
         .map(|node| unsafe {
             Person::new(
                 node.position,

@@ -72,7 +72,7 @@ macro_rules! for_progress {
 macro_rules! ignore_error {
     ($e:expr) => {
         {
-            let _: Result<_, std::sync::mpsc::SendError<_>> = try { let _ = $e; () };
+            let _: Result<_, std::sync::mpsc::SendError<_>> = try { let _ = $e; };
         }
     }
 }
@@ -361,9 +361,7 @@ impl StatusWriterInterface for NullStatusWriter {
 
 impl StatusWriterInterface for StatusWriter {
     fn send(&self, s: impl Into<StatusData>) -> Result<(), mpsc::SendError<StatusData>> {
-        if let Err(e) = self.tx.send(s.into()) {
-            return Err(e);
-        }
+        self.tx.send(s.into())?;
         self.ctx.update();
         Ok(())
     }
@@ -410,7 +408,7 @@ pub enum GlWorkResult {
     VertArray(glow::VertexArray, glow::Buffer),
 }
 
-trait GlWorkGetter<R>: FnOnce(&glow::Context) -> R {
+pub trait GlWorkGetter<R>: FnOnce(&glow::Context) -> R {
     fn get(rx: &Receiver<GlWorkResult>) -> R;
     fn to_boxed(self) -> GlWork;
 }
@@ -427,8 +425,8 @@ impl<T: Send + FnOnce(&glow::Context) -> GlWorkResult + 'static> GlWorkGetter<Gl
     }
 }
 
-impl<T: Send + FnOnce(&glow::Context) -> () + 'static> GlWorkGetter<()> for T {
-    fn get(_: &Receiver<GlWorkResult>) -> () {}
+impl<T: Send + FnOnce(&glow::Context) + 'static> GlWorkGetter<()> for T {
+    fn get(_: &Receiver<GlWorkResult>) {}
     fn to_boxed(self) -> GlWork {
         GlWork(Box::new(move |gl, _| {
             self(gl);
@@ -588,7 +586,7 @@ fn show_status(ui: &mut Ui, status_rx: &mut StatusReader) {
 
 pub fn spawn_cancelable(f: impl FnOnce() -> Cancelable<()> + Send + 'static) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        if let Err(_) = f() {
+        if f().is_err() {
             log::info!("Tab closed; cancelled");
         };
     })
@@ -600,8 +598,7 @@ struct TabViewer<'tab_request, 'frame> {
     frame: &'frame mut eframe::Frame,
 }
 
-impl<'tab_request, 'frame> egui_dock::TabViewer
-for TabViewer<'tab_request, 'frame>
+impl egui_dock::TabViewer for TabViewer<'_, '_>
 {
     type Tab = GraphTab;
 
@@ -640,7 +637,7 @@ for TabViewer<'tab_request, 'frame>
                         tab.ui_state.draw_ui(
                             ui,
                             &mut tab.viewer_data,
-                            &mut *tab.rendered_graph.lock().unwrap(),
+                            &mut tab.rendered_graph.lock().unwrap(),
                             self.tab_request,
                             &mut tab.tab_camera,
                             cid,
@@ -673,7 +670,9 @@ for TabViewer<'tab_request, 'frame>
                                         CamAnimating::PanTo { to, .. } => {
                                             tab.tab_camera.camera.transf = to;
                                         }
-                                        _ => {}
+                                        _ => {
+                                            // only PanTo is animated and needs to pin the final value
+                                        }
                                     }
                                 } else {
                                     match v {
@@ -1023,7 +1022,7 @@ Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortemen
     }
 }
 
-pub type GlTask = Box<dyn for<'a> FnOnce(&'a glow::Context) + Send + 'static>;
+pub type GlTask = Box<dyn FnOnce(&glow::Context) + Send + 'static>;
 
 pub struct RenderedGraph {
     pub program_node: glow::Program,
@@ -1292,7 +1291,9 @@ impl RenderedGraph {
         }
 
         while let Some(task) = self.tasks.pop_front() {
+            println!("running task");
             task(gl);
+            println!("done");
         }
 
         use glow::HasContext as _;
@@ -1303,7 +1304,7 @@ impl RenderedGraph {
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
 
             let mut all_colors = [Color3f::new(0.0, 0.0, 0.0); 512];
-            all_colors[..class_colors.len()].copy_from_slice(&class_colors);
+            all_colors[..class_colors.len()].copy_from_slice(class_colors);
 
             if edges.0 {
                 gl.use_program(Some(self.program_edge));
@@ -1313,7 +1314,7 @@ impl RenderedGraph {
                             .unwrap(),
                     ),
                     false,
-                    &cam.as_slice(),
+                    cam.as_slice(),
                 );
                 gl.uniform_1_u32(
                     Some(
@@ -1351,7 +1352,7 @@ impl RenderedGraph {
                             .unwrap(),
                     ),
                     false,
-                    &cam.as_slice(),
+                    cam.as_slice(),
                 );
                 gl.uniform_1_u32(
                     Some(
@@ -1389,7 +1390,7 @@ impl RenderedGraph {
                         .unwrap(),
                 ),
                 false,
-                &cam.as_slice(),
+                cam.as_slice(),
             );
             gl.bind_vertex_array(Some(self.path_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.path_buffer));
