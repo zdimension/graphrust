@@ -9,5 +9,6 @@ mod geom_draw;
 pub mod graph_storage;
 mod ui;
 pub mod utils;
+mod algorithms;
 
 pub use app::GraphViewApp;

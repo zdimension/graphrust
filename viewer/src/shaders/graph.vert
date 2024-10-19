@@ -1,12 +1,12 @@
 precision mediump float;
 
 layout (location = 0) in vec2 position;
-layout (location = 1) in vec3 color;
-layout (location = 2) in uint deg_and_class;
+layout (location = 1) in uint deg_and_class;
 out vec4 v_color;
 uniform mat4 u_projection;
 uniform uint u_degfilter;
 uniform float opacity;
+uniform vec3 u_class_colors[512];
 const float neg_infinity = uintBitsToFloat(0xFF800000u);
 const float nan = intBitsToFloat(int(0xFFC00000u));
 void main()
@@ -24,7 +24,8 @@ void main()
     } else {
         gl_Position = u_projection * vec4(position, 0.0, 1.0);
         float scale = sqrt(float(min(deg, 1000u)) / 1000.0);
-        v_color = vec4(color, min(1.0, opacity * (1.0 + 1.2 * scale)));
+        //v_color = vec4(color, min(1.0, opacity * (1.0 + 1.2 * scale)));
+        v_color = vec4(u_class_colors[class_], min(1.0, opacity * (1.0 + 1.2 * scale)));
         const float min_size = 12.0;
         const float max_size = 100.0;
         float size = (max_size - min_size) * scale + min_size;

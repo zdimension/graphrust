@@ -23,6 +23,10 @@ egui_extras = "0.29.1"
 egui_dock = "0.14.0"
 rayon = "1.10"
 zearch = { git = "https://github.com/zdimension/zearch" }
+ahash = "0.8.11"
+rand = "0.8"
+forceatlas2 = { version = "0.6", features = ["default"] }
+colourado-iter = "1.2"
 #zearch = { path = "../../zearch" }
 
 [dev-dependencies]
@@ -47,6 +51,7 @@ parking_lot = { version = "*", features = ["nightly"] }
 wasm-logger = "0.2.0"
 wasm_thread = "0.3.0"
 console_error_panic_hook = "0.1.7"
+getrandom = { version = "*", features = ["js"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.chrono]
 version = "*"

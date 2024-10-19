@@ -15,6 +15,7 @@ pub struct Color3b {
 
 // same but f32
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct Color3f {
     pub r: f32,
     pub g: f32,

@@ -1,4 +1,4 @@
-use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable, Progress, ContextUpdater, TabCamera, CamAnimating};
+use crate::app::{create_tab, status_pipe, GlForwarder, GraphTabState, NewTabRequest, Person, RenderedGraph, StatusWriter, Vertex, ViewerData, ModularityClass, spawn_cancelable, Cancelable, Progress, ContextUpdater, TabCamera, CamAnimating, NullStatusWriter, PersonVertex};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
@@ -6,7 +6,7 @@ use derivative::*;
 
 use crate::app::thread;
 use crate::camera::Camera;
-use eframe::Frame;
+use eframe::{glow, Frame};
 use egui::ahash::{AHashMap, AHashSet};
 use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Pos2, Sense, Ui, Vec2, Visuals, Context, Id};
 use egui_extras::{Column, TableBuilder};
@@ -16,7 +16,9 @@ use graph_format::nalgebra::{Matrix4, Vector2};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::sync::{mpsc, Arc};
+use eframe::glow::HasContext;
 use itertools::MinMaxResult::NoElements;
+use zearch::Index;
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -742,6 +744,45 @@ impl DetailsSection {
     }
 }
 
+#[derive(Default)]
+pub struct AlgosSection {
+    algo_ran: bool,
+}
+
+impl AlgosSection {
+    fn show(&mut self, data: &mut Arc<ViewerData>, ui: &mut Ui) {
+        CollapsingHeader::new("Algorithmes")
+            .default_open(false)
+            .show(ui, |ui| {
+                if ui.button("Louvain").clicked() {
+                    self.algo_ran = true;
+                    let louvain = crate::algorithms::louvain::Graph::new(&data.persons).louvain();
+                    //log!("Creating color palette");
+                    use colourado_iter::{ColorPalette, PaletteType};
+                    let palette = ColorPalette::new(PaletteType::Random, false, &mut rand::thread_rng());
+                    let mut classes = Vec::new();
+                    let mut nodes = data.persons.clone();
+                    for n in &mut nodes {
+                        n.modularity_class = u16::MAX;
+                    }
+                    for (i, (comm, color)) in louvain.nodes.iter().zip(palette).enumerate() {
+                        for user in comm.payload.as_ref().unwrap() {
+                            nodes[user.0].modularity_class = i as u16;
+                        }
+                        let [r, g, b] = color.to_array();
+                        classes.push(ModularityClass::new(Color3b {
+                            r: (r * 255.0) as u8,
+                            g: (g * 255.0) as u8,
+                            b: (b * 255.0) as u8,
+                        }, (i + 1) as u16));
+                    }
+                    let new_data = Arc::new(ViewerData::new(nodes, classes, &NullStatusWriter).unwrap());
+                    *data = new_data;
+                }
+            });
+    }
+}
+
 #[derive(Default, PartialEq, Eq)]
 pub enum SelectedUserField {
     Selected,
@@ -758,6 +799,7 @@ pub struct UiState {
     pub infos: InfosSection,
     pub details: DetailsSection,
     pub selected_user_field: SelectedUserField,
+    pub algorithms: AlgosSection,
 }
 
 fn percent_formatter(val: f64, _: RangeInclusive<usize>) -> String {
@@ -902,7 +944,7 @@ impl UiState {
     pub fn draw_ui(
         &mut self,
         ui: &mut Ui,
-        data: &Arc<ViewerData>,
+        data: &mut Arc<ViewerData>,
         graph: &mut RenderedGraph,
         tab_request: &mut Option<NewTabRequest>,
         camera: &mut TabCamera,
@@ -934,6 +976,48 @@ impl UiState {
             );
 
             self.classes.show(&data, ui);
+
+            self.algorithms.show(data, ui);
+            if self.algorithms.algo_ran {
+                self.refresh_node_count(data, graph);
+
+                let nodes = data
+                    .persons
+                    .iter()
+                    .map(|p| {
+                        crate::geom_draw::create_node_vertex(p)
+                    });
+
+                let edges = data
+                    .persons
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(i, n)| {
+                        n.neighbors.iter()
+                            .filter(move |&&j| i < j)
+                            .map(move |&j| (i, j))
+                            .flat_map(|(a, b)| crate::geom_draw::create_edge_vertices(&data.persons[a], &data.persons[b]))
+                    });
+
+                let vertices = nodes.chain(edges).collect_vec();
+
+                let buf = graph.nodes_buffer;
+                let closure = move |gl: &glow::Context| unsafe {
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(buf));
+                    gl.buffer_sub_data_u8_slice(
+                        glow::ARRAY_BUFFER,
+                        0,
+                        std::slice::from_raw_parts(
+                            vertices.as_ptr() as *const u8,
+                            vertices.len() * std::mem::size_of::<PersonVertex>(),
+                        ),
+                    );
+                };
+
+                graph.tasks.push_back(Box::new(closure));
+
+                self.algorithms.algo_ran = false;
+            }
 
             self.details.show(ui, camera, cid);
         });

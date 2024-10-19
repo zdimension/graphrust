@@ -242,6 +242,7 @@ pub async fn load_file(status_tx: &StatusWriter) -> Cancelable<GraphFile> {
         .unwrap();*/
     log!(status_tx, "Downloading file");
     let status_tx_ = status_tx.clone();
+    use crate::app::StatusWriterInterface;
     let progress_handler = Closure::wrap(Box::new(move |progress: usize| {
         status_tx_.send(crate::app::Progress { max: 100, val: progress }).unwrap()
     }) as Box<dyn FnMut(usize)>);

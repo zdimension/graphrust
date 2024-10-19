@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::error::Error;
 use crate::camera::{Camera, CamXform};
 use std::marker::PhantomData;
@@ -32,6 +33,7 @@ pub use wasm_thread as thread;
 macro_rules! log {
     ($ch:expr, $($arg:tt)*) => {
         {
+            use $crate::app::StatusWriterInterface;
             let msg = format!($($arg)*);
             log::info!("{}", &msg);
             $ch.send(msg.clone())?;
@@ -43,6 +45,7 @@ macro_rules! log {
 macro_rules! log_progress {
     ($ch: expr, $val:expr, $max:expr) => {
         {
+            use $crate::app::StatusWriterInterface;
             $ch.send($crate::app::Progress {
                 max: $max,
                 val: $val,
@@ -136,14 +139,14 @@ pub struct Vertex {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct PersonVertex {
-    pub vertex: Vertex,
+    pub position: Point,
     pub degree_and_class: u32,
 }
 
 impl PersonVertex {
-    pub fn new(position: Point, color: Color3b, degree: u16, class: u16) -> PersonVertex {
+    pub fn new(position: Point, degree: u16, class: u16) -> PersonVertex {
         PersonVertex {
-            vertex: Vertex::new(position, color),
+            position,
             degree_and_class: ((class as u32) << 16) | (degree as u32),
         }
     }
@@ -201,7 +204,7 @@ impl ViewerData {
     pub fn new(
         persons: Vec<Person>,
         modularity_classes: Vec<ModularityClass>,
-        status_tx: &StatusWriter,
+        status_tx: &impl StatusWriterInterface,
     ) -> Cancelable<ViewerData> {
         log!(status_tx, "Initializing search engine");
         let engine = Index::new_in_memory(unsafe { std::mem::transmute::<&[Person], &'static [Person]>(&persons[..]) });
@@ -346,8 +349,20 @@ impl From<Progress> for StatusData {
     }
 }
 
-impl StatusWriter {
-    pub fn send(&self, s: impl Into<StatusData>) -> Result<(), mpsc::SendError<StatusData>> {
+pub trait StatusWriterInterface {
+    fn send(&self, s: impl Into<StatusData>) -> Result<(), mpsc::SendError<StatusData>>;
+}
+
+pub struct NullStatusWriter;
+
+impl StatusWriterInterface for NullStatusWriter {
+    fn send(&self, _: impl Into<StatusData>) -> Result<(), mpsc::SendError<StatusData>> {
+        Ok(())
+    }
+}
+
+impl StatusWriterInterface for StatusWriter {
+    fn send(&self, s: impl Into<StatusData>) -> Result<(), mpsc::SendError<StatusData>> {
         if let Err(e) = self.tx.send(s.into()) {
             return Err(e);
         }
@@ -626,7 +641,7 @@ for TabViewer<'tab_request, 'frame>
                         }
                         tab.ui_state.draw_ui(
                             ui,
-                            &tab.viewer_data,
+                            &mut tab.viewer_data,
                             &mut *tab.rendered_graph.lock().unwrap(),
                             self.tab_request,
                             &mut tab.tab_camera,
@@ -799,6 +814,7 @@ for TabViewer<'tab_request, 'frame>
                         let opac_nodes = tab.ui_state.display.g_opac_nodes;
 
                         let cam = tab.tab_camera.camera.get_matrix();
+                        let class_colors = tab.viewer_data.modularity_classes.iter().map(|c| c.color.to_f32()).collect_vec();
                         let callback = egui::PaintCallback {
                             rect,
                             callback: Arc::new(egui_glow::CallbackFn::new(
@@ -808,6 +824,7 @@ for TabViewer<'tab_request, 'frame>
                                         cam,
                                         (edges, opac_edges),
                                         (nodes, opac_nodes),
+                                        &class_colors,
                                     );
                                 },
                             )),
@@ -1008,6 +1025,8 @@ Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortemen
     }
 }
 
+pub type GlTask = Box<dyn for<'a> FnOnce(&'a glow::Context) + Send + 'static>;
+
 pub struct RenderedGraph {
     pub program_node: glow::Program,
     pub program_basic: glow::Program,
@@ -1023,6 +1042,7 @@ pub struct RenderedGraph {
     pub degree_filter: (u16, u16),
     pub filter_nodes: bool,
     pub destroyed: bool,
+    pub tasks: VecDeque<GlTask>,
 }
 
 impl RenderedGraph {
@@ -1114,12 +1134,7 @@ impl RenderedGraph {
                 .persons
                 .iter()
                 .map(|p| {
-                    PersonVertex::new(
-                        p.position,
-                        viewer.modularity_classes[p.modularity_class as usize].color,
-                        p.neighbors.len() as u16,
-                        p.modularity_class,
-                    )
+                    crate::geom_draw::create_node_vertex(p)
                 });
             const VERTS_PER_EDGE: usize = 6; // change this if below changes!
             let edge_vertices = edges
@@ -1130,56 +1145,7 @@ impl RenderedGraph {
                 })
                 //.filter(|(pa, pb)| pa.neighbors.len() > 5 && pb.neighbors.len() > 5)
                 .flat_map(|(pa, pb)| {
-                    let a = pa.position;
-                    let b = pb.position;
-                    const EDGE_HALF_WIDTH: f32 = 0.75;
-                    let ortho = (b - a).ortho().normalized() * EDGE_HALF_WIDTH;
-                    let v0 = a + ortho;
-                    let v1 = a - ortho;
-                    let v2 = b - ortho;
-                    let v3 = b + ortho;
-                    let color_a =
-                        viewer.modularity_classes[pa.modularity_class as usize].color;
-                    let color_b =
-                        viewer.modularity_classes[pb.modularity_class as usize].color;
-                    [
-                        PersonVertex::new(
-                            v0,
-                            color_a,
-                            pa.neighbors.len() as u16,
-                            pa.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v1,
-                            color_a,
-                            pa.neighbors.len() as u16,
-                            pa.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v2,
-                            color_b,
-                            pb.neighbors.len() as u16,
-                            pb.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v2,
-                            color_b,
-                            pb.neighbors.len() as u16,
-                            pb.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v3,
-                            color_b,
-                            pb.neighbors.len() as u16,
-                            pb.modularity_class,
-                        ),
-                        PersonVertex::new(
-                            v0,
-                            color_a,
-                            pa.neighbors.len() as u16,
-                            pa.modularity_class,
-                        ),
-                    ]
+                    crate::geom_draw::create_edge_vertices(pa, pb)
                 });
 
             let vertices = node_vertices
@@ -1228,23 +1194,14 @@ impl RenderedGraph {
                     0,
                 );
                 gl.enable_vertex_attrib_array(0);
-                gl.vertex_attrib_pointer_f32(
+                gl.vertex_attrib_pointer_i32(
                     1,
-                    3,
-                    glow::UNSIGNED_BYTE,
-                    true,
+                    1,
+                    glow::UNSIGNED_INT,
                     std::mem::size_of::<PersonVertex>() as i32,
                     std::mem::size_of::<Point>() as i32,
                 );
                 gl.enable_vertex_attrib_array(1);
-                gl.vertex_attrib_pointer_i32(
-                    2,
-                    1,
-                    glow::UNSIGNED_INT,
-                    std::mem::size_of::<PersonVertex>() as i32,
-                    std::mem::size_of::<Vertex>() as i32,
-                );
-                gl.enable_vertex_attrib_array(2);
 
                 VertArray(vertices_array, vertices_buffer)
             }) else {
@@ -1301,6 +1258,7 @@ impl RenderedGraph {
                 degree_filter: (0, u16::MAX),
                 filter_nodes: false,
                 destroyed: false,
+                tasks: VecDeque::new(),
             })
         }
     }
@@ -1329,9 +1287,14 @@ impl RenderedGraph {
         cam: Matrix4<f32>,
         edges: (bool, f32),
         nodes: (bool, f32),
+        class_colors: &[Color3f],
     ) {
         if self.destroyed {
             return;
+        }
+
+        while let Some(task) = self.tasks.pop_front() {
+            task(gl);
         }
 
         use glow::HasContext as _;
@@ -1340,6 +1303,10 @@ impl RenderedGraph {
 
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
+
+            let mut all_colors = [Color3f::new(0.0, 0.0, 0.0); 512];
+            all_colors[..class_colors.len()].copy_from_slice(&class_colors);
+
             if edges.0 {
                 gl.use_program(Some(self.program_edge));
                 gl.uniform_matrix_4_f32_slice(
@@ -1363,6 +1330,14 @@ impl RenderedGraph {
                             .unwrap(),
                     ),
                     edges.1,
+                );
+
+                gl.uniform_3_f32_slice(
+                    Some(
+                        &gl.get_uniform_location(self.program_edge, "u_class_colors")
+                            .unwrap(),
+                    ),
+                    unsafe { std::slice::from_raw_parts(all_colors.as_ptr() as *const f32, 512 * 3) },
                 );
                 let verts = 2 * 3 * self.edges_count as i32;
                 // if wasm, clamp verts at 30M, because Firefox refuses to draw anything above that
@@ -1397,6 +1372,14 @@ impl RenderedGraph {
                             .unwrap(),
                     ),
                     nodes.1,
+                );
+
+                gl.uniform_3_f32_slice(
+                    Some(
+                        &gl.get_uniform_location(self.program_node, "u_class_colors")
+                            .unwrap(),
+                    ),
+                    unsafe { std::slice::from_raw_parts(all_colors.as_ptr() as *const f32, 512 * 3) },
                 );
                 gl.draw_arrays(glow::POINTS, 0, self.nodes_count as i32);
             }
