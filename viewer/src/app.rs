@@ -1,6 +1,8 @@
 use crate::camera::{CamXform, Camera};
 use std::collections::VecDeque;
 use std::error::Error;
+use std::fmt::Display;
+use std::io;
 use std::ops::Deref;
 
 use crate::graph_storage::{load_binary, load_file, ProcessedData};
@@ -17,13 +19,15 @@ use graphrust_macros::md;
 use itertools::Itertools;
 
 use egui::epaint::TextShape;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::sync::{mpsc, Arc, Mutex};
 use zearch::Index;
 
 use eframe::epaint::text::TextWrapMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread;
+use std::time::Duration;
+use egui_modal::{Icon, Modal};
 #[cfg(target_arch = "wasm32")]
 pub use wasm_thread as thread;
 
@@ -182,11 +186,29 @@ impl ModularityClass {
 }
 
 #[derive(Debug)]
-pub struct CancelableError;
+pub enum CancelableError {
+    TabClosed,
+    Other(anyhow::Error)
+}
+
+impl Display for CancelableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CancelableError::TabClosed => write!(f, "Tab closed"),
+            CancelableError::Other(e) => write!(f, "Other error: {}", e),
+        }
+    }
+}
 
 impl<T: Error> From<T> for CancelableError {
-    fn from(_: T) -> Self {
-        CancelableError
+    default fn from(x: T) -> CancelableError {
+        CancelableError::TabClosed
+    }
+}
+
+impl<T: Error + Into<anyhow::Error>> From<T> for CancelableError {
+    fn from(e: T) -> Self {
+        CancelableError::Other(e.into())
     }
 }
 
@@ -534,6 +556,7 @@ pub fn create_tab<'a>(
 
 pub struct GraphViewApp {
     top_bar: bool,
+    modal: (Receiver<ModalInfo>, Sender<ModalInfo>),
     state: AppState,
 }
 
@@ -566,6 +589,7 @@ impl GraphViewApp {
 
         let (status_tx, status_rx) = status_pipe(&cc.egui_ctx);
         let (file_tx, file_rx) = mpsc::channel();
+        let (modal_tx, modal_rx) = mpsc::channel();
 
         #[cfg(target_arch = "wasm32")]
         wasm_bindgen_futures::spawn_local(async move {
@@ -584,7 +608,7 @@ impl GraphViewApp {
         });
 
         #[cfg(not(target_arch = "wasm32"))]
-        spawn_cancelable(move || {
+        spawn_cancelable(modal_tx.clone(), move || {
             let res = load_file(&status_tx)?;
             let res = load_binary(&status_tx, res)?;
             file_tx.send(res)?;
@@ -593,6 +617,7 @@ impl GraphViewApp {
 
         Self {
             top_bar: true,
+            modal: (modal_rx, modal_tx),
             state: AppState::Loading { status_rx, file_rx },
         }
     }
@@ -608,11 +633,37 @@ fn show_status(ui: &mut Ui, status_rx: &mut StatusReader) {
     });
 }
 
-pub fn spawn_cancelable(f: impl FnOnce() -> Cancelable<()> + Send + 'static) -> thread::JoinHandle<()> {
+pub struct ModalInfo {
+    title: String,
+    body: String
+}
+
+pub trait ModalWriter: Clone + Send + 'static {
+    fn send(&self, modal: ModalInfo);
+}
+
+impl ModalWriter for Sender<ModalInfo> {
+    fn send(&self, modal: ModalInfo) {
+        if let Err(e) = self.send(modal) {
+            log::error!("Error sending modal: {}", e);
+        }
+    }
+}
+
+pub fn spawn_cancelable(ms: impl ModalWriter, f: impl FnOnce() -> Cancelable<()> + Send + 'static) -> thread::JoinHandle<()> {
     thread::spawn(move || {
-        if f().is_err() {
-            log::info!("Tab closed; cancelled");
-        };
+        match f() {
+            Err(CancelableError::TabClosed) => {
+                log::info!("Tab closed; cancelled");
+            }
+            Err(CancelableError::Other(e)) => {
+                ms.send(ModalInfo {
+                    title: "Error".to_string(),
+                    body: format!("Error: {}", e)
+                });
+            }
+            Ok(()) => {}
+        }
     })
 }
 
@@ -620,6 +671,7 @@ struct TabViewer<'tab_request, 'frame> {
     tab_request: &'tab_request mut Option<NewTabRequest>,
     top_bar: &'tab_request mut bool,
     frame: &'frame mut eframe::Frame,
+    modal: Sender<ModalInfo>
 }
 
 impl egui_dock::TabViewer for TabViewer<'_, '_>
@@ -665,6 +717,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             self.tab_request,
                             &mut tab.tab_camera,
                             cid,
+                            &self.modal
                         );
                     });
                 egui::CentralPanel::default()
@@ -912,6 +965,18 @@ impl eframe::App for GraphViewApp {
             self.show_top_bar(ctx);
         }
 
+        let mut modal = Modal::new(ctx, "my_dialog");
+
+        if let Ok(info) = self.modal.0.try_recv() {
+            modal.dialog()
+                .with_title(info.title)
+                .with_body(info.body)
+                .with_icon(Icon::Error)
+                .open();
+        }
+
+        modal.show_dialog();
+
         match &mut self.state {
             AppState::Loading { status_rx, file_rx } => {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -929,7 +994,7 @@ impl eframe::App for GraphViewApp {
                         }]),
                         string_tables: file.strings,
                     };
-                    spawn_cancelable(move || {
+                    spawn_cancelable(self.modal.1.clone(), move || {
                         let mut min = Point::new(f32::INFINITY, f32::INFINITY);
                         let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
                         log!(status_tx, "Calcul des limites du graphes...");
@@ -980,6 +1045,7 @@ impl eframe::App for GraphViewApp {
                             tab_request: &mut new_tab_request,
                             top_bar: &mut self.top_bar,
                             frame,
+                            modal: self.modal.1.clone(),
                         },
                     );
                 if let Some(request) = new_tab_request {

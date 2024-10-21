@@ -1,4 +1,4 @@
-use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GraphTabState, ModularityClass, NewTabRequest, NullStatusWriter, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
+use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GraphTabState, ModalWriter, ModularityClass, NewTabRequest, NullStatusWriter, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
@@ -402,6 +402,7 @@ impl InfosSection {
         camera: &Camera,
         path_section: &PathSection,
         sel_field: &mut SelectedUserField,
+        modal: &impl ModalWriter,
     ) {
         CollapsingHeader::new("Informations")
             .default_open(true)
@@ -445,7 +446,7 @@ impl InfosSection {
                             if ui.button(format!("{}", class)).clicked() {
                                 self.create_subgraph(
                                     format!("Classe {}", class),
-                                    data.clone(), tab_request, camera, path_section, ui,
+                                    data.clone(), tab_request, camera, path_section, ui, modal.clone(),
                                     move |_, data| {
                                         Ok(data.persons
                                             .iter()
@@ -534,7 +535,7 @@ impl InfosSection {
                             let neighborhood_degree = self.neighborhood_degree;
                             self.create_subgraph(
                                 format!("{}-voisinage de {}", neighborhood_degree, person.name),
-                                data.clone(), tab_request, camera, path_section, ui,
+                                data.clone(), tab_request, camera, path_section, ui, modal.clone(),
                                 move |status_tx, data| {
                                     let mut new_included = AHashSet::from([id]);
                                     let mut last_batch = AHashSet::from([id]);
@@ -577,6 +578,7 @@ impl InfosSection {
                        camera: &Camera,
                        path_section: &PathSection,
                        ui: &mut Ui,
+                       modal_tx: impl ModalWriter,
                        x: impl FnOnce(&StatusWriter, &ViewerData) -> Cancelable<AHashSet<usize>> + Send + 'static) {
         let (status_tx, status_rx) = status_pipe(ui.ctx());
         let (state_tx, state_rx) = mpsc::channel();
@@ -598,7 +600,7 @@ impl InfosSection {
         //let data = unsafe { std::mem::transmute::<&ViewerData, &'static ViewerData>(data) };
         // huh? seems like it's being moved around. I put Arcs everywhere, now
         // it works fine, and there doesn't seem to be a huge overhead
-        spawn_cancelable(move || {
+        spawn_cancelable(modal_tx, move || {
             let data = data;
             let new_included = x(&status_tx, &data)?;
 
@@ -980,6 +982,7 @@ impl UiState {
         tab_request: &mut Option<NewTabRequest>,
         camera: &mut TabCamera,
         cid: Id,
+        modal: &impl ModalWriter,
     ) {
         ui.spacing_mut().slider_width = 200.0;
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -1004,6 +1007,7 @@ impl UiState {
                 &camera.camera,
                 &self.path,
                 &mut self.selected_user_field,
+                modal,
             );
 
             self.classes.show(data, ui);
