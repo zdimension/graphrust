@@ -18,7 +18,11 @@ use itertools::MinMaxResult::NoElements;
 use itertools::{Itertools, MinMaxResult};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
-use std::sync::{mpsc, Arc};
+use std::rc::Rc;
+use std::sync::{mpsc, Arc, Mutex};
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::{RecvError, Sender, TryRecvError};
+use std::thread::JoinHandle;
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -744,9 +748,42 @@ impl DetailsSection {
     }
 }
 
+pub struct ForceAtlasState {
+    running: bool,
+    data: Option<(Arc<Mutex<Layout<f32, 2>>>, Option<ForceAtlasThread>)>,
+    settings: Settings<f32>,
+    new_settings: Arc<(AtomicBool, Mutex<Settings<f32>>)>
+}
+
+impl Default for ForceAtlasState {
+    fn default() -> Self {
+        Self {
+            running: false,
+            data: None,
+            settings: Settings {
+                theta: 0.5,
+                ka: 0.1,
+                kg: 0.1,
+                kr: 0.02,
+                lin_log: false,
+                speed: 0.01,
+                prevent_overlapping: None,
+                strong_gravity: false,
+            },
+            new_settings: Default::default(),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct AlgosSection {
     algo_ran: bool,
+    force_atlas_state: ForceAtlasState
+}
+
+pub struct ForceAtlasThread {
+    thread: JoinHandle<()>,
+    status_tx: Sender<bool>
 }
 
 impl AlgosSection {
@@ -780,36 +817,107 @@ impl AlgosSection {
                     *data = Arc::new(data.replace_data(nodes, classes));
                 }
 
-                if ui.button("ForceAtlas2").clicked() {
-                    self.algo_ran = true;
-                    let settings = Settings {
-                        theta: 0.5,
-                        ka: 0.1,
-                        kg: 0.1,
-                        kr: 0.02,
-                        lin_log: false,
-                        speed: 1.0,
-                        prevent_overlapping: None,
-                        strong_gravity: false,
-                    };
+                if ui.checkbox(&mut self.force_atlas_state.running, "ForceAtlas2").changed() {
+                    if let Some((_, Some(thr))) = &self.force_atlas_state.data {
+                        thr.status_tx.send(self.force_atlas_state.running).expect("Failed to send pause signal");
+                    }
+                }
 
-                    let mut layout = Layout::<f32, 2>::from_position_graph(
-                        data.get_edges().map(|e| (e, 1.0)).collect(),
-                        data.persons.iter().map(|p| Node {
-                            pos: VecN(p.position.to_array()),
-                            ..Default::default()
-                        }).collect(),
-                        settings,
-                    );
+                egui::Grid::new("#forceatlas").show(ui, |ui| {
+                    let mut upd = false;
 
-                    layout.iteration();
+                    // TODO: better ranges for these
+                    // TODO: presets?
+                    let fields = [
+                        ("Theta", &mut self.force_atlas_state.settings.theta),
+                        ("Ka", &mut self.force_atlas_state.settings.ka),
+                        ("Kg", &mut self.force_atlas_state.settings.kg),
+                        ("Kr", &mut self.force_atlas_state.settings.kr),
+                        ("Speed", &mut self.force_atlas_state.settings.speed),
+                    ];
 
+                    for (name, field) in fields.into_iter() {
+                        ui.label(name);
+                        upd |= ui.add(egui::Slider::new(field, 0.0..=1.0).text("")).changed();
+                        ui.end_row();
+                    }
+
+                    ui.label("Lin-Log");
+                    upd |= ui.checkbox(&mut self.force_atlas_state.settings.lin_log, "").changed();
+                    ui.end_row();
+
+                    ui.label("Strong gravity");
+                    upd |= ui.checkbox(&mut self.force_atlas_state.settings.strong_gravity, "").changed();
+                    ui.end_row();
+
+                    if upd {
+                        *self.force_atlas_state.new_settings.1.lock().unwrap() = self.force_atlas_state.settings.clone();
+                        self.force_atlas_state.new_settings.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                    }
+                });
+
+                if self.force_atlas_state.running {
+                    ui.spinner();
+
+                    let layout = self.force_atlas_state.data.get_or_insert_with(|| {
+                        const UPD_PER_SEC: usize = 60;
+
+                        let layout = Arc::new(Mutex::new(Layout::<f32, 2>::from_position_graph(
+                            data.get_edges().map(|e| (e, 1.0)).collect(),
+                            data.persons.iter().map(|p| Node {
+                                pos: VecN(p.position.to_array()),
+                                ..Default::default()
+                            }).collect(),
+                            self.force_atlas_state.settings.clone(),
+                        )));
+                        let (status_tx, status_rx) = mpsc::channel();
+                        let layout_thr = layout.clone();
+                        let settings_thr = self.force_atlas_state.new_settings.clone();
+                        let thread = thread::spawn(move || {
+                            loop {
+                                loop {
+                                    {
+                                        let mut layout = layout_thr.lock().unwrap();
+
+                                        layout.iteration();
+
+                                        if settings_thr.0.load(std::sync::atomic::Ordering::SeqCst) {
+                                            layout.set_settings(settings_thr.1.lock().unwrap().clone());
+                                            settings_thr.0.store(false, std::sync::atomic::Ordering::SeqCst);
+                                        }
+                                    }
+
+                                    // check if the layout has been paused
+                                    match status_rx.try_recv() {
+                                        Ok(true) => {}, // continue
+                                        Ok(false) => break, // pause
+                                        Err(TryRecvError::Empty) => {}, // no change
+                                        Err(TryRecvError::Disconnected) => return, // tab closed
+                                    }
+
+                                    thread::sleep(std::time::Duration::from_secs_f32(1.0 / UPD_PER_SEC as f32));
+                                }
+                                loop {
+                                    // wait for resume
+                                    match status_rx.recv() {
+                                        Ok(true) => break, // resume
+                                        Ok(false) => {}, // keep paused
+                                        Err(RecvError) => return, // tab closed
+                                    }
+                                }
+                            }
+                        });
+                        (layout, Some(ForceAtlasThread { thread, status_tx }))
+                    });
+
+                    // TODO: move this to background thread
                     let mut persons = data.persons.clone();
 
-                    for (person, node) in persons.iter_mut().zip(layout.nodes.iter()) {
+                    for (person, node) in persons.iter_mut().zip(layout.0.lock().unwrap().nodes.iter()) {
                         person.position = Point::new(node.pos[0], node.pos[1]);
                     }
 
+                    self.algo_ran = true;
                     *data = Arc::new(data.replace_data(persons, data.modularity_classes.clone()));
                 }
             });
