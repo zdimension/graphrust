@@ -26,7 +26,7 @@ fn main() -> eframe::Result<()> {
         })
         .init();
 
-    //#[cfg(feature = "deadlock_detection")]
+    #[cfg(feature = "deadlock_detection")]
     { // only for #[cfg]
         use std::thread;
         use std::time::Duration;

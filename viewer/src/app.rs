@@ -2,7 +2,6 @@ use crate::camera::{CamXform, Camera};
 use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt::Display;
-use std::io;
 use std::ops::Deref;
 
 use crate::graph_storage::{load_binary, load_file, ProcessedData};
@@ -19,14 +18,13 @@ use graphrust_macros::md;
 use itertools::Itertools;
 
 use egui::epaint::TextShape;
-use std::sync::mpsc::{Receiver, Sender, SendError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc};
 use zearch::Index;
 
 use eframe::epaint::text::TextWrapMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread;
-use std::time::Duration;
 use egui_modal::{Icon, Modal};
 use parking_lot::RwLock;
 #[cfg(target_arch = "wasm32")]
@@ -883,7 +881,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             tab.ui_state.details.mouse_pos_world = None;
                         }
 
-                        let mut graph = tab.rendered_graph.clone();
+                        let graph = tab.rendered_graph.clone();
                         let edges = tab.ui_state.display.g_show_edges;
                         let nodes = tab.ui_state.display.g_show_nodes;
                         let opac_edges = tab.ui_state.display.g_opac_edges;

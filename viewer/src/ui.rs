@@ -1,4 +1,4 @@
-use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GlTask, GraphTabState, ModalWriter, ModularityClass, NewTabRequest, NullStatusWriter, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
+use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GlTask, GraphTabState, ModalWriter, ModularityClass, NewTabRequest, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
@@ -14,11 +14,9 @@ use egui_extras::{Column, TableBuilder};
 use forceatlas2::{Layout, Node, Settings, VecN};
 use graph_format::nalgebra::{Matrix4, Vector2};
 use graph_format::{Color3b, EdgeStore, Point};
-use itertools::MinMaxResult::NoElements;
 use itertools::{Itertools, MinMaxResult};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
-use std::rc::Rc;
 use std::sync::{mpsc, Arc};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, RecvError, Sender, TryRecvError};
@@ -794,7 +792,7 @@ impl <T> SingleChannel<T> {
 
     pub fn try_get_and(&self, handler: impl FnOnce(&T)) {
         if self.flag.load(std::sync::atomic::Ordering::Acquire) {
-            let mut lock = self.value.lock();
+            let lock = self.value.lock();
             handler(&*lock);
             self.flag.store(false, std::sync::atomic::Ordering::Release);
         }

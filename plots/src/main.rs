@@ -4,7 +4,6 @@ use inline_python::python;
 use rayon::prelude::*;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::HashMap;
-use rand::Rng;
 
 #[macro_export]
 macro_rules! log

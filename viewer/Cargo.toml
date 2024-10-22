@@ -29,8 +29,11 @@ forceatlas2 = { version = "0.6", features = ["default"] } # 0.7 is broken since 
 colourado-iter = "1.2"
 anyhow = "1"
 egui-modal = "0.5.0"
-parking_lot = { version = "*", features = ["deadlock_detection"]}
+parking_lot = "*"
 #zearch = { path = "../../zearch" }
+
+[features]
+deadlock_detection = []
 
 [dev-dependencies]
 log = "*"

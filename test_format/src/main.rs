@@ -4,7 +4,6 @@ use graph_format::{Color3b, EdgeStore, GraphFile, LenType, NodeStore, Point, Rea
 use speedy::*;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CStr;
-use std::process::Command;
 
 #[derive(Readable, Writable)]
 pub struct NodeStore2 {
