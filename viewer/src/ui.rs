@@ -1,4 +1,4 @@
-use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GraphTabState, ModalWriter, ModularityClass, NewTabRequest, NullStatusWriter, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
+use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GlTask, GraphTabState, ModalWriter, ModularityClass, NewTabRequest, NullStatusWriter, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
@@ -19,10 +19,12 @@ use itertools::{Itertools, MinMaxResult};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
 use std::rc::Rc;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc};
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::{RecvError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, RecvError, Sender, TryRecvError};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+use parking_lot::{Mutex, RwLock};
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -204,7 +206,7 @@ impl PathSection {
 
     fn person_button(
         &self,
-        data: &Arc<ViewerData>,
+        data: &ViewerData,
         ui: &mut Ui,
         id: &usize,
         selected: &mut Option<usize>,
@@ -219,7 +221,7 @@ impl PathSection {
 
     fn show(
         &mut self,
-        data: &Arc<ViewerData>,
+        data: &Arc<RwLock<ViewerData>>,
         graph: &mut RenderedGraph,
         ui: &mut Ui,
         infos: &mut InfosSection,
@@ -284,9 +286,10 @@ impl PathSection {
                 {
                     let mut cur_excl = None;
                     let mut del_excl = None;
+                    let data = data.read();
                     for (i, id) in self.path_settings.exclude_ids.iter().enumerate() {
                         ui.horizontal(|ui| {
-                            self.person_button(data, ui, id, &mut cur_excl);
+                            self.person_button(&*data, ui, id, &mut cur_excl);
                             if ui.button("x").clicked() {
                                 del_excl = Some(i);
                             }
@@ -320,6 +323,7 @@ impl PathSection {
                             let data = data.clone();
                             let ctx = ContextUpdater::new(ui.ctx());
                             thread::spawn(move || {
+                                let data = (*data.read()).clone();
                                 Self::do_pathfinding(settings, &data, tx, ctx);
                             });
                             Some(PathStatus::Loading)
@@ -345,10 +349,11 @@ impl PathSection {
                 let mut del_path = None;
                 let mut cur_path = None;
                 if let Some(ref path) = self.found_path {
+                    let data = data.read();
                     for (i, id) in path.iter().enumerate() {
                         ui.horizontal(|ui| {
                             set_bg_color_tinted(Color32::RED, ui);
-                            self.person_button(data, ui, id, &mut cur_path);
+                            self.person_button(&*data, ui, id, &mut cur_path);
                             if i != 0 && i != path.len() - 1 {
                                 if ui.button("x").clicked() {
                                     del_path = Some(*id);
@@ -400,7 +405,7 @@ impl InfosSection {
 
     fn show(
         &mut self,
-        data: &Arc<ViewerData>,
+        data_rw: &Arc<RwLock<ViewerData>>,
         tab_request: &mut Option<NewTabRequest>,
         ui: &mut Ui,
         camera: &Camera,
@@ -414,9 +419,10 @@ impl InfosSection {
                 ui.horizontal(|ui| {
                     set_bg_color_tinted(Color32::GREEN, ui);
                     ui.radio_value(sel_field, SelectedUserField::Selected, "");
-                    combo_with_filter(ui, "#infos_user", &mut self.infos_current, data);
+                    combo_with_filter(ui, "#infos_user", &mut self.infos_current, data_rw);
                 });
                 if let Some(id) = self.infos_current {
+                    let data = &*data_rw.read();
                     let person = &data.persons[id];
                     let class = person.modularity_class;
 
@@ -450,7 +456,7 @@ impl InfosSection {
                             if ui.button(format!("{}", class)).clicked() {
                                 self.create_subgraph(
                                     format!("Classe {}", class),
-                                    data.clone(), tab_request, camera, path_section, ui, modal.clone(),
+                                    data_rw, tab_request, camera, path_section, ui, modal.clone(),
                                     move |_, data| {
                                         Ok(data.persons
                                             .iter()
@@ -539,7 +545,7 @@ impl InfosSection {
                             let neighborhood_degree = self.neighborhood_degree;
                             self.create_subgraph(
                                 format!("{}-voisinage de {}", neighborhood_degree, person.name),
-                                data.clone(), tab_request, camera, path_section, ui, modal.clone(),
+                                data_rw, tab_request, camera, path_section, ui, modal.clone(),
                                 move |status_tx, data| {
                                     let mut new_included = AHashSet::from([id]);
                                     let mut last_batch = AHashSet::from([id]);
@@ -577,7 +583,7 @@ impl InfosSection {
 
     fn create_subgraph(&mut self,
                        title: String,
-                       data: Arc<ViewerData>,
+                       data: &Arc<RwLock<ViewerData>>,
                        tab_request: &mut Option<NewTabRequest>,
                        camera: &Camera,
                        path_section: &PathSection,
@@ -604,9 +610,9 @@ impl InfosSection {
         //let data = unsafe { std::mem::transmute::<&ViewerData, &'static ViewerData>(data) };
         // huh? seems like it's being moved around. I put Arcs everywhere, now
         // it works fine, and there doesn't seem to be a huge overhead
+        let data = data.clone();
         spawn_cancelable(modal_tx, move || {
-            let data = data;
-            let new_included = x(&status_tx, &data)?;
+            let new_included = x(&status_tx, &*data.read())?;
 
             let mut new_persons =
                 Vec::with_capacity(new_included.len());
@@ -615,37 +621,43 @@ impl InfosSection {
             let mut class_list = AHashSet::new();
 
             log!(status_tx, "Processing person list and creating ID map");
-            for &id in new_included.iter() {
-                let pers = &data.persons[id];
-                id_map.insert(id, new_persons.len());
-                class_list.insert(pers.modularity_class);
-                new_persons.push(Person {
-                    neighbors: vec![],
-                    ..*pers
-                });
+            {
+                let data = data.read();
+                for &id in new_included.iter() {
+                    let pers = &data.persons[id];
+                    id_map.insert(id, new_persons.len());
+                    class_list.insert(pers.modularity_class);
+                    new_persons.push(Person {
+                        neighbors: vec![],
+                        ..*pers
+                    });
+                }
             }
 
             let mut edges = Vec::new();
 
             log!(status_tx, "Creating new neighbor lists and edge list");
-            for_progress!(status_tx, (&old_id, &new_id) in id_map.iter(), {
-                new_persons[new_id].neighbors.extend(
-                    data.persons[old_id]
-                        .neighbors
-                        .iter()
-                        .filter_map(|&i| id_map.get(&i)),
-                );
-                for &nb in new_persons[new_id].neighbors.iter() {
-                    if new_id < nb {
-                        edges.push(EdgeStore {
-                            a: new_id as u32,
-                            b: nb as u32,
-                        });
-                    } else {
-                        // we do nothing since we'll get it eventually
+            {
+                let data = data.read();
+                for_progress!(status_tx, (&old_id, &new_id) in id_map.iter(), {
+                    new_persons[new_id].neighbors.extend(
+                        data.persons[old_id]
+                            .neighbors
+                            .iter()
+                            .filter_map(|&i| id_map.get(&i)),
+                    );
+                    for &nb in new_persons[new_id].neighbors.iter() {
+                        if new_id < nb {
+                            edges.push(EdgeStore {
+                                a: new_id as u32,
+                                b: nb as u32,
+                            });
+                        } else {
+                            // we do nothing since we'll get it eventually
+                        }
                     }
-                }
-            });
+                });
+            }
 
             log!(status_tx, "Computing min edge filter");
 
@@ -657,7 +669,7 @@ impl InfosSection {
                 filter += 1;
             }
 
-            let viewer = ViewerData::new(new_persons, data.modularity_classes.clone(), &status_tx)?;
+            let viewer = ViewerData::new(new_persons, data.read().modularity_classes.clone(), &status_tx)?;
 
             let mut new_ui = UiState::default();
 
@@ -748,11 +760,54 @@ impl DetailsSection {
     }
 }
 
+#[derive(Clone)]
+pub struct SingleChannel<T> {
+    flag: Arc<AtomicBool>,
+    value: Arc<Mutex<T>>
+}
+
+impl <T> SingleChannel<T> {
+    pub fn new(val: T) -> Self {
+        Self {
+            flag: Arc::new(AtomicBool::new(false)),
+            value: Arc::new(Mutex::new(val))
+        }
+    }
+
+    pub fn send(&self, updater: impl FnOnce(&mut T)) {
+        let mut lock = self.value.lock();
+        updater(&mut *lock);
+        self.flag.store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    // pub fn recv(&self) -> Option<T> {
+    //     if self.flag.load(std::sync::atomic::Ordering::Acquire) {
+    //         self.flag.store(false, std::sync::atomic::Ordering::Release);
+    //         self.value.lock().unwrap().take()
+    //     } else {
+    //         None
+    //     }
+
+    // pub fn get(&self) -> MutexGuard<T> {
+    //     self.value.lock().unwrap()
+    // }
+
+    pub fn try_get_and(&self, handler: impl FnOnce(&T)) {
+        if self.flag.load(std::sync::atomic::Ordering::Acquire) {
+            let mut lock = self.value.lock();
+            handler(&*lock);
+            self.flag.store(false, std::sync::atomic::Ordering::Release);
+        }
+    }
+}
+
+
 pub struct ForceAtlasState {
     running: bool,
     data: Option<(Arc<Mutex<Layout<f32, 2>>>, Option<ForceAtlasThread>)>,
     settings: Settings<f32>,
-    new_settings: Arc<(AtomicBool, Mutex<Settings<f32>>)>
+    new_settings: Arc<(AtomicBool, Mutex<Settings<f32>>)>,
+    render_thread: Option<(AtomicBool, Sender<()>, Receiver<(GlTask)>, JoinHandle<()>)>
 }
 
 impl Default for ForceAtlasState {
@@ -771,6 +826,7 @@ impl Default for ForceAtlasState {
                 strong_gravity: false,
             },
             new_settings: Default::default(),
+            render_thread: None
         }
     }
 }
@@ -778,7 +834,9 @@ impl Default for ForceAtlasState {
 #[derive(Default)]
 pub struct AlgosSection {
     algo_ran: bool,
-    force_atlas_state: ForceAtlasState
+    //algo_task: Option<Box<dyn FnOnce(&UiState) + 'static>>,
+    force_atlas_state: ForceAtlasState,
+    times: Vec<Duration>
 }
 
 pub struct ForceAtlasThread {
@@ -786,22 +844,55 @@ pub struct ForceAtlasThread {
     status_tx: Sender<bool>
 }
 
+fn rerender_graph(data: &ViewerData) -> GlTask {
+    let nodes = data
+        .persons
+        .iter()
+        .map(|p| {
+            crate::geom_draw::create_node_vertex(p)
+        });
+
+    let edges = data.get_edges().flat_map(
+        |(a, b)| crate::geom_draw::create_edge_vertices(&data.persons[a], &data.persons[b])
+    );
+    let vertices = nodes.chain(edges).collect_vec();
+
+    let closure = move |graph: &mut RenderedGraph, gl: &glow::Context| unsafe {
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(graph.nodes_buffer));
+        gl.buffer_sub_data_u8_slice(
+            glow::ARRAY_BUFFER,
+            0,
+            std::slice::from_raw_parts(
+                vertices.as_ptr() as *const u8,
+                vertices.len() * size_of::<PersonVertex>(),
+            ),
+        );
+    };
+
+    Box::new(closure)
+}
+
 impl AlgosSection {
-    fn show(&mut self, data: &mut Arc<ViewerData>, ui: &mut Ui) {
+    fn show(&mut self, data: &Arc<RwLock<ViewerData>>, ui: &mut Ui, graph: &mut RenderedGraph) {
         CollapsingHeader::new("Algorithmes")
             .default_open(false)
             .show(ui, |ui| {
                 if ui.button("Louvain").clicked() {
                     self.algo_ran = true;
-                    let louvain = crate::algorithms::louvain::Graph::new(&data.persons).louvain();
+
+                    let data_ = data.read();
+                    let louvain = crate::algorithms::louvain::Graph::new(&data_.persons).louvain();
+                    let mut nodes = data_.persons.clone();
+                    for n in &mut nodes {
+                        n.modularity_class = u16::MAX;
+                    }
+                    drop(data_);
+
                     //log!("Creating color palette");
                     use colourado_iter::{ColorPalette, PaletteType};
                     let palette = ColorPalette::new(PaletteType::Random, false, &mut rand::thread_rng());
                     let mut classes = Vec::new();
-                    let mut nodes = data.persons.clone();
-                    for n in &mut nodes {
-                        n.modularity_class = u16::MAX;
-                    }
+
                     for (i, (comm, color)) in louvain.nodes.iter().zip(palette).enumerate() {
                         for user in comm.payload.as_ref().unwrap() {
                             nodes[user.0].modularity_class = i as u16;
@@ -814,7 +905,13 @@ impl AlgosSection {
                         }, (i + 1) as u16));
                     }
 
-                    *data = Arc::new(data.replace_data(nodes, classes));
+                    {
+                        let mut lock = data.write();
+                        lock.persons = nodes;
+                        lock.modularity_classes = classes;
+                    }
+
+                    graph.tasks.push_back(rerender_graph(&*data.read()));
                 }
 
                 if ui.checkbox(&mut self.force_atlas_state.running, "ForceAtlas2").changed() {
@@ -851,8 +948,8 @@ impl AlgosSection {
                     ui.end_row();
 
                     if upd {
-                        *self.force_atlas_state.new_settings.1.lock().unwrap() = self.force_atlas_state.settings.clone();
-                        self.force_atlas_state.new_settings.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                        *self.force_atlas_state.new_settings.1.lock() = self.force_atlas_state.settings.clone();
+                        self.force_atlas_state.new_settings.0.store(true, std::sync::atomic::Ordering::Release);
                     }
                 });
 
@@ -862,6 +959,7 @@ impl AlgosSection {
                     let layout = self.force_atlas_state.data.get_or_insert_with(|| {
                         const UPD_PER_SEC: usize = 60;
 
+                        let data = data.read();
                         let layout = Arc::new(Mutex::new(Layout::<f32, 2>::from_position_graph(
                             data.get_edges().map(|e| (e, 1.0)).collect(),
                             data.persons.iter().map(|p| Node {
@@ -873,17 +971,18 @@ impl AlgosSection {
                         let (status_tx, status_rx) = mpsc::channel();
                         let layout_thr = layout.clone();
                         let settings_thr = self.force_atlas_state.new_settings.clone();
+
                         let thread = thread::spawn(move || {
                             loop {
                                 loop {
                                     {
-                                        let mut layout = layout_thr.lock().unwrap();
+                                        let mut layout = layout_thr.lock();
 
                                         layout.iteration();
 
-                                        if settings_thr.0.load(std::sync::atomic::Ordering::SeqCst) {
-                                            layout.set_settings(settings_thr.1.lock().unwrap().clone());
-                                            settings_thr.0.store(false, std::sync::atomic::Ordering::SeqCst);
+                                        if settings_thr.0.load(std::sync::atomic::Ordering::Acquire) {
+                                            layout.set_settings(settings_thr.1.lock().clone());
+                                            settings_thr.0.store(false, std::sync::atomic::Ordering::Release);
                                         }
                                     }
 
@@ -908,17 +1007,40 @@ impl AlgosSection {
                             }
                         });
                         (layout, Some(ForceAtlasThread { thread, status_tx }))
+                    }).0.clone();
+
+                    let (rs, s, r, t) = self.force_atlas_state.render_thread.get_or_insert_with(|| {
+                        let request_sent = AtomicBool::new(false);
+                        let (request_tx, request_rx) = mpsc::channel();
+                        //let chan = SingleChannel::new(Vec::new());
+                        let (result_tx, result_rx) = mpsc::channel();
+                        let thr_data = data.clone();
+                        request_tx.send(()).unwrap();
+                        (request_sent, request_tx, result_rx, thread::spawn(move || {
+                            while let Ok(req) = request_rx.recv() {
+                                let mut persons = thr_data.read().persons.clone();
+                                for (person, node) in persons.iter_mut().zip(layout.lock().nodes.iter()) {
+                                    person.position = Point::new(node.pos[0], node.pos[1]);
+                                }
+
+                                {
+                                    let mut data_w = thr_data.write();
+                                    data_w.persons = persons;
+                                }
+
+                                let closure = rerender_graph(&*thr_data.read());
+                                if result_tx.send(closure).is_err() {
+                                    return; // tab closed
+                                }
+                            }
+                        }))
                     });
 
-                    // TODO: move this to background thread
-                    let mut persons = data.persons.clone();
-
-                    for (person, node) in persons.iter_mut().zip(layout.0.lock().unwrap().nodes.iter()) {
-                        person.position = Point::new(node.pos[0], node.pos[1]);
+                    if let Ok((task)) = r.try_recv() {
+                        graph.tasks.push_back(task);
+                        self.algo_ran = true;
+                        s.send(()).unwrap();
                     }
-
-                    self.algo_ran = true;
-                    *data = Arc::new(data.replace_data(persons, data.modularity_classes.clone()));
                 }
             });
     }
@@ -1058,7 +1180,7 @@ impl DisplaySection {
 }
 
 impl UiState {
-    fn refresh_node_count(&mut self, data: &ViewerData, graph: &mut RenderedGraph) {
+    fn refresh_node_count(&mut self, data: &ViewerData, graph: &RenderedGraph) {
         let mut count_classes = vec![0; data.modularity_classes.len()];
         self.display.node_count = 0;
         for p in &*data.persons {
@@ -1085,8 +1207,8 @@ impl UiState {
     pub fn draw_ui(
         &mut self,
         ui: &mut Ui,
-        data: &mut Arc<ViewerData>,
-        graph: &mut RenderedGraph,
+        data: &Arc<RwLock<ViewerData>>,
+        graph: &Arc<RwLock<RenderedGraph>>,
         tab_request: &mut Option<NewTabRequest>,
         camera: &mut TabCamera,
         cid: Id,
@@ -1094,15 +1216,16 @@ impl UiState {
     ) {
         ui.spacing_mut().slider_width = 200.0;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            self.display.show(graph, ui);
+            self.display.show(&mut *graph.write(), ui);
+
             if self.display.deg_filter_changed {
-                self.refresh_node_count(data, graph);
+                self.refresh_node_count(&*data.read(), &*graph.read());
                 self.display.deg_filter_changed = false;
             }
 
             self.path.show(
                 data,
-                graph,
+                &mut *graph.write(),
                 ui,
                 &mut self.infos,
                 &mut self.selected_user_field,
@@ -1118,39 +1241,45 @@ impl UiState {
                 modal,
             );
 
-            self.classes.show(data, ui);
+            self.classes.show(&*data.read(), ui);
 
-            self.algorithms.show(data, ui);
+            self.algorithms.show(data, ui, &mut *graph.write());
             if self.algorithms.algo_ran {
-                self.refresh_node_count(data, graph);
+                self.refresh_node_count(&*data.read(), &*graph.read());
 
-                let nodes = data
-                    .persons
-                    .iter()
-                    .map(|p| {
-                        crate::geom_draw::create_node_vertex(p)
-                    });
+                // let now = Instant::now();
+                // let nodes = data
+                //     .persons
+                //     .iter()
+                //     .map(|p| {
+                //         crate::geom_draw::create_node_vertex(p)
+                //     });
+                //
+                // let edges = data.get_edges().flat_map(
+                //     |(a, b)| crate::geom_draw::create_edge_vertices(&data.persons[a], &data.persons[b])
+                // );
+                //
+                // let vertices = nodes.chain(edges).collect_vec();
+                // times.push(now.elapsed());
 
-                let edges = data.get_edges().flat_map(
-                    |(a, b)| crate::geom_draw::create_edge_vertices(&data.persons[a], &data.persons[b])
-                );
-
-                let vertices = nodes.chain(edges).collect_vec();
-
-                let buf = graph.nodes_buffer;
-                let closure = move |gl: &glow::Context| unsafe {
-                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(buf));
-                    gl.buffer_sub_data_u8_slice(
-                        glow::ARRAY_BUFFER,
-                        0,
-                        std::slice::from_raw_parts(
-                            vertices.as_ptr() as *const u8,
-                            vertices.len() * size_of::<PersonVertex>(),
-                        ),
-                    );
-                };
-
-                graph.tasks.push_back(Box::new(closure));
+                // let now = Instant::now();
+                // let buf = graph.nodes_buffer;
+                // let closure = move |gl: &glow::Context| unsafe {
+                //     gl.bind_buffer(glow::ARRAY_BUFFER, Some(buf));
+                //     gl.buffer_sub_data_u8_slice(
+                //         glow::ARRAY_BUFFER,
+                //         0,
+                //         std::slice::from_raw_parts(
+                //             vertices.as_ptr() as *const u8,
+                //             vertices.len() * size_of::<PersonVertex>(),
+                //         ),
+                //     );
+                // };
+                //
+                // graph.tasks.push_back(Box::new(closure));
+                // times.push(now.elapsed());
+                //
+                // self.algorithms.times = self.algorithms.times.iter().zip(times.iter()).map(|(a, b)| *a + *b).collect();
 
                 self.algorithms.algo_ran = false;
             }

@@ -20,7 +20,7 @@ use itertools::Itertools;
 
 use egui::epaint::TextShape;
 use std::sync::mpsc::{Receiver, Sender, SendError};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc};
 use zearch::Index;
 
 use eframe::epaint::text::TextWrapMode;
@@ -28,6 +28,7 @@ use eframe::epaint::text::TextWrapMode;
 pub use std::thread;
 use std::time::Duration;
 use egui_modal::{Icon, Modal};
+use parking_lot::RwLock;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_thread as thread;
 
@@ -214,6 +215,7 @@ impl<T: Error + Into<anyhow::Error>> From<T> for CancelableError {
 
 pub type Cancelable<T> = Result<T, CancelableError>;
 
+#[derive(Clone)]
 pub struct ViewerData {
     pub persons: Vec<Person>,
     pub modularity_classes: Vec<ModularityClass>,
@@ -282,8 +284,8 @@ pub struct TabCamera {
 
 pub struct GraphTabLoaded {
     pub ui_state: UiState,
-    pub viewer_data: Arc<ViewerData>,
-    pub rendered_graph: Arc<Mutex<RenderedGraph>>,
+    pub viewer_data: Arc<RwLock<ViewerData>>,
+    pub rendered_graph: Arc<RwLock<RenderedGraph>>,
     pub tab_camera: TabCamera,
 }
 
@@ -546,11 +548,11 @@ pub fn create_tab<'a>(
             },
             ..ui_state
         },
-        rendered_graph: Arc::new(Mutex::new(RenderedGraph {
+        rendered_graph: Arc::new(RwLock::new(RenderedGraph {
             degree_filter: (default_filter, u16::MAX),
             ..RenderedGraph::new(gl, &viewer, edges, status_tx)?
         })),
-        viewer_data: Arc::from(viewer),
+        viewer_data: Arc::from(RwLock::new(viewer)),
     })
 }
 
@@ -712,8 +714,8 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                         }
                         tab.ui_state.draw_ui(
                             ui,
-                            &mut tab.viewer_data,
-                            &mut tab.rendered_graph.lock().unwrap(),
+                            &tab.viewer_data,
+                            &tab.rendered_graph,
                             self.tab_request,
                             &mut tab.tab_camera,
                             cid,
@@ -816,7 +818,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
 
                             if response.clicked() {
                                 let closest = tab
-                                    .viewer_data
+                                    .viewer_data.read()
                                     .persons
                                     .iter()
                                     .map(|p| {
@@ -831,7 +833,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                                     log::info!(
                                         "Selected person {}: {:?} (mouse: {:?})",
                                         closest,
-                                        tab.viewer_data.persons[closest].position,
+                                        tab.viewer_data.read().persons[closest].position,
                                         pos_world
                                     );
                                     tab.ui_state.infos.infos_current = Some(closest);
@@ -881,19 +883,19 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             tab.ui_state.details.mouse_pos_world = None;
                         }
 
-                        let graph = tab.rendered_graph.clone();
+                        let mut graph = tab.rendered_graph.clone();
                         let edges = tab.ui_state.display.g_show_edges;
                         let nodes = tab.ui_state.display.g_show_nodes;
                         let opac_edges = tab.ui_state.display.g_opac_edges;
                         let opac_nodes = tab.ui_state.display.g_opac_nodes;
 
                         let cam = tab.tab_camera.camera.get_matrix();
-                        let class_colors = tab.viewer_data.modularity_classes.iter().map(|c| c.color.to_f32()).collect_vec();
+                        let class_colors = tab.viewer_data.read().modularity_classes.iter().map(|c| c.color.to_f32()).collect_vec();
                         let callback = egui::PaintCallback {
                             rect,
                             callback: Arc::new(egui_glow::CallbackFn::new(
                                 move |_info, painter| {
-                                    graph.lock().unwrap().paint(
+                                    graph.write().paint(
                                         painter.gl(),
                                         cam,
                                         (edges, opac_edges),
@@ -907,8 +909,9 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
 
                         let clipped_painter = ui.painter().with_clip_rect(rect);
 
+                        let data = tab.viewer_data.read();
                         let draw_person = |id, color| {
-                            let person: &Person = &tab.viewer_data.persons[id];
+                            let person: &Person = &data.persons[id];
                             let pos = person.position;
                             let pos_scr = (cam * Vector4::new(pos.x, pos.y, 0.0, 1.0)).xy();
                             let txt = WidgetText::from(person.name)
@@ -944,10 +947,9 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
     }
 
     fn on_close(&mut self, tab: &mut Self::Tab) -> bool {
-        if let GraphTabState::Loaded(tab) = &tab.state {
+        if let GraphTabState::Loaded(ref mut tab) = tab.state {
             tab.rendered_graph
-                .lock()
-                .unwrap()
+                .write()
                 .destroy(&self.frame.gl().unwrap().clone());
         }
         true
@@ -1112,7 +1114,7 @@ Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortemen
     }
 }
 
-pub type GlTask = Box<dyn FnOnce(&glow::Context) + Send + 'static>;
+pub type GlTask = Box<dyn FnOnce(&mut RenderedGraph, &glow::Context) + Send + Sync + 'static>;
 
 pub struct RenderedGraph {
     pub program_node: glow::Program,
@@ -1381,7 +1383,7 @@ impl RenderedGraph {
         }
 
         while let Some(task) = self.tasks.pop_front() {
-            task(gl);
+            task(self, gl);
         }
 
         use glow::HasContext as _;

@@ -13,7 +13,8 @@ use egui::{Align, Id, Layout, Painter, PopupCloseBehavior, Response, ScrollArea,
 use derivative::Derivative;
 use eframe::epaint::text::TextWrapMode;
 use egui::text::{CCursor, CCursorRange};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
+use parking_lot::{Mutex, RwLock};
 use zearch::Search;
 
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
@@ -87,7 +88,7 @@ pub fn combo_with_filter(
     ui: &mut Ui,
     label: &str,
     current_item: &mut Option<usize>,
-    viewer_data: &Arc<ViewerData>,
+    viewer_data: &Arc<RwLock<ViewerData>>,
 ) -> Response {
     #[derive(Derivative, Clone)]
     #[derivative(Default)]
@@ -109,7 +110,6 @@ pub fn combo_with_filter(
     if !is_popup_open {
         ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone())
             .lock()
-            .unwrap()
             .first_open = false;
     }
 
@@ -135,7 +135,7 @@ pub fn combo_with_filter(
         };
 
         let (selected_text, dim) = match current_item {
-            Some(value) => (WidgetText::from(viewer_data.persons[*value].name), false),
+            Some(value) => (WidgetText::from(viewer_data.read().persons[*value].name), false),
             None => (WidgetText::from("Cliquer ici pour rechercher"), true),
         };
 
@@ -197,7 +197,7 @@ pub fn combo_with_filter(
         ui.vertical(|ui| {
             let binding =
                 ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
-            let mut state = binding.lock().unwrap();
+            let mut state = binding.lock();
 
             let layout = Layout::centered_and_justified(ui.layout().main_dir());
             let txt_box_resp = ui
@@ -237,8 +237,8 @@ pub fn combo_with_filter(
                     //let ctx = ui.ctx().clone();
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
-                        let res = viewer_data.engine.search(Search::new(&pattern).with_limit(RESULTS));
-                        let mut state = state.lock().unwrap();
+                        let res = viewer_data.read().engine.search(Search::new(&pattern).with_limit(RESULTS));
+                        let mut state = state.lock();
                         if state.pattern.eq(&pattern) {
                             state.item_vector = res.iter().map(|&i| i as usize).collect();
                             state.loading = false;
@@ -258,6 +258,7 @@ pub fn combo_with_filter(
                     if show_count == 0 {
                         ui.add_enabled(false, SelectableLabel::new(false, "Aucun résultat trouvé"));
                     } else {
+                        let data = viewer_data.read();
                         for i in 0..show_count {
                             let idx = state.item_vector[i];
 
@@ -269,7 +270,7 @@ pub fn combo_with_filter(
                                     |ui| {
                                         ui.add_enabled(!loading, SelectableLabel::new(
                                             *current_item == Some(idx),
-                                            viewer_data.persons[idx].name,
+                                            data.persons[idx].name,
                                         ))
                                     },
                                 )
