@@ -91,6 +91,8 @@ fn main() {
     log::info!("Start called {}", chrono::Local::now().format("%H:%M:%S.%3f"));
     let web_options = eframe::WebOptions::default();
 
+    log::info!("Available parallelism: {:?}", viewer::thread::available_parallelism());
+
     wasm_bindgen_futures::spawn_local(async {
         eframe::WebRunner::new()
             .start(

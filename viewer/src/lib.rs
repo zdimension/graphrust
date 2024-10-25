@@ -14,4 +14,5 @@ mod ui;
 pub mod utils;
 mod algorithms;
 
+pub use app::thread;
 pub use app::GraphViewApp;
