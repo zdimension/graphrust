@@ -362,6 +362,7 @@ impl GraphTabState {
 }
 
 pub struct GraphTab {
+    pub id: Id,
     pub title: String,
     pub closeable: bool,
     pub state: GraphTabState,
@@ -729,6 +730,10 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
 {
     type Tab = GraphTab;
 
+    fn id(&mut self, tab: &mut Self::Tab) -> Id {
+        tab.id
+    }
+
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
         RichText::from(&tab.title).into()
     }
@@ -1039,6 +1044,7 @@ impl eframe::App for GraphViewApp {
                     let (gl_fwd, gl_mpsc) = GlForwarder::new();
                     self.state = AppState::Loaded {
                         tree: DockState::new(vec![GraphTab {
+                            id: Id::new(("main_tab", chrono::Utc::now())),
                             closeable: false,
                             title: "Graphe".to_string(),
                             state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),

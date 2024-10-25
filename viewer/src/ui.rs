@@ -593,6 +593,7 @@ impl InfosSection {
         let (gl_fwd, gl_mpsc) = GlForwarder::new();
 
         *tab_request = Some(NewTabRequest {
+            id: Id::new((&title, chrono::Utc::now())),
             title,
             closeable: true,
             state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),
