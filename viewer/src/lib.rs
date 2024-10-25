@@ -2,6 +2,7 @@
 #![feature(cmp_minmax)]
 #![feature(try_blocks)]
 #![feature(specialization)]
+#![feature(map_many_mut)]
 #![allow(incomplete_features)]
 
 mod app;

@@ -958,13 +958,13 @@ impl AlgosSection {
                         const UPD_PER_SEC: usize = 60;
 
                         let data = data.read();
-                        let layout = Arc::new(RwLock::new(Layout::<f32, 2>::from_position_graph(
-                            data.get_edges().map(|e| (e, 1.0)).collect(),
+                        let layout = Arc::new(RwLock::new(Layout::<f32, 2>::from_positioned(
+                            self.force_atlas_state.settings.clone(),
                             data.persons.iter().map(|p| Node {
                                 pos: VecN(p.position.to_array()),
                                 ..Default::default()
                             }).collect(),
-                            self.force_atlas_state.settings.clone(),
+                            data.get_edges().map(|e| (e, 1.0)).collect(),
                         )));
                         let (status_tx, status_rx) = mpsc::channel();
                         let layout_thr = layout.clone();

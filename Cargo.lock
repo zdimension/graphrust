@@ -1022,9 +1022,8 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "forceatlas2"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe250dab91fc35c905e42a120108569fa5fde2b5aa8aae357dcb1c47c309061f"
+version = "0.7.0"
+source = "git+https://framagit.org/ZettaScript/forceatlas2-rs#44f4f9ad087f028d1549da4bfaeb74e7abb35215"
 dependencies = [
  "bumpalo",
  "num-traits",
