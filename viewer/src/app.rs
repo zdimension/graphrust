@@ -26,7 +26,8 @@ use eframe::epaint::text::TextWrapMode;
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread;
 use egui_modal::{Icon, Modal};
-use parking_lot::RwLock;
+use parking_lot::lock_api::{RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{RawRwLock, RwLock};
 #[cfg(target_arch = "wasm32")]
 pub use wasm_thread as thread;
 
@@ -273,6 +274,31 @@ pub enum CamAnimating {
     PanTo { from: CamXform, to: CamXform },
 }
 
+pub struct MyRwLock<T> {
+    inner: RwLock<T>
+}
+
+impl <T> MyRwLock<T> {
+    pub fn new(x: T) -> MyRwLock<T> {
+        MyRwLock { inner: RwLock::new(x) }
+    }
+
+    pub fn read(&self) -> RwLockReadGuard<'_, RawRwLock, T> {
+        #[cfg(target_arch = "wasm32")]
+        {
+
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            //self.inner.try_re
+            //self.inner.read()
+        }
+    }
+
+    pub fn write(&self) -> RwLockWriteGuard<'_, RawRwLock, T> {
+        self.inner.write()
+    }
+}
 
 pub struct TabCamera {
     pub camera: Camera,
@@ -282,8 +308,8 @@ pub struct TabCamera {
 
 pub struct GraphTabLoaded {
     pub ui_state: UiState,
-    pub viewer_data: Arc<RwLock<ViewerData>>,
-    pub rendered_graph: Arc<RwLock<RenderedGraph>>,
+    pub viewer_data: Arc<MyRwLock<ViewerData>>,
+    pub rendered_graph: Arc<MyRwLock<RenderedGraph>>,
     pub tab_camera: TabCamera,
 }
 
@@ -546,11 +572,11 @@ pub fn create_tab<'a>(
             },
             ..ui_state
         },
-        rendered_graph: Arc::new(RwLock::new(RenderedGraph {
+        rendered_graph: Arc::new(MyRwLock::new(RenderedGraph {
             degree_filter: (default_filter, u16::MAX),
             ..RenderedGraph::new(gl, &viewer, edges, status_tx)?
         })),
-        viewer_data: Arc::from(RwLock::new(viewer)),
+        viewer_data: Arc::from(MyRwLock::new(viewer)),
     })
 }
 

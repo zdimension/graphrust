@@ -1,4 +1,4 @@
-use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GlTask, GraphTabState, ModalWriter, ModularityClass, NewTabRequest, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
+use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GlTask, GraphTabState, ModalWriter, ModularityClass, MyRwLock, NewTabRequest, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
@@ -219,7 +219,7 @@ impl PathSection {
 
     fn show(
         &mut self,
-        data: &Arc<RwLock<ViewerData>>,
+        data: &Arc<MyRwLock<ViewerData>>,
         graph: &mut RenderedGraph,
         ui: &mut Ui,
         infos: &mut InfosSection,
@@ -403,7 +403,7 @@ impl InfosSection {
 
     fn show(
         &mut self,
-        data_rw: &Arc<RwLock<ViewerData>>,
+        data_rw: &Arc<MyRwLock<ViewerData>>,
         tab_request: &mut Option<NewTabRequest>,
         ui: &mut Ui,
         camera: &Camera,
@@ -581,7 +581,7 @@ impl InfosSection {
 
     fn create_subgraph(&mut self,
                        title: String,
-                       data: &Arc<RwLock<ViewerData>>,
+                       data: &Arc<MyRwLock<ViewerData>>,
                        tab_request: &mut Option<NewTabRequest>,
                        camera: &Camera,
                        path_section: &PathSection,
@@ -871,7 +871,7 @@ fn rerender_graph(data: &ViewerData) -> GlTask {
 }
 
 impl AlgosSection {
-    fn show(&mut self, data: &Arc<RwLock<ViewerData>>, ui: &mut Ui, graph: &mut RenderedGraph) {
+    fn show(&mut self, data: &Arc<MyRwLock<ViewerData>>, ui: &mut Ui, graph: &mut RenderedGraph) {
         CollapsingHeader::new("Algorithmes")
             .default_open(false)
             .show(ui, |ui| {
@@ -1205,8 +1205,8 @@ impl UiState {
     pub fn draw_ui(
         &mut self,
         ui: &mut Ui,
-        data: &Arc<RwLock<ViewerData>>,
-        graph: &Arc<RwLock<RenderedGraph>>,
+        data: &Arc<MyRwLock<ViewerData>>,
+        graph: &Arc<MyRwLock<RenderedGraph>>,
         tab_request: &mut Option<NewTabRequest>,
         camera: &mut TabCamera,
         cid: Id,

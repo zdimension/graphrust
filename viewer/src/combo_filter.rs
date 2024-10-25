@@ -1,7 +1,7 @@
 // Ugly unsafe code ahead
 // here be dragons
 
-use crate::app::{thread, ContextUpdater, ViewerData};
+use crate::app::{thread, ContextUpdater, MyRwLock, ViewerData};
 use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
 use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
@@ -88,7 +88,7 @@ pub fn combo_with_filter(
     ui: &mut Ui,
     label: &str,
     current_item: &mut Option<usize>,
-    viewer_data: &Arc<RwLock<ViewerData>>,
+    viewer_data: &Arc<MyRwLock<ViewerData>>,
 ) -> Response {
     #[derive(Derivative, Clone)]
     #[derivative(Default)]
