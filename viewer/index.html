@@ -10,7 +10,7 @@
     <title>network5</title>
 
     <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
-    <link data-trunk rel="rust" data-wasm-opt="2"/>
+    <link data-trunk rel="rust" data-wasm-opt="0" data-keep-debug/>
     <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
     <base data-trunk-public-url/>
 
@@ -156,6 +156,11 @@ https://zdimension.fr -->
             referrerPolicy="no-referrer-when-downgrade"></a></div>
 </noscript>
 <!-- End of Statcounter Code -->
+<script type="module">
+    addEventListener("TrunkApplicationStarted", async (_event) => {
+        await window.wasmBindings.initThreadPool(navigator.hardwareConcurrency);
+    });
+</script>
 
 </body>
 

@@ -20,3 +20,19 @@ The viewer uses [egui](https://github.com/emilk/egui) for the
 UI, [zearch](https://github.com/irevoire/zearch) for the search (which was specially crafted for this use case!), and a
 handwritten OpenGL renderer
 using [glow](https://github.com/grovesNL/glow/).
+
+## Debugging
+
+In root Cargo.toml:
+
+```toml
+[profile.release]
+debug = true
+```
+
+In index.html:
+
+```html
+
+<link data-trunk rel="rust" data-wasm-opt="0" data-keep-debug/>
+```

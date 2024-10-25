@@ -802,7 +802,7 @@ impl<T> SingleChannel<T> {
 
 pub struct ForceAtlasState {
     running: bool,
-    data: Option<(Arc<Mutex<Layout<f32, 2>>>, Option<ForceAtlasThread>)>,
+    data: Option<(Arc<RwLock<Layout<f32, 2>>>, Option<ForceAtlasThread>)>,
     settings: Settings<f32>,
     new_settings: Arc<(AtomicBool, Mutex<Settings<f32>>)>,
     render_thread: Option<(AtomicBool, Sender<()>, Receiver<(GlTask)>, JoinHandle<()>)>,
@@ -871,7 +871,7 @@ fn rerender_graph(data: &ViewerData) -> GlTask {
 }
 
 impl AlgosSection {
-    fn show(&mut self, data: &Arc<MyRwLock<ViewerData>>, ui: &mut Ui, graph: &mut RenderedGraph) {
+    fn show(&mut self, data: &Arc<MyRwLock<ViewerData>>, ui: &mut Ui, graph: &Arc<MyRwLock<RenderedGraph>>) {
         CollapsingHeader::new("Algorithmes")
             .default_open(false)
             .show(ui, |ui| {
@@ -909,7 +909,7 @@ impl AlgosSection {
                         lock.modularity_classes = classes;
                     }
 
-                    graph.tasks.push_back(rerender_graph(&*data.read()));
+                    graph.write().tasks.push_back(rerender_graph(&*data.read()));
                 }
 
                 if ui.checkbox(&mut self.force_atlas_state.running, "ForceAtlas2").changed() {
@@ -958,7 +958,7 @@ impl AlgosSection {
                         const UPD_PER_SEC: usize = 60;
 
                         let data = data.read();
-                        let layout = Arc::new(Mutex::new(Layout::<f32, 2>::from_position_graph(
+                        let layout = Arc::new(RwLock::new(Layout::<f32, 2>::from_position_graph(
                             data.get_edges().map(|e| (e, 1.0)).collect(),
                             data.persons.iter().map(|p| Node {
                                 pos: VecN(p.position.to_array()),
@@ -974,7 +974,7 @@ impl AlgosSection {
                             loop {
                                 loop {
                                     {
-                                        let mut layout = layout_thr.lock();
+                                        let mut layout = layout_thr.write();
 
                                         layout.iteration();
 
@@ -1017,7 +1017,7 @@ impl AlgosSection {
                         (request_sent, request_tx, result_rx, thread::spawn(move || {
                             while let Ok(req) = request_rx.recv() {
                                 let mut persons = thr_data.read().persons.clone();
-                                for (person, node) in persons.iter_mut().zip(layout.lock().nodes.iter()) {
+                                for (person, node) in persons.iter_mut().zip(layout.read().nodes.iter()) {
                                     person.position = Point::new(node.pos[0], node.pos[1]);
                                 }
 
@@ -1026,7 +1026,7 @@ impl AlgosSection {
                                     data_w.persons = persons;
                                 }
 
-                                let closure = rerender_graph(&*thr_data.read());
+                                let closure = rerender_graph(&thr_data.read());
                                 if result_tx.send(closure).is_err() {
                                     return; // tab closed
                                 }
@@ -1035,7 +1035,7 @@ impl AlgosSection {
                     });
 
                     if let Ok((task)) = r.try_recv() {
-                        graph.tasks.push_back(task);
+                        graph.write().tasks.push_back(task);
                         self.algo_ran = true;
                         s.send(()).unwrap();
                     }
@@ -1241,7 +1241,7 @@ impl UiState {
 
             self.classes.show(&*data.read(), ui);
 
-            self.algorithms.show(data, ui, &mut *graph.write());
+            self.algorithms.show(data, ui, graph);
             if self.algorithms.algo_ran {
                 self.refresh_node_count(&*data.read(), &*graph.read());
 

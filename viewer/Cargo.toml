@@ -58,6 +58,7 @@ wasm-logger = "0.2.0"
 wasm_thread = "0.3.0"
 console_error_panic_hook = "0.1.7"
 getrandom = { version = "*", features = ["js"] }
+wasm-bindgen-rayon = "*"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.chrono]
 version = "*"
