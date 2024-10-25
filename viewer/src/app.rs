@@ -306,7 +306,22 @@ impl<T> MyRwLock<T> {
     }
 
     pub fn write(&self) -> RwLockWriteGuard<'_, RawRwLock, T> {
-        self.inner.write()
+        #[cfg(target_arch = "wasm32")]
+        {
+            let start = chrono::Utc::now();
+            loop {
+                if let Some(lock) = self.inner.try_write() {
+                    return lock;
+                }
+                if chrono::Utc::now() - start > chrono::Duration::milliseconds(100) {
+                    panic!("Locking took too long");
+                }
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.inner.write()
+        }
     }
 }
 
