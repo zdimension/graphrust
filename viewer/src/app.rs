@@ -23,11 +23,11 @@ use std::sync::{mpsc, Arc};
 use zearch::Index;
 
 use eframe::epaint::text::TextWrapMode;
-#[cfg(not(target_arch = "wasm32"))]
-pub use std::thread;
 use egui_modal::{Icon, Modal};
 use parking_lot::lock_api::{RwLockReadGuard, RwLockWriteGuard};
 use parking_lot::{RawRwLock, RwLock};
+#[cfg(not(target_arch = "wasm32"))]
+pub use std::thread;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_thread as thread;
 
@@ -188,7 +188,7 @@ impl ModularityClass {
 #[derive(Debug)]
 pub enum CancelableError {
     TabClosed,
-    Other(anyhow::Error)
+    Other(anyhow::Error),
 }
 
 impl Display for CancelableError {
@@ -275,10 +275,10 @@ pub enum CamAnimating {
 }
 
 pub struct MyRwLock<T> {
-    inner: RwLock<T>
+    inner: RwLock<T>,
 }
 
-impl <T> MyRwLock<T> {
+impl<T> MyRwLock<T> {
     pub fn new(x: T) -> MyRwLock<T> {
         MyRwLock { inner: RwLock::new(x) }
     }
@@ -286,12 +286,22 @@ impl <T> MyRwLock<T> {
     pub fn read(&self) -> RwLockReadGuard<'_, RawRwLock, T> {
         #[cfg(target_arch = "wasm32")]
         {
-
+            // Using an RwLock for the main graph state is the most logical choice, but it means
+            // the main thread can technically block a bit if there's a background thread doing
+            // write work. This is okay on desktop, but ends up being a problem on wasm since we
+            // can't block the main thread (this is enforced by preventing the use of Atomics.wait
+            // on the main thread). However, we (the developer) know that even if the main thread
+            // does get blocked, it won't be for more than a couple of milliseconds. So we do a
+            // little active wait. This will never, ever end up coming back to bite us. Ever.
+            loop {
+                if let Some(lock) = self.inner.try_read() {
+                    return lock;
+                }
+            }
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            //self.inner.try_re
-            //self.inner.read()
+            self.inner.read()
         }
     }
 
@@ -661,7 +671,7 @@ fn show_status(ui: &mut Ui, status_rx: &mut StatusReader) {
 
 pub struct ModalInfo {
     title: String,
-    body: String
+    body: String,
 }
 
 pub trait ModalWriter: Clone + Send + 'static {
@@ -685,7 +695,7 @@ pub fn spawn_cancelable(ms: impl ModalWriter, f: impl FnOnce() -> Cancelable<()>
             Err(CancelableError::Other(e)) => {
                 ms.send(ModalInfo {
                     title: "Error".to_string(),
-                    body: format!("Error: {}", e)
+                    body: format!("Error: {}", e),
                 });
             }
             Ok(()) => {}
@@ -697,7 +707,7 @@ struct TabViewer<'tab_request, 'frame> {
     tab_request: &'tab_request mut Option<NewTabRequest>,
     top_bar: &'tab_request mut bool,
     frame: &'frame mut eframe::Frame,
-    modal: Sender<ModalInfo>
+    modal: Sender<ModalInfo>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_, '_>
@@ -743,7 +753,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             self.tab_request,
                             &mut tab.tab_camera,
                             cid,
-                            &self.modal
+                            &self.modal,
                         );
                     });
                 egui::CentralPanel::default()

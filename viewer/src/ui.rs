@@ -15,14 +15,14 @@ use forceatlas2::{Layout, Node, Settings, VecN};
 use graph_format::nalgebra::{Matrix4, Vector2};
 use graph_format::{Color3b, EdgeStore, Point};
 use itertools::{Itertools, MinMaxResult};
+use parking_lot::{Mutex, RwLock};
 use std::collections::VecDeque;
 use std::ops::RangeInclusive;
-use std::sync::{mpsc, Arc};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, RecvError, Sender, TryRecvError};
-use std::thread::JoinHandle;
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
-use parking_lot::{Mutex, RwLock};
+use thread::JoinHandle;
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -761,14 +761,14 @@ impl DetailsSection {
 #[derive(Clone)]
 pub struct SingleChannel<T> {
     flag: Arc<AtomicBool>,
-    value: Arc<Mutex<T>>
+    value: Arc<Mutex<T>>,
 }
 
-impl <T> SingleChannel<T> {
+impl<T> SingleChannel<T> {
     pub fn new(val: T) -> Self {
         Self {
             flag: Arc::new(AtomicBool::new(false)),
-            value: Arc::new(Mutex::new(val))
+            value: Arc::new(Mutex::new(val)),
         }
     }
 
@@ -805,7 +805,7 @@ pub struct ForceAtlasState {
     data: Option<(Arc<Mutex<Layout<f32, 2>>>, Option<ForceAtlasThread>)>,
     settings: Settings<f32>,
     new_settings: Arc<(AtomicBool, Mutex<Settings<f32>>)>,
-    render_thread: Option<(AtomicBool, Sender<()>, Receiver<(GlTask)>, JoinHandle<()>)>
+    render_thread: Option<(AtomicBool, Sender<()>, Receiver<(GlTask)>, JoinHandle<()>)>,
 }
 
 impl Default for ForceAtlasState {
@@ -824,7 +824,7 @@ impl Default for ForceAtlasState {
                 strong_gravity: false,
             },
             new_settings: Default::default(),
-            render_thread: None
+            render_thread: None,
         }
     }
 }
@@ -834,12 +834,12 @@ pub struct AlgosSection {
     algo_ran: bool,
     //algo_task: Option<Box<dyn FnOnce(&UiState) + 'static>>,
     force_atlas_state: ForceAtlasState,
-    times: Vec<Duration>
+    times: Vec<Duration>,
 }
 
 pub struct ForceAtlasThread {
     thread: JoinHandle<()>,
-    status_tx: Sender<bool>
+    status_tx: Sender<bool>,
 }
 
 fn rerender_graph(data: &ViewerData) -> GlTask {
@@ -986,9 +986,9 @@ impl AlgosSection {
 
                                     // check if the layout has been paused
                                     match status_rx.try_recv() {
-                                        Ok(true) => {}, // continue
+                                        Ok(true) => {} // continue
                                         Ok(false) => break, // pause
-                                        Err(TryRecvError::Empty) => {}, // no change
+                                        Err(TryRecvError::Empty) => {} // no change
                                         Err(TryRecvError::Disconnected) => return, // tab closed
                                     }
 
@@ -998,7 +998,7 @@ impl AlgosSection {
                                     // wait for resume
                                     match status_rx.recv() {
                                         Ok(true) => break, // resume
-                                        Ok(false) => {}, // keep paused
+                                        Ok(false) => {} // keep paused
                                         Err(RecvError) => return, // tab closed
                                     }
                                 }
