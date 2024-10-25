@@ -18,12 +18,22 @@ try:
     subprocess.run(["trunk", "build"], check=True)
     subprocess.run(["cmd", "/c", "del", "Z:\\web\\network5\\*", "/Q"], check=True)
     subprocess.run(["xcopy", "dist\\*.*", "Z:\\web\\network5\\", "/s", "/y"], check=True)
+    outfile_name = next(f for f in os.listdir("dist") if f.endswith(".wasm"))[:-len("_bg.wasm")]
     with open(r"Z:\web\network5\.htaccess", "w") as f:
         with open(".htaccess", "r") as htaccess:
             f.write(htaccess.read())
-        f.write("<FilesMatch \"graph_n4j\\.bin\\.br\">\n")
-        f.write(f"Header append X-file-size \"{size}\"\n")
-        f.write("</FilesMatch>\n")
+        f.write(rf"""
+<FilesMatch "graph_n4j\.bin\.br">
+    Header append X-file-size "{size}"
+</FilesMatch>
+<FilesMatch "(index\.html)|(viewer-.*\.js)">
+	Header set Pragma "no-cache"
+</FilesMatch>
+RewriteEngine On
+RewriteRule viewer_bg\.wasm$ {outfile_name}_bg.wasm [L]
+RewriteCond %{{HTTP_REFERER}} workerHelpers.worker.js$
+RewriteRule ^$ {outfile_name}.js [L]
+        """)
 except subprocess.CalledProcessError as e:
     print(e)
     raise e

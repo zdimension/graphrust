@@ -50,7 +50,7 @@ pollster = { version = "0.3" }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "*", features = ["sync", "time"] }
 wasm-bindgen-futures = "0.4"
-wasm-bindgen = "*"
+wasm-bindgen = "=0.2.93"
 js-sys = "*"
 web-sys = { version = "*", features = ["XmlHttpRequest", "XmlHttpRequestResponseType", "WorkerGlobalScope", "Performance", "ProgressEvent"] }
 parking_lot = { version = "*", features = ["nightly"] }
