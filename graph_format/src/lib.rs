@@ -1,4 +1,4 @@
-use nalgebra::Vector2;
+use nalgebra::{Vector2, Vector4};
 pub use speedy::{Readable, Writable};
 use std::iter::Sum;
 
@@ -81,6 +81,12 @@ impl From<Point> for Vector2<f32> {
 impl From<Vector2<f32>> for Point {
     fn from(v: Vector2<f32>) -> Point {
         Point { x: v.x, y: v.y }
+    }
+}
+
+impl From<Point> for Vector4<f32> {
+    fn from(p: Point) -> Vector4<f32> {
+        Vector4::new(p.x, p.y, 0.0, 1.0)
     }
 }
 

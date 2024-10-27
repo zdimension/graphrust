@@ -8,21 +8,20 @@ use crate::graph_storage::{load_binary, load_file, ProcessedData};
 use crate::ui::{DisplaySection, PathStatus, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{
-    vec2, Color32, Context, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText,
-};
+use egui::{vec2, Color32, Context, Hyperlink, Id, RichText, Stroke, TextStyle, Ui, Vec2, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
 use graph_format::{Color3b, Color3f, EdgeStore, Point};
 use graphrust_macros::md;
 use itertools::Itertools;
 
-use egui::epaint::TextShape;
+use egui::epaint::{CircleShape, PathStroke, TextShape};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc};
 use zearch::Index;
 
 use eframe::epaint::text::TextWrapMode;
+use egui::Shape::LineSegment;
 use egui_modal::{Icon, Modal};
 use parking_lot::lock_api::{RwLockReadGuard, RwLockWriteGuard};
 use parking_lot::{RawRwLock, RwLock};
@@ -970,6 +969,11 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                                 .color(Color32::WHITE);
                             let gal =
                                 txt.into_galley(ui, Some(TextWrapMode::Extend), f32::INFINITY, TextStyle::Heading);
+                            clipped_painter.add(CircleShape::filled(
+                                rect.center() + vec2(pos_scr.x, -pos_scr.y) * rect.size() * 0.5,
+                                7.0,
+                                color,
+                            ));
                             clipped_painter.add(TextShape::new(
                                 rect.center()
                                     + vec2(pos_scr.x, -pos_scr.y) * rect.size() * 0.5
@@ -980,6 +984,14 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                         };
 
                         if let Some(PathStatus::PathFound(ref path)) = tab.ui_state.path.path_status {
+                            for (a, b) in path.iter().tuple_windows() {
+                                let a = (cam * Vector4::from(data.persons[*a].position)).xy();
+                                let b = (cam * Vector4::from(data.persons[*b].position)).xy();
+                                clipped_painter.add(LineSegment {
+                                    points: [rect.center() + vec2(a.x, -a.y) * rect.size() * 0.5, rect.center() + vec2(b.x, -b.y) * rect.size() * 0.5],
+                                    stroke: PathStroke::new(2.0, Color32::from_rgba_unmultiplied(150, 0, 0, 200)),
+                                });
+                            }
                             for &p in path {
                                 draw_person(p, Color32::from_rgba_unmultiplied(150, 0, 0, 200));
                             }
@@ -1180,10 +1192,6 @@ pub struct RenderedGraph {
     pub nodes_count: usize,
     pub nodes_array: glow::VertexArray,
     pub edges_count: usize,
-    pub path_array: glow::VertexArray,
-    pub path_buffer: glow::Buffer,
-    pub path_count: usize,
-    pub new_path: Option<Vec<Vertex>>,
     pub degree_filter: (u16, u16),
     pub filter_nodes: bool,
     pub destroyed: bool,
@@ -1396,10 +1404,6 @@ impl RenderedGraph {
                 nodes_count: viewer.persons.len(),
                 nodes_array: vertices_array,
                 edges_count,
-                path_array,
-                path_buffer,
-                path_count: 0,
-                new_path: None,
                 degree_filter: (0, u16::MAX),
                 filter_nodes: false,
                 destroyed: false,
@@ -1419,10 +1423,8 @@ impl RenderedGraph {
             gl.delete_program(self.program_node);
             log::info!("Deleting buffers");
             gl.delete_buffer(self.nodes_buffer);
-            gl.delete_buffer(self.path_buffer);
             log::info!("Deleting arrays");
             gl.delete_vertex_array(self.nodes_array);
-            gl.delete_vertex_array(self.path_array);
         }
     }
 
@@ -1527,38 +1529,6 @@ impl RenderedGraph {
                     unsafe { std::slice::from_raw_parts(all_colors.as_ptr() as *const f32, 512 * 3) },
                 );
                 gl.draw_arrays(glow::POINTS, 0, self.nodes_count as i32);
-            }
-
-            gl.use_program(Some(self.program_basic));
-            gl.uniform_matrix_4_f32_slice(
-                Some(
-                    &gl.get_uniform_location(self.program_basic, "u_projection")
-                        .unwrap(),
-                ),
-                false,
-                cam.as_slice(),
-            );
-            gl.bind_vertex_array(Some(self.path_array));
-            gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.path_buffer));
-            if let Some(path) = self.new_path.take() {
-                log::info!("Buffering {} path vertices", path.len());
-                if path.is_empty() {
-                    self.path_count = 0;
-                } else {
-                    gl.buffer_data_u8_slice(
-                        glow::ARRAY_BUFFER,
-                        std::slice::from_raw_parts(
-                            path.as_ptr() as *const u8,
-                            path.len() * size_of::<Vertex>(),
-                        ),
-                        glow::STATIC_DRAW,
-                    );
-                    self.path_count = path.len();
-                }
-            }
-
-            if self.path_count > 0 {
-                gl.draw_arrays(glow::TRIANGLES, 0, self.path_count as i32);
             }
         }
     }

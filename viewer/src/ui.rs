@@ -1,6 +1,5 @@
 use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GlTask, GraphTabState, ModalWriter, ModularityClass, MyRwLock, NewTabRequest, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
-use crate::geom_draw::{create_circle_tris, create_rectangle};
 use crate::{for_progress, log, log_progress};
 use derivative::*;
 
@@ -71,7 +70,6 @@ pub struct PathSectionSettings {
 
 pub struct PathSectionResults {
     pub path: Vec<usize>,
-    pub verts: Vec<Vertex>,
 }
 
 fn set_bg_color_tinted(base: Color32, ui: &mut Ui) {
@@ -151,36 +149,13 @@ impl PathSection {
                         if i == dest_id {
                             let mut path = Vec::new();
 
-                            let mut verts = Vec::new();
-
                             path.push(dest_id);
 
                             let mut cur = dest_id;
                             while let Some(p) = pred[cur] {
-                                verts.extend(create_rectangle(
-                                    data.persons[p].position,
-                                    data.persons[*path.last().unwrap()].position,
-                                    Color3b::new(255, 0, 0),
-                                    Color3b::new(255, 0, 0),
-                                    20.0,
-                                ));
                                 path.push(p);
                                 cur = p;
                             }
-
-                            verts.extend(path.iter().flat_map(|&i| {
-                                create_circle_tris(
-                                    data.persons[i].position,
-                                    30.0,
-                                    Color3b::new(0, 0, 0),
-                                )
-                                    .into_iter()
-                                    .chain(create_circle_tris(
-                                        data.persons[i].position,
-                                        20.0,
-                                        Color3b::new(255, 0, 0),
-                                    ))
-                            }));
 
                             /*self.found_path = Some(path);
 
@@ -190,7 +165,7 @@ impl PathSection {
 
                             return;*/
 
-                            break 'path_result Some(PathSectionResults { path, verts });
+                            break 'path_result Some(PathSectionResults { path });
                         }
                     }
                 }
@@ -223,7 +198,6 @@ impl PathSection {
     fn show(
         &mut self,
         data: &Arc<MyRwLock<ViewerData>>,
-        graph: &mut RenderedGraph,
         ui: &mut Ui,
         infos: &mut InfosSection,
         sel_field: &mut SelectedUserField,
@@ -232,7 +206,6 @@ impl PathSection {
             if let Ok(res) = rx.try_recv() {
                 if let Some(res) = res {
                     self.path_status = Some(PathStatus::PathFound(res.path));
-                    graph.new_path = Some(res.verts);
                 } else {
                     self.path_status = Some(PathStatus::NoPath);
                 }
@@ -252,7 +225,6 @@ impl PathSection {
                         }
                         if ui.button("x").clicked() {
                             self.path_settings.path_src = None;
-                            graph.new_path = Some(vec![]);
                         }
                         c
                     })
@@ -267,7 +239,6 @@ impl PathSection {
                         }
                         if ui.button("x").clicked() {
                             self.path_settings.path_dest = None;
-                            graph.new_path = Some(vec![]);
                         }
                         c
                     })
@@ -309,7 +280,6 @@ impl PathSection {
                     .changed()
                 {
                     self.path_dirty = false;
-                    graph.new_path = Some(vec![]);
                     self.path_status = match (self.path_settings.path_src, self.path_settings.path_dest) {
                         (Some(x), Some(y)) if x == y => Some(PathStatus::SameSrcDest),
                         (None, _) | (_, None) => None,
@@ -1245,7 +1215,6 @@ impl UiState {
 
             self.path.show(
                 data,
-                &mut graph.write(),
                 ui,
                 &mut self.infos,
                 &mut self.selected_user_field,
