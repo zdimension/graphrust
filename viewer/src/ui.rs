@@ -449,19 +449,7 @@ impl InfosSection {
                         ui.label("Classe :");
                         ui.horizontal(|ui| {
                             ClassSection::class_circle(ui, &data.modularity_classes[class as usize]);
-                            if ui.button(format!("{}", class)).clicked() {
-                                self.create_subgraph(
-                                    format!("Classe {}", class),
-                                    data_rw, tab_request, camera, path_section, ui, modal.clone(),
-                                    move |_, data| {
-                                        Ok(data.persons
-                                            .iter()
-                                            .enumerate()
-                                            .filter(|(_, p)| p.modularity_class == class)
-                                            .map(|(i, _)| i)
-                                            .collect())
-                                    });
-                            }
+                            self.create_class_subgraph(data_rw, tab_request, camera, path_section, modal, class, ui);
                         });
                         ui.end_row();
                     });
@@ -577,7 +565,30 @@ impl InfosSection {
             });
     }
 
-    fn create_subgraph(&mut self,
+    fn create_class_subgraph(&self,
+                             data_rw: &Arc<MyRwLock<ViewerData>>,
+                             tab_request: &mut Option<NewTabRequest>,
+                             camera: &Camera,
+                             path_section: &PathSection,
+                             modal: &impl ModalWriter,
+                             class: u16,
+                             ui: &mut Ui) {
+        if ui.button(format!("{}", class)).clicked() {
+            self.create_subgraph(
+                format!("Classe {}", class),
+                data_rw, tab_request, camera, path_section, ui, modal.clone(),
+                move |_, data| {
+                    Ok(data.persons
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, p)| p.modularity_class == class)
+                        .map(|(i, _)| i)
+                        .collect())
+                });
+        }
+    }
+
+    fn create_subgraph(&self,
                        title: String,
                        data: &Arc<MyRwLock<ViewerData>>,
                        tab_request: &mut Option<NewTabRequest>,
@@ -1068,7 +1079,16 @@ fn percent_parser(s: &str) -> Option<f64> {
 }
 
 impl ClassSection {
-    fn show(&mut self, data: &ViewerData, ui: &mut Ui) {
+    fn show(
+        &mut self,
+        ui: &mut Ui,
+        infos_section: &InfosSection,
+        data_rw: &Arc<MyRwLock<ViewerData>>,
+        tab_request: &mut Option<NewTabRequest>,
+        camera: &Camera,
+        path_section: &PathSection,
+        modal: &impl ModalWriter,
+    ) {
         CollapsingHeader::new("Classes")
             .default_open(false)
             .show(ui, |ui| {
@@ -1077,6 +1097,7 @@ impl ClassSection {
                     .column(Column::exact(40.0))
                     .column(Column::exact(70.0))
                     .body(|mut body| {
+                        let data = data_rw.read();
                         for &(clid, count) in &self.node_count_classes {
                             body.row(15.0, |mut row| {
                                 let cl = &data.modularity_classes[clid];
@@ -1084,7 +1105,17 @@ impl ClassSection {
                                     Self::class_circle(ui, cl);
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{}", cl.id));
+                                    // ui.label(format!("{}", cl.id));
+                                    InfosSection::create_class_subgraph(
+                                        infos_section,
+                                        data_rw,
+                                        tab_request,
+                                        camera,
+                                        path_section,
+                                        modal,
+                                        clid.try_into().unwrap(),
+                                        ui,
+                                    );
                                 });
                                 row.col(|ui| {
                                     ui.label(format!("{}", count));
@@ -1231,7 +1262,14 @@ impl UiState {
                 modal,
             );
 
-            self.classes.show(&data.read(), ui);
+            self.classes.show(
+                ui,
+                &self.infos,
+                data, tab_request,
+                &camera.camera,
+                &self.path,
+                modal,
+            );
 
             self.algorithms.show(data, ui, graph);
             if self.algorithms.algo_ran {
