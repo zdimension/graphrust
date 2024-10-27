@@ -8,7 +8,7 @@ use crate::graph_storage::{load_binary, load_file, ProcessedData};
 use crate::ui::{DisplaySection, PathStatus, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{vec2, Color32, Context, Hyperlink, Id, RichText, Stroke, TextStyle, Ui, Vec2, WidgetText};
+use egui::{vec2, Color32, Context, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
 use graph_format::{Color3b, Color3f, EdgeStore, Point};
@@ -757,10 +757,8 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                 egui::SidePanel::left("settings")
                     .resizable(false)
                     .show_inside(ui, |ui| {
-                        if !*self.top_bar {
-                            if ui.button("Afficher l'en-tête").clicked() {
-                                *self.top_bar = true;
-                            }
+                        if !*self.top_bar && ui.button("Afficher l'en-tête").clicked() {
+                            *self.top_bar = true;
                         }
                         tab.ui_state.draw_ui(
                             ui,

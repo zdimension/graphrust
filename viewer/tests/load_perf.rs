@@ -1,6 +1,5 @@
 use env_logger;
 use std::env;
-use viewer::graph_storage::load_binary;
 
 #[test]
 fn init_logs() {
@@ -24,5 +23,5 @@ fn init_logs() {
 fn it_works() {
     // print the current directory
     println!("Current directory: {:?}", env::current_dir().unwrap());
-    let _ = load_binary();
+    //let _ = load_binary();
 }

@@ -173,7 +173,7 @@ impl PathSection {
             None
         };
 
-        if let Err(_) = tx.send(result) {
+        if tx.send(result).is_err() {
             // tab closed
         }
 
