@@ -201,7 +201,7 @@ impl Display for CancelableError {
 }
 
 impl<T: Error> From<T> for CancelableError {
-    default fn from(x: T) -> CancelableError {
+    default fn from(_: T) -> CancelableError {
         CancelableError::TabClosed
     }
 }
@@ -731,10 +731,6 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
 {
     type Tab = GraphTab;
 
-    fn id(&mut self, tab: &mut Self::Tab) -> Id {
-        tab.id
-    }
-
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
         RichText::from(&tab.title).into()
     }
@@ -995,6 +991,10 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                     });
             }
         }
+    }
+
+    fn id(&mut self, tab: &mut Self::Tab) -> Id {
+        tab.id
     }
 
     fn closeable(&mut self, tab: &mut Self::Tab) -> bool {

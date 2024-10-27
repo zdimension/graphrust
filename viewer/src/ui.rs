@@ -6,9 +6,9 @@ use derivative::*;
 
 use crate::app::thread;
 use crate::camera::Camera;
+use ahash::{AHashMap, AHashSet};
 use eframe::glow::HasContext;
 use eframe::{glow, Frame};
-use egui::ahash::{AHashMap, AHashSet};
 use egui::{vec2, CollapsingHeader, Color32, Hyperlink, Id, Pos2, Sense, SliderClamping, Ui, Vec2};
 use egui_extras::{Column, TableBuilder};
 use forceatlas2::{Layout, Node, Settings, VecN};
@@ -47,7 +47,7 @@ pub struct PathSection {
     pub path_dirty: bool,
     pub path_status: Option<PathStatus>,
     pub path_vbuf: Option<Vec<Vertex>>,
-    pub path_channel: Option<mpsc::Receiver<Option<PathSectionResults>>>,
+    pub path_channel: Option<Receiver<Option<PathSectionResults>>>,
 }
 
 #[derive(Default)]
@@ -100,7 +100,7 @@ fn set_bg_color_tinted(base: Color32, ui: &mut Ui) {
 }
 
 impl PathSection {
-    fn do_pathfinding(settings: PathSectionSettings, data: &ViewerData, tx: mpsc::Sender<Option<PathSectionResults>>, ctx: ContextUpdater) {
+    fn do_pathfinding(settings: PathSectionSettings, data: &ViewerData, tx: Sender<Option<PathSectionResults>>, ctx: ContextUpdater) {
         let src_id = settings.path_src.unwrap();
         let dest_id = settings.path_dest.unwrap();
         let src = &data.persons[src_id];
@@ -287,7 +287,7 @@ impl PathSection {
                     let data = data.read();
                     for (i, id) in self.path_settings.exclude_ids.iter().enumerate() {
                         ui.horizontal(|ui| {
-                            self.person_button(&*data, ui, id, &mut cur_excl);
+                            self.person_button(&data, ui, id, &mut cur_excl);
                             if ui.button("x").clicked() {
                                 del_excl = Some(i);
                             }
@@ -351,11 +351,9 @@ impl PathSection {
                     for (i, id) in path.iter().enumerate() {
                         ui.horizontal(|ui| {
                             set_bg_color_tinted(Color32::RED, ui);
-                            self.person_button(&*data, ui, id, &mut cur_path);
-                            if i != 0 && i != path.len() - 1 {
-                                if ui.button("x").clicked() {
-                                    del_path = Some(*id);
-                                }
+                            self.person_button(&data, ui, id, &mut cur_path);
+                            if i != 0 && i != path.len() - 1 && ui.button("x").clicked() {
+                                del_path = Some(*id);
                             }
                         });
                     }
@@ -611,7 +609,7 @@ impl InfosSection {
         // it works fine, and there doesn't seem to be a huge overhead
         let data = data.clone();
         spawn_cancelable(modal_tx, move || {
-            let new_included = x(&status_tx, &*data.read())?;
+            let new_included = x(&status_tx, &data.read())?;
 
             let mut new_persons =
                 Vec::with_capacity(new_included.len());
@@ -806,7 +804,7 @@ pub struct ForceAtlasState {
     data: Option<(Arc<RwLock<Layout<f32, 2>>>, Option<ForceAtlasThread>)>,
     settings: Settings<f32>,
     new_settings: Arc<(AtomicBool, Mutex<Settings<f32>>)>,
-    render_thread: Option<(AtomicBool, Sender<()>, Receiver<(GlTask)>, JoinHandle<()>)>,
+    render_thread: Option<(Sender<()>, Receiver<(GlTask)>, JoinHandle<()>)>,
 }
 
 impl Default for ForceAtlasState {
@@ -910,7 +908,7 @@ impl AlgosSection {
                         lock.modularity_classes = classes;
                     }
 
-                    graph.write().tasks.push_back(rerender_graph(&*data.read()));
+                    graph.write().tasks.push_back(rerender_graph(&data.read()));
                 }
 
                 if ui.checkbox(&mut self.force_atlas_state.running, "ForceAtlas2").changed() {
@@ -993,7 +991,7 @@ impl AlgosSection {
                                         Err(TryRecvError::Disconnected) => return, // tab closed
                                     }
 
-                                    thread::sleep(std::time::Duration::from_secs_f32(1.0 / UPD_PER_SEC as f32));
+                                    thread::sleep(Duration::from_secs_f32(1.0 / UPD_PER_SEC as f32));
                                 }
                                 loop {
                                     // wait for resume
@@ -1008,15 +1006,13 @@ impl AlgosSection {
                         (layout, Some(ForceAtlasThread { thread, status_tx }))
                     }).0.clone();
 
-                    let (rs, s, r, t) = self.force_atlas_state.render_thread.get_or_insert_with(|| {
-                        let request_sent = AtomicBool::new(false);
+                    let (s, r, t) = self.force_atlas_state.render_thread.get_or_insert_with(|| {
                         let (request_tx, request_rx) = mpsc::channel();
-                        //let chan = SingleChannel::new(Vec::new());
                         let (result_tx, result_rx) = mpsc::channel();
                         let thr_data = data.clone();
                         request_tx.send(()).unwrap();
-                        (request_sent, request_tx, result_rx, thread::spawn(move || {
-                            while let Ok(req) = request_rx.recv() {
+                        (request_tx, result_rx, thread::spawn(move || {
+                            while let Ok(()) = request_rx.recv() {
                                 let mut persons = thr_data.read().persons.clone();
                                 for (person, node) in persons.iter_mut().zip(layout.read().nodes.iter()) {
                                     person.position = Point::new(node.pos[0], node.pos[1]);
@@ -1215,16 +1211,16 @@ impl UiState {
     ) {
         ui.spacing_mut().slider_width = 200.0;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            self.display.show(&mut *graph.write(), ui);
+            self.display.show(&mut graph.write(), ui);
 
             if self.display.deg_filter_changed {
-                self.refresh_node_count(&*data.read(), &*graph.read());
+                self.refresh_node_count(&data.read(), &graph.read());
                 self.display.deg_filter_changed = false;
             }
 
             self.path.show(
                 data,
-                &mut *graph.write(),
+                &mut graph.write(),
                 ui,
                 &mut self.infos,
                 &mut self.selected_user_field,
@@ -1240,45 +1236,11 @@ impl UiState {
                 modal,
             );
 
-            self.classes.show(&*data.read(), ui);
+            self.classes.show(&data.read(), ui);
 
             self.algorithms.show(data, ui, graph);
             if self.algorithms.algo_ran {
-                self.refresh_node_count(&*data.read(), &*graph.read());
-
-                // let now = Instant::now();
-                // let nodes = data
-                //     .persons
-                //     .iter()
-                //     .map(|p| {
-                //         crate::geom_draw::create_node_vertex(p)
-                //     });
-                //
-                // let edges = data.get_edges().flat_map(
-                //     |(a, b)| crate::geom_draw::create_edge_vertices(&data.persons[a], &data.persons[b])
-                // );
-                //
-                // let vertices = nodes.chain(edges).collect_vec();
-                // times.push(now.elapsed());
-
-                // let now = Instant::now();
-                // let buf = graph.nodes_buffer;
-                // let closure = move |gl: &glow::Context| unsafe {
-                //     gl.bind_buffer(glow::ARRAY_BUFFER, Some(buf));
-                //     gl.buffer_sub_data_u8_slice(
-                //         glow::ARRAY_BUFFER,
-                //         0,
-                //         std::slice::from_raw_parts(
-                //             vertices.as_ptr() as *const u8,
-                //             vertices.len() * size_of::<PersonVertex>(),
-                //         ),
-                //     );
-                // };
-                //
-                // graph.tasks.push_back(Box::new(closure));
-                // times.push(now.elapsed());
-                //
-                // self.algorithms.times = self.algorithms.times.iter().zip(times.iter()).map(|(a, b)| *a + *b).collect();
+                self.refresh_node_count(&data.read(), &graph.read());
 
                 self.algorithms.algo_ran = false;
             }

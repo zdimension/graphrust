@@ -33,7 +33,7 @@ parking_lot = "*"
 #zearch = { path = "../../zearch" }
 
 [features]
-deadlock_detection = []
+deadlock_detection = ["parking_lot/deadlock_detection"]
 
 [dev-dependencies]
 log = "*"
