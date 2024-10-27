@@ -601,12 +601,7 @@ impl InfosSection {
         let path_src = path_section.path_settings.path_src;
         let path_dest = path_section.path_settings.path_dest;
         let camera = *camera;
-        // SAFETY: the tab can't be closed while it's loading, and the tab stays
-        // in the loading state until the thread stops. Therefore, for the
-        // thread's duration, data stays alive.
-        //let data = unsafe { std::mem::transmute::<&ViewerData, &'static ViewerData>(data) };
-        // huh? seems like it's being moved around. I put Arcs everywhere, now
-        // it works fine, and there doesn't seem to be a huge overhead
+
         let data = data.clone();
         spawn_cancelable(modal_tx, move || {
             let new_included = x(&status_tx, &data.read())?;
