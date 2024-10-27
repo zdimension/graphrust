@@ -43,7 +43,7 @@ pub struct DisplaySection {
 #[derivative(Default)]
 pub struct PathSection {
     pub path_settings: PathSectionSettings,
-    pub found_path: Option<Vec<usize>>,
+    //pub found_path: Option<Vec<usize>>,
     pub path_dirty: bool,
     pub path_status: Option<PathStatus>,
     pub path_vbuf: Option<Vec<Vertex>>,
@@ -56,7 +56,7 @@ pub enum PathStatus {
     SameSrcDest,
     Loading,
     NoPath,
-    PathFound(usize),
+    PathFound(Vec<usize>),
 }
 
 #[derive(Derivative)]
@@ -198,7 +198,10 @@ impl PathSection {
             None
         };
 
-        let _ = tx.send(result);
+        if let Err(_) = tx.send(result) {
+            // tab closed
+        }
+
         ctx.update();
     }
 
@@ -228,8 +231,7 @@ impl PathSection {
         if let Some(rx) = self.path_channel.as_ref() {
             if let Ok(res) = rx.try_recv() {
                 if let Some(res) = res {
-                    self.path_status = Some(PathStatus::PathFound(res.path.len()));
-                    self.found_path = Some(res.path);
+                    self.path_status = Some(PathStatus::PathFound(res.path));
                     graph.new_path = Some(res.verts);
                 } else {
                     self.path_status = Some(PathStatus::NoPath);
@@ -250,7 +252,6 @@ impl PathSection {
                         }
                         if ui.button("x").clicked() {
                             self.path_settings.path_src = None;
-                            self.found_path = None;
                             graph.new_path = Some(vec![]);
                         }
                         c
@@ -266,7 +267,6 @@ impl PathSection {
                         }
                         if ui.button("x").clicked() {
                             self.path_settings.path_dest = None;
-                            self.found_path = None;
                             graph.new_path = Some(vec![]);
                         }
                         c
@@ -309,7 +309,6 @@ impl PathSection {
                     .changed()
                 {
                     self.path_dirty = false;
-                    self.found_path = None;
                     graph.new_path = Some(vec![]);
                     self.path_status = match (self.path_settings.path_src, self.path_settings.path_dest) {
                         (Some(x), Some(y)) if x == y => Some(PathStatus::SameSrcDest),
@@ -340,30 +339,30 @@ impl PathSection {
                             });
                         }
                         NoPath => { ui.label("🗙 Aucun chemin entre les deux nœuds"); }
-                        PathFound(len) => { ui.label(format!("✔ Chemin trouvé, distance {}", len - 1)); }
-                    }
-                }
+                        PathFound(path) => {
+                            ui.label(format!("✔ Chemin trouvé, distance {}", path.len() - 1));
 
-                let mut del_path = None;
-                let mut cur_path = None;
-                if let Some(ref path) = self.found_path {
-                    let data = data.read();
-                    for (i, id) in path.iter().enumerate() {
-                        ui.horizontal(|ui| {
-                            set_bg_color_tinted(Color32::RED, ui);
-                            self.person_button(&data, ui, id, &mut cur_path);
-                            if i != 0 && i != path.len() - 1 && ui.button("x").clicked() {
-                                del_path = Some(*id);
+                            let mut del_path = None;
+                            let mut cur_path = None;
+                            let data = data.read();
+                            for (i, id) in path.iter().enumerate() {
+                                ui.horizontal(|ui| {
+                                    set_bg_color_tinted(Color32::RED, ui);
+                                    self.person_button(&data, ui, id, &mut cur_path);
+                                    if i != 0 && i != path.len() - 1 && ui.button("x").clicked() {
+                                        del_path = Some(*id);
+                                    }
+                                });
                             }
-                        });
+                            if let Some(id) = cur_path {
+                                infos.set_infos_current(Some(id));
+                            }
+                            if let Some(i) = del_path {
+                                self.path_dirty = true;
+                                self.path_settings.exclude_ids.push(i);
+                            }
+                        }
                     }
-                }
-                if let Some(id) = cur_path {
-                    infos.set_infos_current(Some(id));
-                }
-                if let Some(i) = del_path {
-                    self.path_dirty = true;
-                    self.path_settings.exclude_ids.push(i);
                 }
             });
     }

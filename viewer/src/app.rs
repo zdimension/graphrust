@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 
 use crate::graph_storage::{load_binary, load_file, ProcessedData};
-use crate::ui::{DisplaySection, SelectedUserField, UiState};
+use crate::ui::{DisplaySection, PathStatus, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
 use egui::{
@@ -979,7 +979,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             ));
                         };
 
-                        if let Some(ref path) = tab.ui_state.path.found_path {
+                        if let Some(PathStatus::PathFound(ref path)) = tab.ui_state.path.path_status {
                             for &p in path {
                                 draw_person(p, Color32::from_rgba_unmultiplied(150, 0, 0, 200));
                             }
