@@ -13,8 +13,7 @@ use egui::{Align, Id, Layout, Painter, PopupCloseBehavior, Response, ScrollArea,
 use derivative::Derivative;
 use eframe::epaint::text::TextWrapMode;
 use egui::text::{CCursor, CCursorRange};
-use std::sync::{Arc};
-use parking_lot::{Mutex, RwLock};
+use std::sync::Arc;
 use zearch::Search;
 
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
@@ -100,7 +99,7 @@ pub fn combo_with_filter(
         first_open: bool,
     }
 
-    type StateType = Arc<Mutex<ComboFilterState>>;
+    type StateType = Arc<MyRwLock<ComboFilterState>>;
     let id = Id::new(label).with(ui.id()).with("combo_with_filter");
 
     let popup_id = id.with("popup");
@@ -109,7 +108,7 @@ pub fn combo_with_filter(
     let is_popup_open = ui.memory(|m| m.is_popup_open(popup_id));
     if !is_popup_open {
         ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone())
-            .lock()
+            .write()
             .first_open = false;
     }
 
@@ -197,7 +196,6 @@ pub fn combo_with_filter(
         ui.vertical(|ui| {
             let binding =
                 ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
-            let mut state = binding.lock();
 
             let layout = Layout::centered_and_justified(ui.layout().main_dir());
             let txt_box_resp = ui
@@ -205,13 +203,15 @@ pub fn combo_with_filter(
                     ui.available_size() * vec2(1.0, 0.0),
                     layout,
                     |ui| {
-                        let r = TextEdit::singleline(&mut state.pattern).show(ui);
+                        let r = TextEdit::singleline(&mut binding.write().pattern).show(ui);
                         ui.add_space(2.0);
                         r
                     },
                 );
             let mut txt_resp = txt_box_resp.inner;
             let txt = &txt_resp.response;
+
+            let mut state = binding.write();
             if !state.first_open {
                 state.first_open = true;
                 ui.memory_mut(|m| m.request_focus(txt.id));
@@ -238,7 +238,7 @@ pub fn combo_with_filter(
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
                         let res = viewer_data.read().engine.search(Search::new(&pattern).with_limit(RESULTS));
-                        let mut state = state.lock();
+                        let mut state = state.write();
                         if state.pattern.eq(&pattern) {
                             state.item_vector = res.iter().map(|&i| i as usize).collect();
                             state.loading = false;

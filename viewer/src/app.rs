@@ -274,6 +274,7 @@ pub enum CamAnimating {
     PanTo { from: CamXform, to: CamXform },
 }
 
+#[derive(Default)]
 pub struct MyRwLock<T> {
     inner: RwLock<T>,
 }
