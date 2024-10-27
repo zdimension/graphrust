@@ -254,6 +254,7 @@ pub fn combo_with_filter(
 
             ScrollArea::vertical()
                 .max_height(ui.spacing().combo_height)
+                .auto_shrink([false, false])
                 .show(ui, |ui| {
                     if show_count == 0 {
                         ui.add_enabled(false, SelectableLabel::new(false, "Aucun résultat trouvé"));
