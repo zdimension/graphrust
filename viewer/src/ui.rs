@@ -938,7 +938,7 @@ impl AlgosSection {
 
                     for (name, field) in fields.into_iter() {
                         ui.label(name);
-                        upd |= ui.add(egui::Slider::new(field, 0.0..=1.0).text("")).changed();
+                        upd |= ui.add(egui::Slider::new(field, 0.001..=10.0).logarithmic(true).text("")).changed();
                         ui.end_row();
                     }
 
