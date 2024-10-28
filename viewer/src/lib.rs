@@ -3,6 +3,8 @@
 #![feature(try_blocks)]
 #![feature(specialization)]
 #![feature(map_many_mut)]
+#![feature(negative_impls)]
+#![feature(auto_traits)]
 #![allow(incomplete_features)]
 
 mod app;

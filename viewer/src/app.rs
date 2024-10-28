@@ -8,7 +8,7 @@ use crate::graph_storage::{load_binary, load_file, ProcessedData};
 use crate::ui::{DisplaySection, PathStatus, SelectedUserField, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{vec2, Color32, Context, Hyperlink, Id, RichText, TextStyle, Ui, Vec2, WidgetText};
+use egui::{vec2, Color32, Context, FontFamily, FontId, Hyperlink, Id, Layout, RichText, TextFormat, TextStyle, Ui, Vec2, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::nalgebra::{Isometry3, Matrix4, Similarity3, Translation3, UnitQuaternion, Vector4};
 use graph_format::{Color3b, Color3f, EdgeStore, Point};
@@ -21,9 +21,11 @@ use std::sync::{mpsc, Arc};
 use zearch::Index;
 
 use derivative::Derivative;
+use eframe::emath::Align;
 use eframe::epaint::text::TextWrapMode;
+use egui::text::LayoutJob;
 use egui::Shape::LineSegment;
-use egui_modal::{Icon, Modal};
+use egui_modal::{Icon, Modal, ModalStyle};
 use parking_lot::lock_api::{RwLockReadGuard, RwLockWriteGuard};
 use parking_lot::{RawRwLock, RwLock};
 #[cfg(not(target_arch = "wasm32"))]
@@ -207,17 +209,21 @@ impl Display for CancelableError {
     }
 }
 
-impl<T: Error> From<T> for CancelableError {
-    default fn from(_: T) -> CancelableError {
+impl<U> From<mpsc::SendError<U>> for CancelableError {
+    fn from(_: mpsc::SendError<U>) -> CancelableError {
         CancelableError::TabClosed
     }
 }
 
-impl<T: Error + Into<anyhow::Error>> From<T> for CancelableError {
+impl<T: IsNonSendError + Into<anyhow::Error>> From<T> for CancelableError {
     fn from(e: T) -> Self {
         CancelableError::Other(e.into())
     }
 }
+
+auto trait IsNonSendError {}
+impl IsNonSendError for speedy::Error {} // somehow it's not implemented even though it's auto
+impl<T> ! IsNonSendError for mpsc::SendError<T> {}
 
 pub type Cancelable<T> = Result<T, CancelableError>;
 
@@ -698,9 +704,10 @@ pub fn show_progress_bar(ui: &mut Ui, status_rx: &StatusReader) {
     }
 }
 
+#[derive(Clone)]
 pub struct ModalInfo {
     title: String,
-    body: String,
+    body: WidgetText,
 }
 
 pub trait ModalWriter: Clone + Send + 'static {
@@ -724,7 +731,18 @@ pub fn spawn_cancelable(ms: impl ModalWriter, f: impl FnOnce() -> Cancelable<()>
             Err(CancelableError::Other(e)) => {
                 ms.send(ModalInfo {
                     title: "Error".to_string(),
-                    body: format!("Error: {}", e),
+                    body: {
+                        let mut job = LayoutJob::default();
+                        job.append("An error occurred:\n\n", 0.0, TextFormat {
+                            font_id: FontId::new(14.0, FontFamily::Proportional),
+                            ..Default::default()
+                        });
+                        job.append(&format!("{:?}", e), 0.0, TextFormat {
+                            font_id: FontId::new(11.0, FontFamily::Monospace),
+                            ..Default::default()
+                        });
+                        job.into()
+                    },
                 });
             }
             Ok(()) => {}
@@ -1045,14 +1063,29 @@ impl eframe::App for GraphViewApp {
             self.show_top_bar(ctx);
         }
 
-        let mut modal = Modal::new(ctx, "my_dialog");
+        let modal_id = "my_dialog";
+        let mut modal = Modal::new(ctx, modal_id).with_close_on_outside_click(true).with_style(&ModalStyle {
+            default_width: Some(800.0),
+            ..ModalStyle::default()
+        });
 
         if let Ok(info) = self.modal.0.try_recv() {
-            modal.dialog()
-                .with_title(info.title)
-                .with_body(info.body)
-                .with_icon(Icon::Error)
-                .open();
+            ctx.data_mut(|w| w.insert_temp(Id::new(modal_id).with("data"), info));
+            modal.open();
+        }
+
+        if let Some(data) = ctx.data(|w| w.get_temp::<ModalInfo>(Id::new(modal_id).with("data"))) {
+            modal.show(|ui| {
+                modal.title(ui, data.title);
+                modal.frame(ui, |ui| {
+                    modal.body_and_icon(ui, data.body, Icon::Error);
+                });
+                modal.buttons(ui, |ui| {
+                    ui.with_layout(Layout::top_down_justified(Align::Center), |ui| {
+                        modal.button(ui, "OK");
+                    });
+                });
+            });
         }
 
         modal.show_dialog();
