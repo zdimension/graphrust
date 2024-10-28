@@ -869,7 +869,8 @@ impl AlgosSection {
                             *stats.write() = NodeStats::new(&lock, graph.read().node_filter);
                         }
 
-                        graph.write().tasks.push_back(rerender_graph(&data.read()));
+                        let task = rerender_graph(&data.read());
+                        graph.write().tasks.push_back(task);
                     });
                     self.louvain_state = Some(LouvainState {
                         thread: thr,
@@ -1167,7 +1168,7 @@ impl ClassSection {
 }
 
 impl DisplaySection {
-    fn show(&mut self, graph: &mut RenderedGraph, ui: &mut Ui) {
+    fn show(&mut self, graph: &Arc<MyRwLock<RenderedGraph>>, ui: &mut Ui) {
         CollapsingHeader::new("Affichage")
             .default_open(true)
             .show(ui, |ui| {
@@ -1193,6 +1194,8 @@ impl DisplaySection {
                 }
 
                 ui.horizontal(|ui| {
+                    let mut graph_lock = graph.write();
+                    let graph = &mut *graph_lock;
                     ui.vertical(|ui| {
                         let start = ui
                             .add(
@@ -1240,7 +1243,7 @@ impl UiState {
     ) {
         ui.spacing_mut().slider_width = 200.0;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            self.display.show(&mut graph.write(), ui);
+            self.display.show(graph, ui);
 
             if self.display.deg_filter_changed {
                 *self.stats.write() = NodeStats::new(&data.read(), graph.read().node_filter);

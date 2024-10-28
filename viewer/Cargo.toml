@@ -55,7 +55,7 @@ js-sys = "*"
 web-sys = { version = "*", features = ["XmlHttpRequest", "XmlHttpRequestResponseType", "WorkerGlobalScope", "Performance", "ProgressEvent"] }
 parking_lot = { version = "*", features = ["nightly"] }
 wasm-logger = "0.2.0"
-wasm_thread = "0.3.0"
+wasm_thread = { version = "0.3.0", git = "https://github.com/zdimension/wasm_thread" }
 console_error_panic_hook = "0.1.7"
 getrandom = { version = "*", features = ["js"] }
 wasm-bindgen-rayon = "*"

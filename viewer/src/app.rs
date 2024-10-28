@@ -327,7 +327,7 @@ impl<T> MyRwLock<T> {
                 if let Some(lock) = self.inner.try_write() {
                     return lock;
                 }
-                if chrono::Utc::now() - start > chrono::Duration::milliseconds(100) {
+                if chrono::Utc::now() - start > chrono::Duration::milliseconds(500) {
                     panic!("Locking took too long");
                 }
             }
