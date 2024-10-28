@@ -93,7 +93,7 @@ impl Graph {
                         }
                     }
                     let mut best_comm = node_tmp_comm;
-                    let mut best_gain = PRECISION;
+                    let mut best_gain = precision;
                     for &comm in &neigh_comm {
                         let gain = if comm == node_tmp_comm {
                             neigh_links[comm] as f32
