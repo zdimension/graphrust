@@ -1,6 +1,6 @@
-use crate::app::{create_tab, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GlTask, GraphTabState, ModalWriter, ModularityClass, MyRwLock, NewTabRequest, Person, PersonVertex, RenderedGraph, StatusWriter, TabCamera, Vertex, ViewerData};
+use crate::app::{create_tab, show_progress_bar, spawn_cancelable, status_pipe, CamAnimating, Cancelable, ContextUpdater, GlForwarder, GlTask, GraphTabState, ModalWriter, ModularityClass, MyRwLock, NewTabRequest, NodeFilter, Person, PersonVertex, RenderedGraph, StatusReader, StatusWriter, TabCamera, Vertex, ViewerData};
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
-use crate::{for_progress, log, log_progress};
+use crate::{for_progress, log, log_progress, try_log_progress};
 use derivative::*;
 
 use crate::app::thread;
@@ -42,10 +42,8 @@ pub struct DisplaySection {
 #[derivative(Default)]
 pub struct PathSection {
     pub path_settings: PathSectionSettings,
-    //pub found_path: Option<Vec<usize>>,
     pub path_dirty: bool,
     pub path_status: Option<PathStatus>,
-    pub path_vbuf: Option<Vec<Vertex>>,
     pub path_channel: Option<Receiver<Option<PathSectionResults>>>,
 }
 
@@ -338,11 +336,8 @@ impl PathSection {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Default)]
-pub struct ClassSection {
-    pub node_count_classes: Vec<(usize, usize)>,
-}
+#[derive(Default)]
+pub struct ClassSection {}
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -732,54 +727,12 @@ impl DetailsSection {
     }
 }
 
-#[derive(Clone)]
-pub struct SingleChannel<T> {
-    flag: Arc<AtomicBool>,
-    value: Arc<Mutex<T>>,
-}
-
-impl<T> SingleChannel<T> {
-    pub fn new(val: T) -> Self {
-        Self {
-            flag: Arc::new(AtomicBool::new(false)),
-            value: Arc::new(Mutex::new(val)),
-        }
-    }
-
-    pub fn send(&self, updater: impl FnOnce(&mut T)) {
-        let mut lock = self.value.lock();
-        updater(&mut *lock);
-        self.flag.store(true, std::sync::atomic::Ordering::Release);
-    }
-
-    // pub fn recv(&self) -> Option<T> {
-    //     if self.flag.load(std::sync::atomic::Ordering::Acquire) {
-    //         self.flag.store(false, std::sync::atomic::Ordering::Release);
-    //         self.value.lock().unwrap().take()
-    //     } else {
-    //         None
-    //     }
-
-    // pub fn get(&self) -> MutexGuard<T> {
-    //     self.value.lock().unwrap()
-    // }
-
-    pub fn try_get_and(&self, handler: impl FnOnce(&T)) {
-        if self.flag.load(std::sync::atomic::Ordering::Acquire) {
-            let lock = self.value.lock();
-            handler(&*lock);
-            self.flag.store(false, std::sync::atomic::Ordering::Release);
-        }
-    }
-}
-
-
 pub struct ForceAtlasState {
     running: bool,
     data: Option<(Arc<RwLock<Layout<f32, 2>>>, Option<ForceAtlasThread>)>,
     settings: Settings<f32>,
     new_settings: Arc<(AtomicBool, Mutex<Settings<f32>>)>,
-    render_thread: Option<(Sender<()>, Receiver<(GlTask)>, JoinHandle<()>)>,
+    render_thread: Option<(Sender<()>, Receiver<GlTask>, JoinHandle<()>)>,
 }
 
 impl Default for ForceAtlasState {
@@ -805,10 +758,18 @@ impl Default for ForceAtlasState {
 
 #[derive(Default)]
 pub struct AlgosSection {
-    algo_ran: bool,
     //algo_task: Option<Box<dyn FnOnce(&UiState) + 'static>>,
+    louvain_precision: f32,
+    louvain_state: Option<LouvainState>,
     force_atlas_state: ForceAtlasState,
     times: Vec<Duration>,
+}
+
+pub struct LouvainState {
+    thread: JoinHandle<()>,
+    status_rx: StatusReader,
+    //data_rx: Receiver<()>,
+    //status_tx: Sender<LouvainStatus>,
 }
 
 pub struct ForceAtlasThread {
@@ -845,45 +806,99 @@ fn rerender_graph(data: &ViewerData) -> GlTask {
 }
 
 impl AlgosSection {
-    fn show(&mut self, data: &Arc<MyRwLock<ViewerData>>, ui: &mut Ui, graph: &Arc<MyRwLock<RenderedGraph>>) {
+    fn show(&mut self,
+            data: &Arc<MyRwLock<ViewerData>>,
+            ui: &mut Ui,
+            graph: &Arc<MyRwLock<RenderedGraph>>,
+            stats: &Arc<MyRwLock<NodeStats>>) {
         CollapsingHeader::new("Algorithmes")
             .default_open(false)
             .show(ui, |ui| {
-                if ui.button("Louvain").clicked() {
-                    self.algo_ran = true;
-
-                    let data_ = data.read();
-                    let louvain = crate::algorithms::louvain::Graph::new(&data_.persons).louvain();
-                    let mut nodes = data_.persons.clone();
-                    for n in &mut nodes {
-                        n.modularity_class = u16::MAX;
-                    }
-                    drop(data_);
-
-                    //log!("Creating color palette");
-                    use colourado_iter::{ColorPalette, PaletteType};
-                    let palette = ColorPalette::new(PaletteType::Random, false, &mut rand::thread_rng());
-                    let mut classes = Vec::new();
-
-                    for (i, (comm, color)) in louvain.nodes.iter().zip(palette).enumerate() {
-                        for user in comm.payload.as_ref().unwrap() {
-                            nodes[user.0].modularity_class = i as u16;
+                if ui.add_enabled(self.louvain_state.is_none(), egui::Button::new("Louvain")).clicked() {
+                    let (status_tx, status_rx) = status_pipe(ui.ctx());
+                    let data = data.clone();
+                    let graph = graph.clone();
+                    const ITERATIONS: usize = 100;
+                    let precision = self.louvain_precision;
+                    let stats = stats.clone();
+                    let thr = thread::spawn(move || {
+                        let data_ = data.read();
+                        let mut louvain = crate::algorithms::louvain::Graph::new(&data_.persons);
+                        for i in 0..ITERATIONS {
+                            if try_log_progress!(status_tx, i, ITERATIONS).is_err() {
+                                return;
+                            }
+                            let old_stats = louvain.stats();
+                            louvain = louvain.next(precision);
+                            let new_stats = louvain.stats();
+                            if old_stats == new_stats {
+                                break;
+                            }
                         }
-                        let [r, g, b] = color.to_array();
-                        classes.push(ModularityClass::new(Color3b {
-                            r: (r * 255.0) as u8,
-                            g: (g * 255.0) as u8,
-                            b: (b * 255.0) as u8,
-                        }, (i + 1) as u16));
-                    }
+                        if try_log_progress!(status_tx, ITERATIONS, ITERATIONS).is_err() {
+                            return;
+                        }
+                        let mut nodes = data_.persons.clone();
+                        for n in &mut nodes {
+                            n.modularity_class = u16::MAX;
+                        }
+                        drop(data_);
 
-                    {
-                        let mut lock = data.write();
-                        lock.persons = nodes;
-                        lock.modularity_classes = classes;
-                    }
+                        use colourado_iter::{ColorPalette, PaletteType};
+                        let palette = ColorPalette::new(PaletteType::Random, false, &mut rand::thread_rng());
+                        let mut classes = Vec::new();
+                        println!("result: {} classes", louvain.nodes.len());
 
-                    graph.write().tasks.push_back(rerender_graph(&data.read()));
+                        for (i, (comm, color)) in louvain.nodes.iter().zip(palette).enumerate() {
+                            for user in comm.payload.as_ref().unwrap() {
+                                nodes[user.0].modularity_class = i as u16;
+                            }
+                            let [r, g, b] = color.to_array();
+                            classes.push(ModularityClass::new(Color3b {
+                                r: (r * 255.0) as u8,
+                                g: (g * 255.0) as u8,
+                                b: (b * 255.0) as u8,
+                            }, (i + 1) as u16));
+                        }
+
+                        {
+                            let mut lock = data.write();
+                            lock.persons = nodes;
+                            lock.modularity_classes = classes;
+
+                            *stats.write() = NodeStats::new(&lock, graph.read().node_filter);
+                        }
+
+                        graph.write().tasks.push_back(rerender_graph(&data.read()));
+                    });
+                    self.louvain_state = Some(LouvainState {
+                        thread: thr,
+                        status_rx,
+                    });
+                }
+
+                if let Some(ref mut state) = self.louvain_state {
+                    if state.thread.is_finished() {
+                        self.louvain_state = None;
+                    } else {
+                        state.status_rx.recv();
+                        if ui.horizontal(|ui| {
+                            ui.spinner();
+                            let cancel = ui.button("🗙").clicked();
+                            show_progress_bar(ui, &state.status_rx);
+                            cancel
+                        }).inner {
+                            self.louvain_state = None;
+                        };
+                    }
+                } else {
+                    ui.horizontal(|ui| {
+                        ui.label("Précision :");
+                        ui.add(egui::Slider::new(&mut self.louvain_precision, 1e-7..=1.0)
+                            .logarithmic(true)
+                            .custom_formatter(|n, _| format!("{:.1e}", n))
+                            .text("")).changed();
+                    });
                 }
 
                 if ui.checkbox(&mut self.force_atlas_state.running, "ForceAtlas2").changed() {
@@ -986,6 +1001,8 @@ impl AlgosSection {
                         let (result_tx, result_rx) = mpsc::channel();
                         let thr_data = data.clone();
                         request_tx.send(()).unwrap();
+                        let graph = graph.clone();
+                        let stats = stats.clone();
                         (request_tx, result_rx, thread::spawn(move || {
                             while let Ok(()) = request_rx.recv() {
                                 let mut persons = thr_data.read().persons.clone();
@@ -996,6 +1013,8 @@ impl AlgosSection {
                                 {
                                     let mut data_w = thr_data.write();
                                     data_w.persons = persons;
+
+                                    *stats.write() = NodeStats::new(&data_w, graph.read().node_filter);
                                 }
 
                                 let closure = rerender_graph(&thr_data.read());
@@ -1008,7 +1027,6 @@ impl AlgosSection {
 
                     if let Ok((task)) = r.try_recv() {
                         graph.write().tasks.push_back(task);
-                        self.algo_ran = true;
                         s.send(()).unwrap();
                     }
                 }
@@ -1025,6 +1043,42 @@ pub enum SelectedUserField {
 }
 
 #[derive(Default)]
+pub struct NodeStats {
+    node_count: usize,
+    node_classes: Vec<(usize, usize)>,
+}
+
+impl NodeStats {
+    pub fn new(data: &ViewerData, filter: NodeFilter) -> Self {
+        let mut count_classes = vec![0; data.modularity_classes.len()];
+        let mut node_count = 0;
+        for p in &*data.persons {
+            let ok = if filter.filter_nodes {
+                let deg = p.neighbors.len() as u16;
+                deg >= filter.degree_filter.0 && deg <= filter.degree_filter.1
+            } else {
+                true
+            };
+            if ok {
+                node_count += 1;
+                count_classes[p.modularity_class as usize] += 1;
+            }
+        }
+        let node_classes = count_classes
+            .iter()
+            .enumerate()
+            .filter(|(_, &c)| c != 0)
+            .sorted_by_key(|(_, &c)| std::cmp::Reverse(c))
+            .map(|(i, &c)| (i, c))
+            .collect_vec();
+        Self {
+            node_count,
+            node_classes,
+        }
+    }
+}
+
+#[derive(Default)]
 pub struct UiState {
     pub display: DisplaySection,
     pub path: PathSection,
@@ -1033,6 +1087,8 @@ pub struct UiState {
     pub details: DetailsSection,
     pub selected_user_field: SelectedUserField,
     pub algorithms: AlgosSection,
+
+    pub stats: Arc<MyRwLock<NodeStats>>,
 }
 
 fn percent_formatter(val: f64, _: RangeInclusive<usize>) -> String {
@@ -1057,8 +1113,10 @@ impl ClassSection {
         camera: &Camera,
         path_section: &PathSection,
         modal: &impl ModalWriter,
+        stats: &Arc<MyRwLock<NodeStats>>,
     ) {
-        CollapsingHeader::new("Classes")
+        CollapsingHeader::new(format!("Classes ({})", stats.read().node_classes.len()))
+            .id_salt("classes")
             .default_open(false)
             .show(ui, |ui| {
                 TableBuilder::new(ui)
@@ -1067,7 +1125,7 @@ impl ClassSection {
                     .column(Column::exact(70.0))
                     .body(|mut body| {
                         let data = data_rw.read();
-                        for &(clid, count) in &self.node_count_classes {
+                        for &(clid, count) in &stats.read().node_classes {
                             body.row(15.0, |mut row| {
                                 let cl = &data.modularity_classes[clid];
                                 row.col(|ui| {
@@ -1138,17 +1196,17 @@ impl DisplaySection {
                     ui.vertical(|ui| {
                         let start = ui
                             .add(
-                                egui::DragValue::new(&mut graph.degree_filter.0)
+                                egui::DragValue::new(&mut graph.node_filter.degree_filter.0)
                                     .speed(1)
-                                    .range(1..=graph.degree_filter.1)
+                                    .range(1..=graph.node_filter.degree_filter.1)
                                     .prefix("Degré minimum : "),
                             )
                             .changed();
                         let end = ui
                             .add(
-                                egui::DragValue::new(&mut graph.degree_filter.1)
+                                egui::DragValue::new(&mut graph.node_filter.degree_filter.1)
                                     .speed(1)
-                                    .range(graph.degree_filter.0..=self.max_degree)
+                                    .range(graph.node_filter.degree_filter.0..=self.max_degree)
                                     .prefix("Degré maximum : "),
                             )
                             .changed();
@@ -1157,7 +1215,7 @@ impl DisplaySection {
                         }
                     });
                     ui.vertical(|ui| {
-                        ui.checkbox(&mut graph.filter_nodes, "Filtrer les nœuds");
+                        ui.checkbox(&mut graph.node_filter.filter_nodes, "Filtrer les nœuds");
                     });
                 });
 
@@ -1170,30 +1228,6 @@ impl DisplaySection {
 }
 
 impl UiState {
-    fn refresh_node_count(&mut self, data: &ViewerData, graph: &RenderedGraph) {
-        let mut count_classes = vec![0; data.modularity_classes.len()];
-        self.display.node_count = 0;
-        for p in &*data.persons {
-            let ok = if graph.filter_nodes {
-                let deg = p.neighbors.len() as u16;
-                deg >= graph.degree_filter.0 && deg <= graph.degree_filter.1
-            } else {
-                true
-            };
-            if ok {
-                self.display.node_count += 1;
-                count_classes[p.modularity_class as usize] += 1;
-            }
-        }
-        self.classes.node_count_classes = count_classes
-            .iter()
-            .enumerate()
-            .filter(|(_, &c)| c != 0)
-            .sorted_by_key(|(_, &c)| std::cmp::Reverse(c))
-            .map(|(i, &c)| (i, c))
-            .collect_vec();
-    }
-
     pub fn draw_ui(
         &mut self,
         ui: &mut Ui,
@@ -1209,8 +1243,7 @@ impl UiState {
             self.display.show(&mut graph.write(), ui);
 
             if self.display.deg_filter_changed {
-                self.refresh_node_count(&data.read(), &graph.read());
-                self.display.deg_filter_changed = false;
+                *self.stats.write() = NodeStats::new(&data.read(), graph.read().node_filter);
             }
 
             self.path.show(
@@ -1237,14 +1270,10 @@ impl UiState {
                 &camera.camera,
                 &self.path,
                 modal,
+                &self.stats,
             );
 
-            self.algorithms.show(data, ui, graph);
-            if self.algorithms.algo_ran {
-                self.refresh_node_count(&data.read(), &graph.read());
-
-                self.algorithms.algo_ran = false;
-            }
+            self.algorithms.show(data, ui, graph, &self.stats);
 
             self.details.show(ui, camera, cid);
         });

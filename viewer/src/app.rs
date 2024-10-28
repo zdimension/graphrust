@@ -20,6 +20,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc};
 use zearch::Index;
 
+use derivative::Derivative;
 use eframe::epaint::text::TextWrapMode;
 use egui::Shape::LineSegment;
 use egui_modal::{Icon, Modal};
@@ -43,15 +44,22 @@ macro_rules! log {
 }
 
 #[macro_export]
-macro_rules! log_progress {
+macro_rules! try_log_progress {
     ($ch: expr, $val:expr, $max:expr) => {
         {
             use $crate::app::StatusWriterInterface;
             $ch.send($crate::app::Progress {
                 max: $max,
                 val: $val,
-            })?;
+            })
         }
+    }
+}
+
+#[macro_export]
+macro_rules! log_progress {
+    ($( $arg:expr ),*) => {
+        crate::try_log_progress!($( $arg ),*)?;
     }
 }
 
@@ -88,7 +96,7 @@ where
     let how_often = (max / 100).max(1);
     iter.enumerate().map(move |(i, x)| {
         if i % how_often == 0 {
-            ignore_error!(log_progress!(ch, i, max));
+            let _ = try_log_progress!(ch, i, max);
         }
         x
     })
@@ -598,9 +606,10 @@ pub fn create_tab<'a>(
             },
             ..ui_state
         },
-        rendered_graph: Arc::new(MyRwLock::new(RenderedGraph {
-            degree_filter: (default_filter, u16::MAX),
-            ..RenderedGraph::new(gl, &viewer, edges, status_tx)?
+        rendered_graph: Arc::new(MyRwLock::new({
+            let mut graph = RenderedGraph::new(gl, &viewer, edges, status_tx)?;
+            graph.node_filter.degree_filter = (default_filter, u16::MAX);
+            graph
         })),
         viewer_data: Arc::from(MyRwLock::new(viewer)),
     })
@@ -679,10 +688,14 @@ fn show_status(ui: &mut Ui, status_rx: &mut StatusReader) {
     ui.vertical_centered(|ui| {
         ui.spinner();
         ui.label(status_rx.recv());
-        if let Some(p) = status_rx.progress {
-            ui.add(egui::ProgressBar::new(p.val as f32 / p.max as f32).desired_height(12.0).desired_width(230.0));
-        }
+        show_progress_bar(ui, status_rx);
     });
+}
+
+pub fn show_progress_bar(ui: &mut Ui, status_rx: &StatusReader) {
+    if let Some(p) = status_rx.progress {
+        ui.add(egui::ProgressBar::new(p.val as f32 / p.max as f32).desired_height(12.0).desired_width(230.0));
+    }
 }
 
 pub struct ModalInfo {
@@ -1182,6 +1195,14 @@ Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortemen
 
 pub type GlTask = Box<dyn FnOnce(&mut RenderedGraph, &glow::Context) + Send + Sync + 'static>;
 
+#[derive(Copy, Clone, Derivative)]
+#[derivative(Default())]
+pub struct NodeFilter {
+    #[derivative(Default(value = "(0, u16::MAX)"))]
+    pub degree_filter: (u16, u16),
+    pub filter_nodes: bool,
+}
+
 pub struct RenderedGraph {
     pub program_node: glow::Program,
     pub program_basic: glow::Program,
@@ -1190,8 +1211,7 @@ pub struct RenderedGraph {
     pub nodes_count: usize,
     pub nodes_array: glow::VertexArray,
     pub edges_count: usize,
-    pub degree_filter: (u16, u16),
-    pub filter_nodes: bool,
+    pub node_filter: NodeFilter,
     pub destroyed: bool,
     pub tasks: VecDeque<GlTask>,
 }
@@ -1402,8 +1422,7 @@ impl RenderedGraph {
                 nodes_count: viewer.persons.len(),
                 nodes_array: vertices_array,
                 edges_count,
-                degree_filter: (0, u16::MAX),
-                filter_nodes: false,
+                node_filter: NodeFilter::default(),
                 destroyed: false,
                 tasks: VecDeque::new(),
             })
@@ -1467,7 +1486,7 @@ impl RenderedGraph {
                         &gl.get_uniform_location(self.program_edge, "u_degfilter")
                             .unwrap(),
                     ),
-                    ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32),
+                    ((self.node_filter.degree_filter.1 as u32) << 16) | (self.node_filter.degree_filter.0 as u32),
                 );
                 gl.uniform_1_f32(
                     Some(
@@ -1505,8 +1524,8 @@ impl RenderedGraph {
                         &gl.get_uniform_location(self.program_node, "u_degfilter")
                             .unwrap(),
                     ),
-                    if self.filter_nodes {
-                        ((self.degree_filter.1 as u32) << 16) | (self.degree_filter.0 as u32)
+                    if self.node_filter.filter_nodes {
+                        ((self.node_filter.degree_filter.1 as u32) << 16) | (self.node_filter.degree_filter.0 as u32)
                     } else {
                         0xffff_0000
                     },

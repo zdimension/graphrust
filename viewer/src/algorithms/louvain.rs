@@ -18,7 +18,6 @@ pub struct PersonId(pub usize);
 pub struct CommunityId(pub usize);
 
 const PRECISION: f32 = 0.0;
-const RESOLUTION: f32 = 1.0; // the lower the smaller the communities
 const ITERATIONS: usize = 100; // iterations before giving up
 
 fn merge(nodes: &[Community], idxs: &[CommunityId]) -> Vec<PersonId> {
@@ -51,7 +50,7 @@ impl Graph {
         Self { nodes, total_links }
     }
 
-    fn next(mut self) -> Self {
+    pub fn next(mut self, precision: f32) -> Self {
         const MAX: usize = 50;
 
         let n_nodes = self.nodes.len();
@@ -172,7 +171,7 @@ impl Graph {
         }
     }
 
-    fn stats(&self) -> (usize, usize) {
+    pub fn stats(&self) -> (usize, usize) {
         (self.nodes.len(), self.total_links)
     }
 
@@ -190,7 +189,7 @@ impl Graph {
     pub fn louvain(mut self) -> Self {
         for _ in 0..ITERATIONS {
             let old_stats = self.stats();
-            self = self.next();
+            self = self.next(PRECISION);
             /*log!(
                 "Louvain iteration {} done : {:?} → {:?}",
                 i,

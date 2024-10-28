@@ -200,7 +200,7 @@ pub async fn load_file(status_tx: &StatusWriter) -> Cancelable<GraphFile> {
     xhr.set_onprogress(Some(Closure::wrap(Box::new(move |e: web_sys::ProgressEvent| {
         if e.length_computable() {
             let percent = (e.loaded() as f64 / e.total() as f64 * 100.0).round() as usize;
-            ignore_error!(log_progress!(status_tx_, percent, 100));
+            let _ = try_log_progress!(status_tx_, percent, 100);
         }
     }) as Box<dyn FnMut(_)>).as_ref().unchecked_ref()));
     let prom = js_sys::Promise::new(&mut move |resolve, reject| {
