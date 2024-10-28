@@ -1,4 +1,4 @@
-use crate::app::Person;
+use crate::algorithms::AbstractNode;
 use ahash::AHashMap;
 use itertools::Itertools;
 use rand::seq::SliceRandom;
@@ -27,18 +27,8 @@ fn merge(nodes: &[Community], idxs: &[CommunityId]) -> Vec<PersonId> {
         .collect()
 }
 
-pub trait GraphNode {
-    fn neighbors(&self) -> &Vec<usize>;
-}
-
-impl GraphNode for Person {
-    fn neighbors(&self) -> &Vec<usize> {
-        &self.neighbors
-    }
-}
-
 impl Graph {
-    pub fn new(persons: &[impl GraphNode]) -> Self {
+    pub fn new(persons: &[impl AbstractNode]) -> Self {
         let mut nodes = Vec::with_capacity(persons.len());
         let mut total_links = 0;
         for (i, pers) in persons.iter().enumerate() {

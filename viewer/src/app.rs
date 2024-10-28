@@ -250,18 +250,6 @@ impl ViewerData {
         })
     }
 
-    pub fn get_edges(&self) -> impl Iterator<Item=(usize, usize)> + '_ {
-        self
-            .persons
-            .iter()
-            .enumerate()
-            .flat_map(|(i, n)| {
-                n.neighbors.iter()
-                    .filter(move |&&j| i < j)
-                    .map(move |&j| (i, j))
-            })
-    }
-
     pub fn replace_data(
         &self,
         persons: Vec<Person>,

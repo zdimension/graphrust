@@ -3,6 +3,7 @@ use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::{for_progress, log, log_progress, try_log_progress};
 use derivative::*;
 
+use crate::algorithms::AbstractGraph;
 use crate::app::thread;
 use crate::camera::Camera;
 use ahash::{AHashMap, AHashSet};
@@ -715,12 +716,14 @@ impl DetailsSection {
     }
 }
 
+pub struct ForceAtlasRenderDone;
+
 pub struct ForceAtlasState {
     running: bool,
     data: Option<(Arc<RwLock<Layout<f32, 2>>>, Option<ForceAtlasThread>)>,
     settings: Settings<f32>,
     new_settings: Arc<(AtomicBool, Mutex<Settings<f32>>)>,
-    render_thread: Option<(Sender<()>, Receiver<GlTask>, JoinHandle<()>)>,
+    render_thread: Option<(Sender<()>, Receiver<ForceAtlasRenderDone>, JoinHandle<()>)>,
 }
 
 impl Default for ForceAtlasState {
@@ -765,16 +768,15 @@ pub struct ForceAtlasThread {
     status_tx: Sender<bool>,
 }
 
-fn rerender_graph(data: &ViewerData) -> GlTask {
-    let nodes = data
-        .persons
+fn rerender_graph(persons: &Vec<Person>) -> GlTask {
+    let nodes = persons
         .iter()
         .map(|p| {
             crate::geom_draw::create_node_vertex(p)
         });
 
-    let edges = data.get_edges().flat_map(
-        |(a, b)| crate::geom_draw::create_edge_vertices(&data.persons[a], &data.persons[b])
+    let edges = persons.iter().get_edges().flat_map(
+        |(a, b)| crate::geom_draw::create_edge_vertices(&persons[a], &persons[b])
     );
     let vertices = nodes.chain(edges).collect_vec();
 
@@ -854,16 +856,17 @@ impl AlgosSection {
                             }, (i + 1) as u16));
                         }
 
+                        let task = rerender_graph(&nodes);
+
                         {
                             let mut lock = data.write();
                             lock.persons = nodes;
                             lock.modularity_classes = classes;
 
-                            *stats.write() = NodeStats::new(&lock, graph.read().node_filter);
+                            let mut graph = graph.write();
+                            *stats.write() = NodeStats::new(&lock, graph.node_filter);
+                            graph.tasks.push_back(task);
                         }
-
-                        let task = rerender_graph(&data.read());
-                        graph.write().tasks.push_back(task);
                     });
                     self.louvain_state = Some(LouvainState {
                         thread: thr,
@@ -947,7 +950,7 @@ impl AlgosSection {
                                 pos: VecN(p.position.to_array()),
                                 ..Default::default()
                             }).collect(),
-                            data.get_edges().map(|e| (e, 1.0)).collect(),
+                            data.persons.iter().get_edges().map(|e| (e, 1.0)).collect(),
                         )));
                         let (status_tx, status_rx) = mpsc::channel();
                         let layout_thr = layout.clone();
@@ -1004,23 +1007,24 @@ impl AlgosSection {
                                     person.position = Point::new(node.pos[0], node.pos[1]);
                                 }
 
+                                let closure = rerender_graph(&persons);
+
                                 {
                                     let mut data_w = thr_data.write();
                                     data_w.persons = persons;
 
-                                    *stats.write() = NodeStats::new(&data_w, graph.read().node_filter);
+                                    let mut graph = graph.write();
+                                    *stats.write() = NodeStats::new(&data_w, graph.node_filter);
+                                    graph.tasks.push_back(closure);
                                 }
-
-                                let closure = rerender_graph(&thr_data.read());
-                                if result_tx.send(closure).is_err() {
+                                if result_tx.send(ForceAtlasRenderDone).is_err() {
                                     return; // tab closed
                                 }
                             }
                         }))
                     });
 
-                    if let Ok((task)) = r.try_recv() {
-                        graph.write().tasks.push_back(task);
+                    if let Ok(ForceAtlasRenderDone) = r.try_recv() {
                         s.send(()).unwrap();
                     }
                 }
