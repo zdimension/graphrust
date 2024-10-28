@@ -802,6 +802,11 @@ impl AlgosSection {
         CollapsingHeader::new("Algorithmes")
             .default_open(false)
             .show(ui, |ui| {
+                if data.read().persons.len() > 50_000 {
+                    ui.label("⚠ Le graphe affiché est très grand. Au-delà de 50k nœuds, les \
+                    algorithmes seront lents, voire inutilisables. Essayez d'afficher un sous-graphe \
+                    en utilisant le voisinage ou la liste des classes.");
+                }
                 if ui.add_enabled(self.louvain_state.is_none(), egui::Button::new("Louvain")).clicked() {
                     let (status_tx, status_rx) = status_pipe(ui.ctx());
                     let data = data.clone();
