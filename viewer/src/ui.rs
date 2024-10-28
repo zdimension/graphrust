@@ -44,7 +44,7 @@ pub struct PathSection {
     pub path_settings: PathSectionSettings,
     pub path_dirty: bool,
     pub path_status: Option<PathStatus>,
-    pub path_channel: Option<Receiver<Option<PathSectionResults>>>,
+    pub path_thread: Option<JoinHandle<Option<PathSectionResults>>>,
 }
 
 #[derive(Default)]
@@ -96,7 +96,7 @@ fn set_bg_color_tinted(base: Color32, ui: &mut Ui) {
 }
 
 impl PathSection {
-    fn do_pathfinding(settings: PathSectionSettings, data: &ViewerData, tx: Sender<Option<PathSectionResults>>, ctx: ContextUpdater) {
+    fn do_pathfinding(settings: PathSectionSettings, data: &ViewerData) -> Option<PathSectionResults> {
         let src_id = settings.path_src.unwrap();
         let dest_id = settings.path_dest.unwrap();
         let src = &data.persons[src_id];
@@ -122,60 +122,52 @@ impl PathSection {
         dist[src_id] = 0;
         queue.push_back(src_id);
 
-        let result = 'path_result: {
-            while let Some(id) = queue.pop_front() {
-                let person = &data.persons[id];
-                for &i in person.neighbors.iter() {
-                    if settings.path_no_direct && id == src_id && i == dest_id {
-                        continue;
-                    }
+        while let Some(id) = queue.pop_front() {
+            let person = &data.persons[id];
+            for &i in person.neighbors.iter() {
+                if settings.path_no_direct && id == src_id && i == dest_id {
+                    continue;
+                }
 
-                    if settings.path_no_mutual && intersect.contains(&i) {
-                        continue;
-                    }
+                if settings.path_no_mutual && intersect.contains(&i) {
+                    continue;
+                }
 
-                    if exclude_set.contains(&i) {
-                        continue;
-                    }
+                if exclude_set.contains(&i) {
+                    continue;
+                }
 
-                    if !visited[i] {
-                        visited[i] = true;
-                        dist[i] = dist[id] + 1;
-                        pred[i] = Some(id);
-                        queue.push_back(i);
+                if !visited[i] {
+                    visited[i] = true;
+                    dist[i] = dist[id] + 1;
+                    pred[i] = Some(id);
+                    queue.push_back(i);
 
-                        if i == dest_id {
-                            let mut path = Vec::new();
+                    if i == dest_id {
+                        let mut path = Vec::new();
 
-                            path.push(dest_id);
+                        path.push(dest_id);
 
-                            let mut cur = dest_id;
-                            while let Some(p) = pred[cur] {
-                                path.push(p);
-                                cur = p;
-                            }
-
-                            /*self.found_path = Some(path);
-
-                            graph.new_path = Some(verts);*/
-
-                            /*let _ = tx.send(Some(PathSectionResults { path, verts }));
-
-                            return;*/
-
-                            break 'path_result Some(PathSectionResults { path });
+                        let mut cur = dest_id;
+                        while let Some(p) = pred[cur] {
+                            path.push(p);
+                            cur = p;
                         }
+
+                        /*self.found_path = Some(path);
+
+                        graph.new_path = Some(verts);*/
+
+                        /*let _ = tx.send(Some(PathSectionResults { path, verts }));
+
+                        return;*/
+
+                        return Some(PathSectionResults { path });
                     }
                 }
             }
-            None
-        };
-
-        if tx.send(result).is_err() {
-            // tab closed
         }
-
-        ctx.update();
+        None
     }
 
     fn person_button(
@@ -200,14 +192,13 @@ impl PathSection {
         infos: &mut InfosSection,
         sel_field: &mut SelectedUserField,
     ) {
-        if let Some(rx) = self.path_channel.as_ref() {
-            if let Ok(res) = rx.try_recv() {
-                if let Some(res) = res {
-                    self.path_status = Some(PathStatus::PathFound(res.path));
-                } else {
-                    self.path_status = Some(PathStatus::NoPath);
-                }
-                self.path_channel = None;
+        if let Some(thr) = self.path_thread.take_if(|thr| thr.is_finished()) {
+            let res = thr.join();
+            self.path_thread = None;
+            if let Ok(Some(res)) = res {
+                self.path_status = Some(PathStatus::PathFound(res.path));
+            } else {
+                self.path_status = Some(PathStatus::NoPath);
             }
         }
 
@@ -282,15 +273,12 @@ impl PathSection {
                         (Some(x), Some(y)) if x == y => Some(PathStatus::SameSrcDest),
                         (None, _) | (_, None) => None,
                         _ => {
-                            let (tx, rx) = mpsc::channel();
-                            self.path_channel = Some(rx);
                             let settings = self.path_settings.clone();
                             let data = data.clone();
-                            let ctx = ContextUpdater::new(ui.ctx());
-                            thread::spawn(move || {
+                            self.path_thread = Some(thread::spawn(move || {
                                 let data = (*data.read()).clone();
-                                Self::do_pathfinding(settings, &data, tx, ctx);
-                            });
+                                Self::do_pathfinding(settings, &data)
+                            }));
                             Some(PathStatus::Loading)
                         }
                     }
