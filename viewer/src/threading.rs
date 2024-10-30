@@ -1,4 +1,5 @@
 use crate::app::ContextUpdater;
+use crate::thread;
 use crate::ui::modal::{ModalInfo, ModalWriter};
 use eframe::epaint::text::{LayoutJob, TextFormat};
 use eframe::epaint::{FontFamily, FontId};
@@ -8,7 +9,6 @@ use parking_lot::{RawRwLock, RwLock};
 use std::fmt::Display;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
 
 #[derive(Debug)]
 pub enum CancelableError {

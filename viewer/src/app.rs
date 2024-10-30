@@ -16,7 +16,7 @@ use zearch::Index;
 
 use eframe::emath::Align;
 #[cfg(not(target_arch = "wasm32"))]
-pub use std::thread;
+pub use std::thread as thread;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_thread as thread;
 use crate::graph_render::{GlForwarder, GlMpsc};

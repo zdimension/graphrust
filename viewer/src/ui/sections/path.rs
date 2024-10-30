@@ -1,5 +1,7 @@
 use crate::app::ViewerData;
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
+use crate::thread;
+use crate::thread::JoinHandle;
 use crate::threading::MyRwLock;
 use crate::ui::infos::InfosSection;
 use crate::ui::SelectedUserField;
@@ -9,8 +11,6 @@ use eframe::emath::vec2;
 use egui::{CollapsingHeader, Ui};
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
 
 #[derive(Derivative)]
 #[derivative(Default)]

@@ -1,6 +1,8 @@
 use crate::algorithms::AbstractGraph;
 use crate::app::{show_progress_bar, ViewerData};
 use crate::graph_render::RenderedGraph;
+use crate::thread;
+use crate::thread::JoinHandle;
 use crate::threading::{status_pipe, MyRwLock, StatusReader};
 use crate::ui::NodeStats;
 use crate::{try_log_progress, ui};
@@ -11,8 +13,6 @@ use parking_lot::{Mutex, RwLock};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, RecvError, Sender, TryRecvError};
 use std::sync::{mpsc, Arc};
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 pub struct ForceAtlasRenderDone;

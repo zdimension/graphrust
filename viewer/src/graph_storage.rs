@@ -313,29 +313,6 @@ pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<P
     log!(status_tx, "Generating neighbor lists");
 
     let start = chrono::Local::now();
-    /*let how_often = (content.edges.len() / 100).max(1);
-    for (i, edge) in content.edges.iter().enumerate() {
-        if edge.a == edge.b {
-            //panic!("Self edge detected"); TODO
-            continue;
-        }
-        let (p1, p2) = person_data.get_two_mut(edge.a as usize, edge.b as usize);
-        p1.neighbors.push(edge.b as usize);
-        p2.neighbors.push(edge.a as usize);
-        if i % how_often == 0 {
-            log_progress!(status_tx, i, content.edges.len());
-        }
-    }*/
-
-    /*for_progress!(status_tx, edge in content.edges.iter(), {
-        if edge.a == edge.b {
-            //panic!("Self edge detected"); TODO
-            continue;
-        }
-        let (p1, p2) = person_data.get_two_mut(edge.a as usize, edge.b as usize);
-        p1.neighbors.push(edge.b as usize);
-        p2.neighbors.push(edge.a as usize);
-    });*/
 
     let mut edges = Vec::new();
 
