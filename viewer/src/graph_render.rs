@@ -204,7 +204,7 @@ impl RenderedGraph {
             let vertices = {
                 const THRESHOLD: usize = 1024 * 1024 * 1024;
                 const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / std::mem::size_of::<PersonVertex>();
-                let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * VERTS_PER_EDGE;
+                let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * crate::geom_draw::VERTS_PER_EDGE;
                 if num_vertices > MAX_VERTS_IN_ONE_GIG {
                     log!(status_tx, "More than {}MB of vertices ({}), truncating", THRESHOLD / 1024 / 1024, num_vertices);
                     vertices.take(MAX_VERTS_IN_ONE_GIG).collect_vec()
