@@ -1,4 +1,4 @@
-use crate::app::{iter_progress, Cancelable, ModularityClass, Person, StatusWriter, StringTables, ViewerData};
+use crate::app::{iter_progress, ModularityClass, Person, StringTables, ViewerData};
 
 use graph_format::{EdgeStore, GraphFile};
 use itertools::Itertools;
@@ -8,7 +8,8 @@ use speedy::Readable;
 
 use crate::utils::{str_from_null_terminated_utf8, SliceExt};
 
-use crate::{for_progress, log, log_progress};
+use crate::threading::{Cancelable, StatusWriter};
+use crate::{for_progress, log};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -241,9 +242,9 @@ pub async fn load_file(status_tx: &StatusWriter) -> Cancelable<GraphFile> {
         .unwrap();*/
     log!(status_tx, "Downloading file");
     let status_tx_ = status_tx.clone();
-    use crate::app::StatusWriterInterface;
+    use crate::threading::StatusWriterInterface;
     let progress_handler = Closure::wrap(Box::new(move |progress: usize| {
-        status_tx_.send(crate::app::Progress { max: 100, val: progress }).unwrap()
+        status_tx_.send(crate::threading::Progress { max: 100, val: progress }).unwrap()
     }) as Box<dyn FnMut(usize)>);
     js_console_log("Awaiting JS promise");
     let result = wasm_bindgen_futures::JsFuture::from(downloadGraph(include_str!("../file_size").parse().unwrap(), progress_handler.as_ref().unchecked_ref()))
@@ -286,15 +287,18 @@ pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<P
 
     let start = chrono::Local::now();
     let mut person_data: Vec<_> = iter_progress(content.nodes.iter(), status_tx)
-        .map(|node| unsafe {
+        .map(|node| {
             Person::new(
                 node.position,
                 node.size,
                 node.class,
-                str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)),
-                str_from_null_terminated_utf8(
-                    content.names.as_ptr().offset(node.offset_name as isize),
-                ),
+                // SAFETY: the strings are null-terminated
+                unsafe { str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)) },
+                unsafe {
+                    str_from_null_terminated_utf8(
+                        content.names.as_ptr().offset(node.offset_name as isize),
+                    )
+                },
                 node.total_edge_count as usize,
             )
         })

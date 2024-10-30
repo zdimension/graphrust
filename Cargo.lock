@@ -1684,9 +1684,9 @@ dependencies = [
 
 [[package]]
 name = "nalgebra"
-version = "0.33.1"
+version = "0.33.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bf139e93ad757869338ad85239cb1d6c067b23b94e5846e637ca6328ee4be60"
+checksum = "26aecdf64b707efd1310e3544d709c5c0ac61c13756046aaaba41be5c4f66a3b"
 dependencies = [
  "approx",
  "matrixmultiply",
@@ -2314,12 +2314,6 @@ dependencies = [
  "tracing",
  "windows-sys 0.59.0",
 ]
-
-[[package]]
-name = "pollster"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22686f4785f02a4fcc856d3b3bb19bf6c8160d103f7a99cc258bddd0251dc7f2"
 
 [[package]]
 name = "powerfmt"
@@ -3386,12 +3380,10 @@ dependencies = [
  "getrandom",
  "graph_format",
  "graphrust_macros",
- "instant",
  "itertools",
  "js-sys",
  "log",
  "parking_lot",
- "pollster",
  "rand 0.8.5",
  "rayon",
  "speedy",
@@ -3525,8 +3517,8 @@ dependencies = [
 
 [[package]]
 name = "wasm_thread"
-version = "0.3.2"
-source = "git+https://github.com/zdimension/wasm_thread#d4f6fb103132d5a3131856e65b05798ee1f0320c"
+version = "0.3.3"
+source = "git+https://github.com/zdimension/wasm_thread#d1e5346a916c7a2b55d3579b35478349ce2dd9ba"
 dependencies = [
  "futures",
  "js-sys",

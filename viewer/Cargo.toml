@@ -12,9 +12,7 @@ eframe = { version = "0.29.1", default-features = false, features = [
     "glow", # Use the glow rendering backend. Alternative: "wgpu".
 ] }
 egui = "0.29.1"
-instant = "0.1"
 itertools = "0.13"
-pollster = "0.3"
 speedy = "0.8"
 log = "0.4"
 graph_format = { path = "../graph_format" }
@@ -30,7 +28,6 @@ colourado-iter = "1.2"
 anyhow = "1"
 egui-modal = "0.5.0"
 parking_lot = "*"
-#zearch = { path = "../../zearch" }
 
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
@@ -44,7 +41,6 @@ vergen-gitcl = { version = "1.0.0", features = ["build"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
-pollster = { version = "0.3" }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -55,12 +51,8 @@ js-sys = "*"
 web-sys = { version = "*", features = ["XmlHttpRequest", "XmlHttpRequestResponseType", "WorkerGlobalScope", "Performance", "ProgressEvent"] }
 parking_lot = { version = "*", features = ["nightly"] }
 wasm-logger = "0.2.0"
-wasm_thread = { version = "0.3.0", git = "https://github.com/zdimension/wasm_thread" }
+wasm_thread = { version = "0.3.3", git = "https://github.com/zdimension/wasm_thread" }
 console_error_panic_hook = "0.1.7"
 getrandom = { version = "*", features = ["js"] }
 wasm-bindgen-rayon = "*"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.chrono]
-version = "*"
-features = ["wasmbind"]
-
+chrono = { version = "*", features = ["wasmbind"] }

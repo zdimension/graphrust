@@ -1,4 +1,5 @@
-use crate::app::{Person, PersonVertex};
+use crate::app::Person;
+use crate::graph_render::PersonVertex;
 
 pub fn create_node_vertex(p: &Person) -> PersonVertex {
     PersonVertex::new(
@@ -8,7 +9,9 @@ pub fn create_node_vertex(p: &Person) -> PersonVertex {
     )
 }
 
-pub fn create_edge_vertices(pa: &Person, pb: &Person) -> [PersonVertex; 6] {
+pub const VERTS_PER_EDGE: usize = 6;
+
+pub fn create_edge_vertices(pa: &Person, pb: &Person) -> [PersonVertex; VERTS_PER_EDGE] {
     let a = pa.position;
     let b = pb.position;
     const EDGE_HALF_WIDTH: f32 = 0.75;

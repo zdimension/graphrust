@@ -15,6 +15,8 @@ pub mod graph_storage;
 mod ui;
 pub mod utils;
 mod algorithms;
+mod threading;
+mod graph_render;
 
 pub use app::thread;
 pub use app::GraphViewApp;

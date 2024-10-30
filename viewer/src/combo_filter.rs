@@ -1,7 +1,4 @@
-// Ugly unsafe code ahead
-// here be dragons
-
-use crate::app::{thread, ContextUpdater, MyRwLock, ViewerData};
+use crate::app::{thread, ContextUpdater, ViewerData};
 use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
 use eframe::epaint;
 use eframe::epaint::{Shape, Stroke};
@@ -10,12 +7,14 @@ use std::ops::Add;
 
 use egui::{Align, Id, Layout, Painter, PopupCloseBehavior, Response, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText};
 
+use crate::threading::MyRwLock;
 use derivative::Derivative;
 use eframe::epaint::text::TextWrapMode;
 use egui::text::{CCursor, CCursorRange};
 use std::sync::Arc;
 use zearch::Search;
 
+/// Draws the dropdown icon (downwards arrow)
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
     let rect = Rect::from_center_size(
         rect.center(),
@@ -234,7 +233,6 @@ pub fn combo_with_filter(
                     let pattern = state.pattern.clone();
                     let viewer_data = viewer_data.clone();
                     let state = binding.clone();
-                    //let ctx = ui.ctx().clone();
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
                         let res = viewer_data.read().engine.search(Search::new(&pattern).with_limit(RESULTS));

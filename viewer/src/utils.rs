@@ -1,42 +1,9 @@
 use std::cmp::Ordering;
 use std::ffi::CStr;
 
-/// Logs a message to the console prefixed with the current time and caller code location.
-/*#[macro_export]
-macro_rules! log
-{
-    ($($arg:tt)*) =>
-    {
-        //log::info!("[{}] [{}:{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), file!(), line!(), format_args!($($arg)*));
-        log::info!($($arg)*);
-        //$crate::utils::add_loading_text(&format!("{}", format_args!($($arg)*)));
-    }
-}
-*/
-/*pub fn add_loading_text(_text: &str) {
-    #[cfg(target_arch = "wasm32")]
-    {
-        use wasm_bindgen::JsCast;
-
-        let elem = eframe::web_sys::window()
-            .unwrap()
-            .document()
-            .unwrap()
-            .get_element_by_id("center_message")
-            .unwrap();
-        let elem = elem.dyn_ref::<eframe::web_sys::HtmlElement>().unwrap();
-
-        let orig_text = elem.text_content().unwrap();
-        let new_text = format!("{}\n{}", orig_text, text);
-
-        elem.set_text_content(Some(&new_text));
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        println!("{}", text);
-    }
-}*/
-
+/// # Safety
+///
+/// The input pointer must point to a null-terminated UTF-8 string.
 pub unsafe fn str_from_null_terminated_utf8<'a>(s: *const u8) -> &'a str {
     std::str::from_utf8_unchecked(CStr::from_ptr(s as *const _).to_bytes())
 }
