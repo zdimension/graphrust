@@ -10,3 +10,4 @@ graph_format = { path = "../graph_format" }
 inline-python = "0.12"
 rayon = "1.9.0"
 rand = "0.8"
+streaming-stats = "0.2.3"

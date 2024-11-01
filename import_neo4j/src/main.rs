@@ -200,6 +200,31 @@ async fn main() {
     let graph = Graph::connect(n4j_config).await.unwrap();
     log!("Start");
     let mut file = GraphFile::default();
+
+    let total_node_count: usize = graph
+        .execute(query("match (n) return count(n) as count"))
+        .await
+        .unwrap()
+        .next()
+        .await
+        .unwrap()
+        .unwrap()
+        .get("count")
+        .unwrap();
+
+    // graph is scale-free network so the node distribution follows a power law
+    // we can estimate and pre allocate
+    let expected_nodes = (0.8 * (config.min_degree as f64).powf(-1.86) * (total_node_count as f64)) as usize;
+
+    log!("Expected node count: {}", expected_nodes);
+
+    const AVERAGE_ID_BYTES: usize = 18; // obtained experimentally on file with 1.7M nodes
+    const AVERAGE_NAME_BYTES: usize = 14;
+
+    file.ids.reserve(expected_nodes * (AVERAGE_ID_BYTES + 1)); // plus null terminator
+    file.names.reserve(expected_nodes * (AVERAGE_NAME_BYTES + 1));
+    file.nodes.reserve(expected_nodes);
+
     let mut nodes = graph
         .execute(if false && config.only_bfs {
             query("match (n) return n.uid, n.name")
@@ -209,13 +234,13 @@ async fn main() {
         })
         .await
         .unwrap();
-    let mut nodes_ids = AHashMap::new();
+    let mut nodes_ids = AHashMap::with_capacity(expected_nodes);
     log!("Processing node query");
     while let Ok(Some(row)) = nodes.next().await {
         let uid: &str = row.get("n.uid").unwrap();
         let name: &str = row
             .get("n.name")
-            .expect(format!("Node without name: {}", uid).as_str());
+            .unwrap_or_else(|_| panic!("Node without name: {}", uid));
         let id: u64 = row.get("id(n)").unwrap();
         let pers = NodeStore {
             position: Point { x: 0.0, y: 0.0 },
@@ -236,6 +261,9 @@ async fn main() {
     }
     log!("{} nodes", file.nodes.len());
 
+    let expected_edges = ((file.nodes.len() as f64).powf(0.4165) * 88155.0) as usize;
+    log!("Expected edge count: {}", expected_edges);
+
     let mut edges_q = graph
         .execute(
             if false && config.only_bfs {
@@ -250,7 +278,7 @@ async fn main() {
         .await
         .unwrap();
 
-    let mut edges = Vec::new();
+    let mut edges = Vec::with_capacity(expected_edges);
     // write edge list to edges.txt with a buffered writer
 
     log!("Processing edge query");

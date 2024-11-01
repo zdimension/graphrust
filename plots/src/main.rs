@@ -4,6 +4,7 @@ use inline_python::python;
 use rayon::prelude::*;
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::HashMap;
+use std::ffi::CStr;
 
 #[macro_export]
 macro_rules! log
@@ -20,6 +21,14 @@ macro_rules! log
 
 fn main() {
     let file = GraphFile::read_from_file("graph_n4j.bin").unwrap();
+
+    let avg_id = stats::mean(file.nodes.iter().map(|n|
+        unsafe { CStr::from_ptr(file.ids.as_ptr().add(n.offset_id as usize) as *const _) }.count_bytes()));
+    let avg_name = stats::mean(file.nodes.iter().map(|n|
+        unsafe { CStr::from_ptr(file.names.as_ptr().add(n.offset_name as usize) as *const _) }.count_bytes()));
+
+    println!("Average id length: {}", avg_id);
+    println!("Average name length: {}", avg_name);
 
     let mut degrees = AHashMap::new();
     let persons = file.get_adjacency();

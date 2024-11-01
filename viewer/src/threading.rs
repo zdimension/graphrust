@@ -16,15 +16,6 @@ pub enum CancelableError {
     Other(anyhow::Error),
 }
 
-impl Display for CancelableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CancelableError::TabClosed => write!(f, "Tab closed"),
-            CancelableError::Other(e) => write!(f, "Other error: {}", e),
-        }
-    }
-}
-
 impl<U> From<mpsc::SendError<U>> for CancelableError {
     fn from(_: mpsc::SendError<U>) -> CancelableError {
         CancelableError::TabClosed
