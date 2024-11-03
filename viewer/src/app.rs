@@ -14,16 +14,16 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc};
 use zearch::Index;
 
-use eframe::emath::Align;
-#[cfg(not(target_arch = "wasm32"))]
-pub use std::thread as thread;
-#[cfg(target_arch = "wasm32")]
-pub use wasm_thread as thread;
 use crate::graph_render::{GlForwarder, GlMpsc};
 use crate::threading;
 use crate::threading::{Cancelable, StatusReader, StatusWriter, StatusWriterInterface};
 use crate::ui::modal::{show_modal, ModalInfo};
 use crate::ui::tabs::{GraphTab, GraphTabLoaded, TabViewer};
+use eframe::emath::Align;
+#[cfg(not(target_arch = "wasm32"))]
+pub use std::thread as thread;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_thread as thread;
 
 #[macro_export]
 macro_rules! log {
@@ -249,6 +249,7 @@ impl ContextUpdater {
 
 pub struct GraphViewApp {
     top_bar: bool,
+    tasks: Receiver<EguiTask>,
     modal: (Receiver<ModalInfo>, Sender<ModalInfo>),
     state: AppState,
 }
@@ -269,6 +270,8 @@ pub enum AppState {
     },
 }
 
+pub type EguiTask = Box<dyn FnOnce(&Context) + Send>;
+
 impl GraphViewApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -284,6 +287,30 @@ impl GraphViewApp {
         let (status_tx, status_rx) = threading::status_pipe(&cc.egui_ctx);
         let (file_tx, file_rx) = mpsc::channel();
         let (modal_tx, modal_rx) = mpsc::channel();
+        let (ctx_tx, ctx_rx) = mpsc::channel();
+
+        threading::spawn_cancelable(modal_tx.clone(), move || {
+            let res: Result<_, anyhow::Error> = try {
+                let font = crate::gfonts::download_font("Noto Sans Arabic", "NotoSansArabic-Light.ttf")?;
+                let task: EguiTask = Box::new(move |ctx: &Context| {
+                    let mut fonts = egui::FontDefinitions::default();
+                    let name = "Noto Sans Arabic";
+                    fonts.font_data.insert(
+                        name.to_string(),
+                        egui::FontData::from_owned(font),
+                    );
+                    fonts.families.entry(FontFamily::Proportional).or_default()
+                        .push(name.to_string());
+                    ctx.set_fonts(fonts);
+                    log::info!("Arabic font loaded");
+                });
+                ctx_tx.send(task)
+            };
+            if res.is_err() {
+                log::info!("Error loading Arabic font");
+            }
+            Ok(())
+        });
 
         #[cfg(target_arch = "wasm32")]
         wasm_bindgen_futures::spawn_local(async move {
@@ -312,6 +339,7 @@ impl GraphViewApp {
         Self {
             top_bar: true,
             modal: (modal_rx, modal_tx),
+            tasks: ctx_rx,
             state: AppState::Loading { status_rx, file_rx },
         }
     }
@@ -335,6 +363,10 @@ impl eframe::App for GraphViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
         let mut new_tab_request = None;
+
+        while let Ok(task) = self.tasks.try_recv() {
+            task(ctx);
+        }
 
         if self.top_bar {
             self.show_top_bar(ctx);
