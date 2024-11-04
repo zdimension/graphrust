@@ -1,6 +1,6 @@
 use crate::app::ViewerData;
-use crate::log;
 use crate::threading::{Cancelable, StatusWriter};
+use crate::{for_progress, log};
 use derivative::Derivative;
 use eframe::glow;
 use graph_format::nalgebra::Matrix4;
@@ -200,7 +200,6 @@ impl RenderedGraph {
             let vertices = node_vertices
                 .chain(edge_vertices);
 
-            #[cfg(target_arch = "wasm32")]
             let vertices = {
                 const THRESHOLD: usize = 1024 * 1024 * 1024;
                 const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / std::mem::size_of::<PersonVertex>();
@@ -214,10 +213,9 @@ impl RenderedGraph {
                 }
             };
 
-            #[cfg(not(target_arch = "wasm32"))]
-            let vertices = vertices.collect_vec();
+            let vertices_count = vertices.len();
 
-            log!(status_tx, "Buffering {} vertices", vertices.len());
+            log!(status_tx, "Allocating vertex buffer");
             let VertArray(vertices_array, vertices_buffer) = gl.run(move |gl: &glow::Context| {
                 let vertices_array = gl
                     .create_vertex_array()
@@ -225,15 +223,15 @@ impl RenderedGraph {
                 gl.bind_vertex_array(Some(vertices_array));
                 let vertices_buffer = gl.create_buffer().expect("Cannot create buffer");
                 gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices_buffer));
-                gl.buffer_data_u8_slice(
+                gl.buffer_data_size(
                     glow::ARRAY_BUFFER,
-                    std::slice::from_raw_parts(
-                        vertices.as_ptr() as *const u8,
-                        vertices.len() * size_of::<PersonVertex>(),
-                    ),
+                    (vertices_count * std::mem::size_of::<PersonVertex>()).try_into().unwrap(),
                     glow::STATIC_DRAW,
                 );
-
+                let err = gl.get_error();
+                if err != glow::NO_ERROR {
+                    log::error!("Error: {:x}", err);
+                }
                 gl.vertex_attrib_pointer_f32(
                     0,
                     2,
@@ -256,6 +254,34 @@ impl RenderedGraph {
             }) else {
                 panic!("Failed to create vertices array");
             };
+
+            log!(status_tx, "Buffering {} vertices", vertices.len());
+
+            let vertices = std::sync::Arc::new(vertices);
+
+            const BATCH_SIZE: usize = 1000000;
+
+            for_progress!(status_tx, i in 0..vertices.len().div_ceil(BATCH_SIZE), {
+                let vertices = vertices.clone();
+                gl.run(move |gl: &glow::Context| {
+                    let start = i * BATCH_SIZE;
+                    let end = ((i + 1) * BATCH_SIZE).min(vertices.len());
+                    let batch = &vertices[i * BATCH_SIZE..end];
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices_buffer));
+                    gl.buffer_sub_data_u8_slice(
+                        glow::ARRAY_BUFFER,
+                        (start * std::mem::size_of::<PersonVertex>()).try_into().unwrap(),
+                        std::slice::from_raw_parts(
+                            batch.as_ptr() as *const u8,
+                            std::mem::size_of_val(batch),
+                        ),
+                    );
+                    let err = gl.get_error();
+                    if err != glow::NO_ERROR {
+                        log::error!("Error: {:x}", err);
+                    }
+                });
+            });
 
             log!(status_tx, "Creating path array");
             let PathArray(path_array, path_buffer) = gl.run(|gl| {

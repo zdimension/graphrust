@@ -116,7 +116,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                 state_rx,
                 gl_mpsc,
             } => {
-                for work in gl_mpsc.0.try_iter() {
+                if let Ok(work) = gl_mpsc.0.try_recv() {
                     work.0(self.frame.gl().unwrap().deref(), &gl_mpsc.1);
                 }
                 app::show_status(ui, status_rx);
