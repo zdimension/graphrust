@@ -291,7 +291,7 @@ impl GraphViewApp {
 
         threading::spawn_cancelable(modal_tx.clone(), move || {
             let res: Result<_, anyhow::Error> = try {
-                let font = crate::gfonts::download_font("Noto Sans Arabic", "NotoSansArabic-Light.ttf")?;
+                let font = crate::http::download_bytes("fonts/noto_sans_arabic.ttf")?;
                 let task: EguiTask = Box::new(move |ctx: &Context| {
                     let mut fonts = egui::FontDefinitions::default();
                     let name = "Noto Sans Arabic";
@@ -306,8 +306,8 @@ impl GraphViewApp {
                 });
                 ctx_tx.send(task)
             };
-            if res.is_err() {
-                log::info!("Error loading Arabic font");
+            if let Err(e) = res {
+                log::error!("Error loading Arabic font: {}", e);
             }
             Ok(())
         });

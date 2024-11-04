@@ -11,13 +11,36 @@ fn send_reqwest(url: &str) -> anyhow::Result<reqwest::blocking::Response> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub fn try_find_local_file(url: &str) -> anyhow::Result<std::fs::File> {
+    use std::path::Path;
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets").join(url);
+    Ok(std::fs::File::open(path)?)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn download_text(url: &str) -> anyhow::Result<String> {
+    if !url.starts_with("http") {
+        if let Ok(mut file) = try_find_local_file(url) {
+            use std::io::Read;
+            let mut buf = String::new();
+            file.read_to_string(&mut buf)?;
+            return Ok(buf);
+        }
+    }
     let response = send_reqwest(url)?;
     Ok(response.text()?)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn download_bytes(url: &str) -> anyhow::Result<Vec<u8>> {
+    if !url.starts_with("http") {
+        if let Ok(mut file) = try_find_local_file(url) {
+            use std::io::Read;
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf)?;
+            return Ok(buf);
+        }
+    }
     let response = send_reqwest(url)?;
     Ok(response.bytes()?.to_vec())
 }

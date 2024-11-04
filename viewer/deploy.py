@@ -18,6 +18,7 @@ try:
     subprocess.run(["trunk", "build"], check=True)
     subprocess.run(["cmd", "/c", "del", "Z:\\web\\network5\\*", "/Q"], check=True)
     subprocess.run(["xcopy", "dist\\*.*", "Z:\\web\\network5\\", "/s", "/y"], check=True)
+    subprocess.run(["xcopy", "assets\\*.*", "Z:\\web\\network5\\", "/s", "/y"], check=True)
     outfile_name = next(f for f in os.listdir("dist") if f.endswith(".wasm"))[:-len("_bg.wasm")]
     with open(r"Z:\web\network5\.htaccess", "w") as f:
         with open(".htaccess", "r") as htaccess:
