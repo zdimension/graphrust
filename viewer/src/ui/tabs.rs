@@ -165,7 +165,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                         if !response.is_pointer_button_down_on() {
                             if let Some(v) = tab.tab_camera.cam_animating {
                                 const DUR: f32 = 0.5;
-                                let anim = ui.ctx().animate_bool_with_time(cid, false, DUR);
+                                let anim = ui.ctx().animate_bool_with_time_and_easing(cid, false, DUR, emath::easing::circular_out);
                                 if anim == 0.0 {
                                     tab.tab_camera.cam_animating = None;
                                     match v {
