@@ -184,7 +184,7 @@ impl PathSection {
 
                 ui.horizontal(|ui| {
                     ui.label("Exclure :");
-                    if ui.button("✖").clicked() {
+                    if ui.button("✖").on_hover_text("Vider la liste d'exclusion").clicked() {
                         self.path_settings.exclude_ids.clear();
                         self.path_dirty = true;
                     }
@@ -197,7 +197,7 @@ impl PathSection {
                     for (i, id) in self.path_settings.exclude_ids.iter().enumerate() {
                         ui.horizontal(|ui| {
                             self.person_button(&data, ui, id, &mut cur_excl);
-                            if ui.button("✖").clicked() {
+                            if ui.button("✖").on_hover_text("Retirer de la liste d'exclusion").clicked() {
                                 del_excl = Some(i);
                             }
                         });
@@ -256,7 +256,8 @@ impl PathSection {
                                 ui.horizontal(|ui| {
                                     ui::set_bg_color_tinted(Color32::RED, ui);
                                     self.person_button(&data, ui, id, &mut cur_path);
-                                    if i != 0 && i != path.len() - 1 && ui.button("✖").clicked() {
+                                    if i != 0 && i != path.len() - 1 &&
+                                        ui.button("✖").on_hover_text("Exclure du chemin").clicked() {
                                         del_path = Some(*id);
                                     }
                                 });

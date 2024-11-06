@@ -384,7 +384,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             rect.max - vec2(BUTTON_SIZE + PADDING, BUTTON_SIZE + PADDING),
                             vec2(BUTTON_SIZE, BUTTON_SIZE)),
                                   egui::Button::new("⌖"),
-                        ).clicked() {
+                        ).on_hover_text("Centrer la caméra").clicked() {
                             ui.ctx().animate_bool_with_time(cid, true, 0.0);
                             let camera = &mut tab.tab_camera;
                             camera.cam_animating = Some(CamAnimating::PanTo { from: camera.camera.transf, to: camera.camera_default.transf });
