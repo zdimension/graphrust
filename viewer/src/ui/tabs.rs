@@ -12,7 +12,7 @@ use eframe::emath::{vec2, Vec2};
 use eframe::epaint::text::TextWrapMode;
 use eframe::epaint::Shape::LineSegment;
 use eframe::epaint::{CircleShape, Color32, PathStroke, TextShape};
-use egui::{Id, RichText, TextStyle, Ui, WidgetText};
+use egui::{emath, Id, Rect, RichText, TextStyle, Ui, WidgetText};
 use graph_format::nalgebra::{Similarity3, Vector4};
 use graph_format::EdgeStore;
 use itertools::Itertools;
@@ -372,6 +372,22 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
 
                         if let Some(sel) = tab.ui_state.infos.infos_current {
                             draw_person(sel, Color32::from_rgba_unmultiplied(0, 100, 0, 200));
+                        }
+
+                        ui.style_mut().text_styles.insert(
+                            egui::TextStyle::Button,
+                            egui::FontId::new(24.0, eframe::epaint::FontFamily::Proportional),
+                        );
+                        const PADDING: f32 = 4.0;
+                        const BUTTON_SIZE: f32 = 30.0;
+                        if ui.put(Rect::from_min_size(
+                            rect.max - vec2(BUTTON_SIZE + PADDING, BUTTON_SIZE + PADDING),
+                            vec2(BUTTON_SIZE, BUTTON_SIZE)),
+                                  egui::Button::new("⌖"),
+                        ).clicked() {
+                            ui.ctx().animate_bool_with_time(cid, true, 0.0);
+                            let camera = &mut tab.tab_camera;
+                            camera.cam_animating = Some(CamAnimating::PanTo { from: camera.camera.transf, to: camera.camera_default.transf });
                         }
                     });
             }
