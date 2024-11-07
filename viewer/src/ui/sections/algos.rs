@@ -60,8 +60,7 @@ impl AlgosSection {
                     let precision = self.louvain_precision;
                     let stats = stats.clone();
                     let thr = thread::spawn(move || {
-                        let data_ = data.read();
-                        let mut louvain = crate::algorithms::louvain::Graph::new(&data_.persons);
+                        let mut louvain = crate::algorithms::louvain::Graph::new(&data.read().persons);
                         for i in 0..ITERATIONS {
                             if try_log_progress!(status_tx, i, ITERATIONS).is_err() {
                                 return;
@@ -76,6 +75,7 @@ impl AlgosSection {
                         if try_log_progress!(status_tx, ITERATIONS, ITERATIONS).is_err() {
                             return;
                         }
+                        let data_ = data.read();
                         let mut nodes = data_.persons.clone();
                         for n in &mut nodes {
                             n.modularity_class = u16::MAX;
