@@ -1,11 +1,19 @@
+use derivative::Derivative;
 use egui::{Align, Context, Id, Layout, WidgetText};
 use egui_modal::{Icon, Modal, ModalStyle};
+use std::fmt::Pointer;
 use std::sync::mpsc::{Receiver, Sender};
 
-#[derive(Clone)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct ModalInfo {
     pub title: String,
+    #[derivative(Debug(format_with = "fmt_modal_body"))]
     pub body: WidgetText,
+}
+
+fn fmt_modal_body(text: &WidgetText, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(text.text())
 }
 
 pub trait ModalWriter: Clone + Send + 'static {

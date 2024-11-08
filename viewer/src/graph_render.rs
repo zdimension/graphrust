@@ -350,6 +350,8 @@ impl RenderedGraph {
         }
     }
 
+    pub const MAX_RENDER_CLASSES: usize = 512;
+
     pub(crate) fn paint(
         &mut self,
         gl: &glow::Context,
@@ -374,7 +376,7 @@ impl RenderedGraph {
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
 
-            let mut all_colors = [Color3f::new(0.0, 0.0, 0.0); 512];
+            let mut all_colors = [Color3f::new(0.0, 0.0, 0.0); Self::MAX_RENDER_CLASSES];
             all_colors[..class_colors.len()].copy_from_slice(class_colors);
 
             if edges.0 {

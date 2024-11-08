@@ -192,7 +192,7 @@ impl UiState {
                 &self.stats,
             );
 
-            self.algorithms.show(data, ui, graph, &self.stats);
+            self.algorithms.show(data, ui, graph, &self.stats, modal);
 
             self.details.show(ui, camera, cid);
         });

@@ -1,11 +1,12 @@
 use crate::algorithms::AbstractGraph;
 use crate::app::{show_progress_bar, ViewerData};
 use crate::graph_render::RenderedGraph;
-use crate::thread;
 use crate::thread::JoinHandle;
-use crate::threading::{status_pipe, MyRwLock, StatusReader};
+use crate::threading::{spawn_cancelable, status_pipe, CancelableError, MyRwLock, StatusReader};
+use crate::ui;
+use crate::ui::modal::{ModalInfo, ModalWriter};
 use crate::ui::NodeStats;
-use crate::{try_log_progress, ui};
+use crate::{log_progress, thread};
 use egui::{CollapsingHeader, Ui};
 use forceatlas2::{Layout, Node, Settings, VecN};
 use graph_format::Point;
@@ -43,7 +44,8 @@ impl AlgosSection {
                        data: &Arc<MyRwLock<ViewerData>>,
                        ui: &mut Ui,
                        graph: &Arc<MyRwLock<RenderedGraph>>,
-                       stats: &Arc<MyRwLock<NodeStats>>) {
+                       stats: &Arc<MyRwLock<NodeStats>>,
+                       modal: &impl ModalWriter) {
         CollapsingHeader::new("Algorithmes")
             .default_open(false)
             .show(ui, |ui| {
@@ -59,12 +61,10 @@ impl AlgosSection {
                     const ITERATIONS: usize = 100;
                     let precision = self.louvain_precision;
                     let stats = stats.clone();
-                    let thr = thread::spawn(move || {
+                    let thr = spawn_cancelable(modal.clone(), move || {
                         let mut louvain = crate::algorithms::louvain::Graph::new(&data.read().persons);
                         for i in 0..ITERATIONS {
-                            if try_log_progress!(status_tx, i, ITERATIONS).is_err() {
-                                return;
-                            }
+                            log_progress!(status_tx, i, ITERATIONS);
                             let old_stats = louvain.stats();
                             louvain = louvain.next(precision);
                             let new_stats = louvain.stats();
@@ -72,9 +72,16 @@ impl AlgosSection {
                                 break;
                             }
                         }
-                        if try_log_progress!(status_tx, ITERATIONS, ITERATIONS).is_err() {
-                            return;
+                        log_progress!(status_tx, ITERATIONS, ITERATIONS);
+                        if louvain.nodes.len() > RenderedGraph::MAX_RENDER_CLASSES {
+                            return Err(CancelableError::Custom(ModalInfo {
+                                title: "Trop de classes".to_string(),
+                                body: format!("Trop de classes ({}) pour afficher le résultat.\
+                            La limite actuelle est {}.\n\n\
+                            Essayez de diminuer la précision.", louvain.nodes.len(), RenderedGraph::MAX_RENDER_CLASSES).into(),
+                            }));
                         }
+
                         let data_ = data.read();
                         let mut nodes = data_.persons.clone();
                         for n in &mut nodes {
@@ -88,7 +95,6 @@ impl AlgosSection {
                         use crate::ui;
                         let palette = ColorPalette::new(PaletteType::Random, false, &mut rand::thread_rng());
                         let mut classes = Vec::new();
-                        println!("result: {} classes", louvain.nodes.len());
 
                         for (i, (comm, color)) in louvain.nodes.iter().zip(palette).enumerate() {
                             for user in comm.payload.as_ref().unwrap() {
@@ -113,6 +119,8 @@ impl AlgosSection {
                             *stats.write() = NodeStats::new(&lock, graph.node_filter);
                             graph.tasks.push_back(task);
                         }
+
+                        Ok(())
                     });
                     self.louvain_state = Some(LouvainState {
                         thread: thr,
@@ -127,7 +135,7 @@ impl AlgosSection {
                         state.status_rx.recv();
                         if ui.horizontal(|ui| {
                             ui.spinner();
-                            let cancel = ui.button("🗙").clicked();
+                            let cancel = ui.button("✖").clicked();
                             show_progress_bar(ui, &state.status_rx);
                             cancel
                         }).inner {

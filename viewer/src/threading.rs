@@ -14,6 +14,7 @@ use std::sync::mpsc::{Receiver, Sender};
 pub enum CancelableError {
     TabClosed,
     Other(anyhow::Error),
+    Custom(ModalInfo),
 }
 
 impl<U> From<mpsc::SendError<U>> for CancelableError {
@@ -201,6 +202,9 @@ pub fn spawn_cancelable(ms: impl ModalWriter, f: impl FnOnce() -> Cancelable<()>
                         job.into()
                     },
                 });
+            }
+            Err(CancelableError::Custom(info)) => {
+                ms.send(info);
             }
             Ok(()) => {}
         }
