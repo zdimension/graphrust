@@ -1,6 +1,4 @@
 use crate::camera::{CamXform, Camera};
-use std::fmt::Display;
-
 use crate::graph_storage::{load_binary, load_file, ProcessedData};
 use crate::ui::{tabs, UiState};
 use eframe::glow::HasContext;
@@ -9,17 +7,20 @@ use egui::{vec2, Color32, Context, FontFamily, FontId, Hyperlink, Id, Layout, Ri
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3b, Point};
 use graphrust_macros::md;
+use std::fmt::Display;
+use std::mem::MaybeUninit;
 
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Condvar, Mutex};
 use zearch::Index;
 
 use crate::graph_render::{GlForwarder, GlMpsc};
 use crate::threading;
-use crate::threading::{Cancelable, StatusReader, StatusWriter, StatusWriterInterface};
+use crate::threading::{Cancelable, MyRwLock, StatusReader, StatusWriter, StatusWriterInterface};
 use crate::ui::modal::{show_modal, ModalInfo};
 use crate::ui::tabs::{GraphTab, GraphTabLoaded, TabViewer};
 use eframe::emath::Align;
+use parking_lot::RwLock;
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread as thread;
 #[cfg(target_arch = "wasm32")]
@@ -140,11 +141,77 @@ impl ModularityClass {
     }
 }
 
-#[derive(Clone)]
+//#[derive(Clone)]
 pub struct ViewerData {
     pub persons: Vec<Person>,
     pub modularity_classes: Vec<ModularityClass>,
-    pub engine: Index<'static>,
+    pub engine: Arc<SearchEngine>,
+}
+
+// pub enum SearchEngineState {
+//     Loading(Arc<(Mutex<Option<Index<'static>>>, Condvar)>),
+//     Loaded(Index<'static>),
+// }
+//
+// pub struct SearchEngine {
+//     state: Arc<RwLock<SearchEngineState>>
+// }
+//
+// impl SearchEngine {
+//     pub fn new(persons: &'static [Person]) -> Self {
+//         let state = Arc::new((Mutex::new(None), Condvar::new()));
+//         let state_clone = state.clone();
+//
+//         thread::spawn(move || {
+//             let engine = Index::new_in_memory(persons);
+//             let (lock, cvar) = &*state_clone;
+//             let mut state = lock.lock().unwrap();
+//             *state = Some(engine);
+//             cvar.notify_all();
+//         });
+//
+//         SearchEngine {
+//             state: Arc::new(RwLock::new(SearchEngineState::Loading(state)))
+//         }
+//     }
+//
+//     pub fn get_blocking(&mut self) -> &Index<'static> {
+//         if
+//     }
+// }
+
+pub struct SearchEngine {
+    inner: Arc<(Mutex<Option<Index<'static>>>, Condvar)>,
+}
+
+impl SearchEngine {
+    pub fn new(persons: &'static [Person]) -> Self {
+        let inner = Arc::new((Mutex::new(None), Condvar::new()));
+        let inner_clone = inner.clone();
+
+        thread::spawn(move || {
+            log::info!("Initializing search engine");
+            let engine = Index::new_in_memory(persons);
+            log::info!("Search engine initialized");
+            let (lock, cvar) = &*inner_clone;
+            let mut state = lock.lock().unwrap();
+            *state = Some(engine);
+            cvar.notify_all();
+        });
+
+        SearchEngine {
+            inner
+        }
+    }
+
+    pub fn get_blocking<T>(&self, op: impl FnOnce(&Index<'static>) -> T) -> T {
+        let (lock, cvar) = &*self.inner;
+        let mut state = lock.lock().unwrap();
+        while state.is_none() {
+            state = cvar.wait(state).unwrap();
+        }
+        op(state.as_ref().unwrap())
+    }
 }
 
 impl ViewerData {
@@ -153,27 +220,16 @@ impl ViewerData {
         modularity_classes: Vec<ModularityClass>,
         status_tx: &impl StatusWriterInterface,
     ) -> Cancelable<ViewerData> {
-        log!(status_tx, "Initializing search engine");
+        /*log!(status_tx, "Initializing search engine");
         // SAFETY: `engine` will never live longer than `persons`
         let engine = Index::new_in_memory(unsafe { std::mem::transmute::<&[Person], &'static [Person]>(&persons[..]) });
-        log!(status_tx, "Done");
+        log!(status_tx, "Done");*/
+        let engine = Arc::new(SearchEngine::new(unsafe { std::mem::transmute::<&[Person], &'static [Person]>(&persons[..]) }));
         Ok(ViewerData {
             persons,
             modularity_classes,
             engine,
         })
-    }
-
-    pub fn replace_data(
-        &self,
-        persons: Vec<Person>,
-        modularity_classes: Vec<ModularityClass>,
-    ) -> ViewerData {
-        ViewerData {
-            persons,
-            modularity_classes,
-            engine: self.engine.clone(),
-        }
     }
 }
 

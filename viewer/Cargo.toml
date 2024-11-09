@@ -27,7 +27,7 @@ forceatlas2 = { version = "0.7", features = ["default"], git = "https://framagit
 colourado-iter = "1.2"
 anyhow = "1"
 egui-modal = "0.5.0"
-parking_lot = "*"
+parking_lot = { version = "*", features = ["send_guard"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

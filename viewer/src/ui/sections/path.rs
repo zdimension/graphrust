@@ -1,3 +1,4 @@
+use crate::algorithms::AbstractNode;
 use crate::app::ViewerData;
 use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::thread;
@@ -9,6 +10,7 @@ use ahash::AHashSet;
 use derivative::Derivative;
 use eframe::emath::vec2;
 use egui::{CollapsingHeader, Ui};
+use itertools::Itertools;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -45,15 +47,15 @@ pub struct PathSectionResults {
 }
 
 impl PathSection {
-    fn do_pathfinding(settings: PathSectionSettings, data: &ViewerData) -> Option<PathSectionResults> {
+    fn do_pathfinding(settings: PathSectionSettings, data: &[impl AbstractNode]) -> Option<PathSectionResults> {
         let src_id = settings.path_src.unwrap();
         let dest_id = settings.path_dest.unwrap();
-        let src = &data.persons[src_id];
-        let dest = &data.persons[dest_id];
+        let src = &data[src_id];
+        let dest = &data[dest_id];
 
         let intersect: AHashSet<usize> = if settings.path_no_mutual {
-            AHashSet::<_>::from_iter(src.neighbors.iter().copied())
-                .intersection(&AHashSet::<_>::from_iter(dest.neighbors.iter().copied()))
+            AHashSet::<_>::from_iter(src.neighbors().iter().copied())
+                .intersection(&AHashSet::<_>::from_iter(dest.neighbors().iter().copied()))
                 .copied()
                 .collect()
         } else {
@@ -63,17 +65,17 @@ impl PathSection {
         let exclude_set: AHashSet<usize> = AHashSet::from_iter(settings.exclude_ids.iter().cloned());
 
         let mut queue = VecDeque::new();
-        let mut visited = vec![false; data.persons.len()];
-        let mut pred = vec![None; data.persons.len()];
-        let mut dist = vec![i32::MAX; data.persons.len()];
+        let mut visited = vec![false; data.len()];
+        let mut pred = vec![None; data.len()];
+        let mut dist = vec![i32::MAX; data.len()];
 
         visited[src_id] = true;
         dist[src_id] = 0;
         queue.push_back(src_id);
 
         while let Some(id) = queue.pop_front() {
-            let person = &data.persons[id];
-            for &i in person.neighbors.iter() {
+            let person = &data[id];
+            for &i in person.neighbors().iter() {
                 if settings.path_no_direct && id == src_id && i == dest_id {
                     continue;
                 }
@@ -102,14 +104,6 @@ impl PathSection {
                             path.push(p);
                             cur = p;
                         }
-
-                        /*self.found_path = Some(path);
-
-                        graph.new_path = Some(verts);*/
-
-                        /*let _ = tx.send(Some(PathSectionResults { path, verts }));
-
-                        return;*/
 
                         return Some(PathSectionResults { path });
                     }
@@ -225,7 +219,13 @@ impl PathSection {
                             let settings = self.path_settings.clone();
                             let data = data.clone();
                             self.path_thread = Some(thread::spawn(move || {
-                                let data = (*data.read()).clone();
+                                struct SmallNode(Vec<usize>);
+                                impl AbstractNode for SmallNode {
+                                    fn neighbors(&self) -> &Vec<usize> {
+                                        &self.0
+                                    }
+                                }
+                                let data = data.read().persons.iter().map(|p| SmallNode(p.neighbors.clone())).collect_vec();
                                 Self::do_pathfinding(settings, &data)
                             }));
                             Some(PathStatus::Loading)

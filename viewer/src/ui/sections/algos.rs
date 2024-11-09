@@ -79,7 +79,7 @@ impl AlgosSection {
                                 body: format!("Trop de classes ({}) pour afficher le résultat.\
                             La limite actuelle est {}.\n\n\
                             Essayez de diminuer la précision.", louvain.nodes.len(), RenderedGraph::MAX_RENDER_CLASSES).into(),
-                            }));
+                            }.into()));
                         }
 
                         let data_ = data.read();

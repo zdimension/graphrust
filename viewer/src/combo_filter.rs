@@ -231,11 +231,11 @@ pub fn combo_with_filter(
                 } else {
                     state.loading = true;
                     let pattern = state.pattern.clone();
-                    let viewer_data = viewer_data.clone();
+                    let engine = viewer_data.read().engine.clone();
                     let state = binding.clone();
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
-                        let res = viewer_data.read().engine.search(Search::new(&pattern).with_limit(RESULTS));
+                        let res = engine.get_blocking(|s| s.search(Search::new(&pattern).with_limit(RESULTS)));
                         let mut state = state.write();
                         if state.pattern.eq(&pattern) {
                             state.item_vector = res.iter().map(|&i| i as usize).collect();

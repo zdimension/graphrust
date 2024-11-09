@@ -5,6 +5,7 @@
 #![feature(map_many_mut)]
 #![feature(negative_impls)]
 #![feature(auto_traits)]
+#![feature(box_patterns)]
 #![allow(incomplete_features)]
 
 mod app;
