@@ -16,13 +16,13 @@ pub enum GlWorkResult {
 }
 
 pub trait GlWorkGetter<R>: FnOnce(&glow::Context) -> R {
-    fn get(rx: &Receiver<GlWorkResult>) -> R;
+    fn get(rx: &Receiver<GlWorkResult>) -> Cancelable<R>;
     fn to_boxed(self) -> GlWork;
 }
 
 impl<T: Send + FnOnce(&glow::Context) -> GlWorkResult + 'static> GlWorkGetter<GlWorkResult> for T {
-    fn get(rx: &Receiver<GlWorkResult>) -> GlWorkResult {
-        rx.recv().unwrap()
+    fn get(rx: &Receiver<GlWorkResult>) -> Cancelable<GlWorkResult> {
+        Ok(rx.recv()?)
     }
 
     fn to_boxed(self) -> GlWork {
@@ -33,7 +33,7 @@ impl<T: Send + FnOnce(&glow::Context) -> GlWorkResult + 'static> GlWorkGetter<Gl
 }
 
 impl<T: Send + FnOnce(&glow::Context) + 'static> GlWorkGetter<()> for T {
-    fn get(_: &Receiver<GlWorkResult>) {}
+    fn get(_: &Receiver<GlWorkResult>) -> Cancelable<()> { Ok(()) }
     fn to_boxed(self) -> GlWork {
         GlWork(Box::new(move |gl, _| {
             self(gl);
@@ -63,8 +63,8 @@ impl GlForwarder {
         )
     }
 
-    pub fn run<R, T: GlWorkGetter<R>>(&self, work: T) -> R {
-        self.tx.send(work.to_boxed()).unwrap();
+    pub fn run<R, T: GlWorkGetter<R>>(&self, work: T) -> Cancelable<R> {
+        self.tx.send(work.to_boxed())?;
         T::get(&self.rx)
     }
 }
@@ -170,7 +170,7 @@ impl RenderedGraph {
 
                     program
                 }))
-            }) else {
+            })? else {
                 panic!("Failed to compile shaders");
             };
 
@@ -251,7 +251,7 @@ impl RenderedGraph {
                 gl.enable_vertex_attrib_array(1);
 
                 VertArray(vertices_array, vertices_buffer)
-            }) else {
+            })? else {
                 panic!("Failed to create vertices array");
             };
 
@@ -280,7 +280,7 @@ impl RenderedGraph {
                     if err != glow::NO_ERROR {
                         log::error!("Error: {:x}", err);
                     }
-                });
+                })?;
             });
 
             log!(status_tx, "Creating path array");
@@ -312,7 +312,7 @@ impl RenderedGraph {
                 gl.enable_vertex_attrib_array(1);
 
                 PathArray(path_array, path_buffer)
-            }) else {
+            })? else {
                 panic!("Failed to create path array");
             };
 

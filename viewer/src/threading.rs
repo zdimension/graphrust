@@ -23,6 +23,12 @@ impl<U> From<mpsc::SendError<U>> for CancelableError {
     }
 }
 
+impl From<mpsc::RecvError> for CancelableError {
+    fn from(_: mpsc::RecvError) -> CancelableError {
+        CancelableError::TabClosed
+    }
+}
+
 impl<T: IsNonSendError + Into<anyhow::Error>> From<T> for CancelableError {
     fn from(e: T) -> Self {
         CancelableError::Other(e.into())
@@ -31,10 +37,11 @@ impl<T: IsNonSendError + Into<anyhow::Error>> From<T> for CancelableError {
 
 auto trait IsNonSendError {}
 
+/// somehow it's not implemented even though it's auto
 impl IsNonSendError for speedy::Error {}
 
-// somehow it's not implemented even though it's auto
 impl<T> ! IsNonSendError for mpsc::SendError<T> {}
+impl ! IsNonSendError for mpsc::RecvError {}
 
 pub type Cancelable<T> = Result<T, CancelableError>;
 
