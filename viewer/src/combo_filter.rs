@@ -12,7 +12,6 @@ use derivative::Derivative;
 use eframe::epaint::text::TextWrapMode;
 use egui::text::{CCursor, CCursorRange};
 use std::sync::Arc;
-use zearch::Search;
 
 /// Draws the dropdown icon (downwards arrow)
 fn paint_icon(painter: &Painter, rect: Rect, visuals: &WidgetVisuals) {
@@ -235,7 +234,7 @@ pub fn combo_with_filter(
                     let state = binding.clone();
                     let ctx = ContextUpdater::new(ui.ctx());
                     thread::spawn(move || {
-                        let res = engine.get_blocking(|s| s.search(Search::new(&pattern).with_limit(RESULTS)));
+                        let res = engine.get_blocking(|s| s.search(&pattern, RESULTS));
                         let mut state = state.write();
                         if state.pattern.eq(&pattern) {
                             state.item_vector = res.iter().map(|&i| i as usize).collect();

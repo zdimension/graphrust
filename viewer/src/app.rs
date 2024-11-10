@@ -12,7 +12,7 @@ use std::mem::MaybeUninit;
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
-use zearch::Index;
+use zearch::{Document, Index, Search};
 
 use crate::graph_render::{GlForwarder, GlMpsc};
 use crate::threading;
@@ -98,12 +98,6 @@ pub struct Person {
     pub neighbors: Vec<usize>,
 }
 
-impl AsRef<str> for Person {
-    fn as_ref(&self) -> &str {
-        self.name
-    }
-}
-
 impl Person {
     pub fn new(
         position: Point,
@@ -143,56 +137,67 @@ impl ModularityClass {
 
 //#[derive(Clone)]
 pub struct ViewerData {
-    pub persons: Vec<Person>,
+    pub persons: Arc<Vec<Person>>,
     pub modularity_classes: Vec<ModularityClass>,
     pub engine: Arc<SearchEngine>,
 }
 
-// pub enum SearchEngineState {
-//     Loading(Arc<(Mutex<Option<Index<'static>>>, Condvar)>),
-//     Loaded(Index<'static>),
-// }
-//
-// pub struct SearchEngine {
-//     state: Arc<RwLock<SearchEngineState>>
-// }
-//
-// impl SearchEngine {
-//     pub fn new(persons: &'static [Person]) -> Self {
-//         let state = Arc::new((Mutex::new(None), Condvar::new()));
-//         let state_clone = state.clone();
-//
-//         thread::spawn(move || {
-//             let engine = Index::new_in_memory(persons);
-//             let (lock, cvar) = &*state_clone;
-//             let mut state = lock.lock().unwrap();
-//             *state = Some(engine);
-//             cvar.notify_all();
-//         });
-//
-//         SearchEngine {
-//             state: Arc::new(RwLock::new(SearchEngineState::Loading(state)))
-//         }
-//     }
-//
-//     pub fn get_blocking(&mut self) -> &Index<'static> {
-//         if
-//     }
-// }
-
-pub struct SearchEngine {
-    inner: Arc<(Mutex<Option<Index<'static>>>, Condvar)>,
+pub struct SearchIndex {
+    fuzzy: Index<'static>,
+    exact: Vec<(&'static str, u32)>,
+    persons: Arc<Vec<Person>>,
 }
 
+impl Document<'_, 'static> for Person {
+    fn name(&'_ self) -> &'static str {
+        self.name
+    }
+}
+
+impl SearchIndex {
+    pub fn new(persons: Arc<Vec<Person>>) -> Self {
+        log::info!("Initializing search engine");
+        let mut fuzzy = Index::new_in_memory(&persons);
+        log::info!("Fuzzy index initialized");
+        let mut exact = Vec::with_capacity(persons.len());
+        for (i, p) in persons.iter().enumerate() {
+            exact.push((p.id, i as u32));
+        }
+        exact.sort_unstable_by_key(|(id, _)| *id);
+        log::info!("Search engine initialized");
+        SearchIndex {
+            fuzzy,
+            exact,
+            persons,
+        }
+    }
+
+    pub fn search(&self, query: &str, max_results: usize) -> Vec<u32> {
+        let exact = self.exact.binary_search_by_key(&query, |(name, _)| *name).ok();
+        let mut fuzzy = self.fuzzy.search(Search::new(&query).with_limit(max_results));
+        if let Some(e) = exact {
+            let exact_match = self.exact[e].1;
+            if let Some(i) = fuzzy.iter().position(|&i| i == exact_match) {
+                fuzzy.remove(i);
+            }
+            fuzzy.insert(0, exact_match);
+        }
+        fuzzy
+    }
+}
+
+pub struct SearchEngine {
+    inner: Arc<(Mutex<Option<SearchIndex>>, Condvar)>,
+}
+
+
 impl SearchEngine {
-    pub fn new(persons: &'static [Person]) -> Self {
+    pub fn new(persons: Arc<Vec<Person>>) -> Self {
         let inner = Arc::new((Mutex::new(None), Condvar::new()));
         let inner_clone = inner.clone();
 
         thread::spawn(move || {
-            log::info!("Initializing search engine");
-            let engine = Index::new_in_memory(persons);
-            log::info!("Search engine initialized");
+            let engine = SearchIndex::new(persons);
             let (lock, cvar) = &*inner_clone;
             let mut state = lock.lock().unwrap();
             *state = Some(engine);
@@ -204,7 +209,7 @@ impl SearchEngine {
         }
     }
 
-    pub fn get_blocking<T>(&self, op: impl FnOnce(&Index<'static>) -> T) -> T {
+    pub fn get_blocking<T>(&self, op: impl FnOnce(&SearchIndex) -> T) -> T {
         let (lock, cvar) = &*self.inner;
         let mut state = lock.lock().unwrap();
         while state.is_none() {
@@ -218,13 +223,9 @@ impl ViewerData {
     pub fn new(
         persons: Vec<Person>,
         modularity_classes: Vec<ModularityClass>,
-        status_tx: &impl StatusWriterInterface,
     ) -> Cancelable<ViewerData> {
-        /*log!(status_tx, "Initializing search engine");
-        // SAFETY: `engine` will never live longer than `persons`
-        let engine = Index::new_in_memory(unsafe { std::mem::transmute::<&[Person], &'static [Person]>(&persons[..]) });
-        log!(status_tx, "Done");*/
-        let engine = Arc::new(SearchEngine::new(unsafe { std::mem::transmute::<&[Person], &'static [Person]>(&persons[..]) }));
+        let persons = Arc::new(persons);
+        let engine = Arc::new(SearchEngine::new(persons.clone()));
         Ok(ViewerData {
             persons,
             modularity_classes,

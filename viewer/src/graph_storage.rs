@@ -339,7 +339,7 @@ pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<P
             ids: content.ids,
             names: content.names,
         },
-        viewer: ViewerData::new(person_data, modularity_classes, status_tx)?,
+        viewer: ViewerData::new(person_data, modularity_classes)?,
         edges,
     })
 }

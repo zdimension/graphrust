@@ -4701,7 +4701,7 @@ dependencies = [
 [[package]]
 name = "zearch"
 version = "0.1.0"
-source = "git+https://github.com/zdimension/zearch#8b8100fb16e75daa0891b0fce4dbd346d8fb31b8"
+source = "git+https://github.com/zdimension/zearch#73521434e409e12ed89c75d4251ce61ad33cf34a"
 dependencies = [
  "fst",
  "levenshtein_automata",

@@ -83,7 +83,7 @@ impl AlgosSection {
                         }
 
                         let data_ = data.read();
-                        let mut nodes = data_.persons.clone();
+                        let mut nodes = data_.persons.as_ref().clone();
                         for n in &mut nodes {
                             n.modularity_class = u16::MAX;
                         }
@@ -112,7 +112,7 @@ impl AlgosSection {
 
                         {
                             let mut lock = data.write();
-                            lock.persons = nodes;
+                            lock.persons = Arc::new(nodes);
                             lock.modularity_classes = classes;
 
                             let mut graph = graph.write();
@@ -256,7 +256,7 @@ impl AlgosSection {
                         let stats = stats.clone();
                         (request_tx, result_rx, thread::spawn(move || {
                             while let Ok(()) = request_rx.recv() {
-                                let mut persons = thr_data.read().persons.clone();
+                                let mut persons = thr_data.read().persons.as_ref().clone();
                                 for (person, node) in persons.iter_mut().zip(layout.read().nodes.iter()) {
                                     person.position = Point::new(node.pos[0], node.pos[1]);
                                 }
@@ -265,7 +265,7 @@ impl AlgosSection {
 
                                 {
                                     let mut data_w = thr_data.write();
-                                    data_w.persons = persons;
+                                    data_w.persons = Arc::new(persons);
 
                                     let mut graph = graph.write();
                                     *stats.write() = NodeStats::new(&data_w, graph.node_filter);

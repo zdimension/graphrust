@@ -307,7 +307,7 @@ impl InfosSection {
                 filter += 1;
             }
 
-            let viewer = ViewerData::new(new_persons, data.read().modularity_classes.clone(), &status_tx)?;
+            let viewer = ViewerData::new(new_persons, data.read().modularity_classes.clone())?;
 
             let mut new_ui = UiState::default();
 
