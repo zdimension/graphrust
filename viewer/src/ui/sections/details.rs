@@ -13,35 +13,35 @@ pub struct DetailsSection {
 
 impl DetailsSection {
     pub(crate) fn show(&mut self, ui: &mut Ui, camera: &mut TabCamera, cid: Id) {
-        CollapsingHeader::new("Détails")
+        CollapsingHeader::new(t!("Details"))
             .default_open(false)
             .show(ui, |ui| {
                 let trans = &camera.camera.transf;
                 egui::Grid::new("#mouse_pos").show(ui, |ui| {
-                    ui.label("Position :");
+                    ui.label(t!("Position:"));
                     ui.label(format!(
                         "{:?}",
                         self.mouse_pos.map(|p| Vector2::new(p.x, p.y))
                     ));
                     ui.end_row();
-                    ui.label("Position (monde) :");
+                    ui.label(t!("Position (world):"));
                     ui.label(format!("{:?}", self.mouse_pos_world));
                     ui.end_row();
-                    ui.label("Échelle :");
+                    ui.label(t!("Scale:"));
                     ui.label(format!("{:.3}", trans.scaling()));
                     ui.end_row();
-                    ui.label("Angle :");
+                    ui.label(t!("Angle:"));
                     ui.label(format!("{:.3}", trans.isometry.rotation.angle()));
                     ui.end_row();
-                    ui.label("Translation :");
+                    ui.label(t!("Translation:"));
                     let offs = trans.isometry.translation;
                     ui.label(format!("({:.3}, {:.3})", offs.x, offs.y));
                     ui.end_row();
                 });
-                if ui.button("Réinitialiser caméra").clicked() {
+                if ui.button(t!("Reset camera")).clicked() {
                     camera.camera = camera.camera_default;
                 }
-                if ui.button("Centrer caméra").clicked() {
+                if ui.button(t!("Center camera")).clicked() {
                     ui.ctx().animate_bool_with_time(cid, true, 0.0);
                     camera.cam_animating = Some(CamAnimating::PanTo { from: camera.camera.transf, to: camera.camera_default.transf });
                 }

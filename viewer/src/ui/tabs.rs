@@ -56,15 +56,15 @@ pub fn create_tab<'a>(
     ui_state: UiState,
     status_tx: StatusWriter,
 ) -> Cancelable<GraphTabLoaded> {
-    log!(status_tx, "Creating tab with {} nodes and {} edges", viewer.persons.len(), edges.len());
-    log!(status_tx, "Computing maximum degree...");
+    log!(status_tx, t!("Creating tab with %{n} nodes and %{m} edges", n = viewer.persons.len(), m = edges.len()));
+    log!(status_tx, t!("Computing maximum degree..."));
     let max_degree = viewer
         .persons
         .iter()
         .map(|p| p.neighbors.len())
         .max()
         .unwrap() as u16;
-    log!(status_tx, "Max degree: {}", max_degree);
+    log!(status_tx, t!("Maximum degree is %{d}", d = max_degree));
     let hide_edges = if cfg!(target_arch = "wasm32") {
         edges.len() > 300000
     } else {
@@ -132,7 +132,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                 egui::SidePanel::left("settings")
                     .resizable(false)
                     .show_inside(ui, |ui| {
-                        if !*self.top_bar && ui.button("⏬ Afficher l'en-tête").clicked() {
+                        if !*self.top_bar && ui.button(t!("⏬ Show header")).clicked() {
                             *self.top_bar = true;
                         }
                         tab.ui_state.draw_ui(
@@ -384,7 +384,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             rect.max - vec2(BUTTON_SIZE + PADDING, BUTTON_SIZE + PADDING),
                             vec2(BUTTON_SIZE, BUTTON_SIZE)),
                                   egui::Button::new("⌖"),
-                        ).on_hover_text("Centrer la caméra").clicked() {
+                        ).on_hover_text(t!("Center camera")).clicked() {
                             ui.ctx().animate_bool_with_time(cid, true, 0.0);
                             let camera = &mut tab.tab_camera;
                             camera.cam_animating = Some(CamAnimating::PanTo { from: camera.camera.transf, to: camera.camera_default.transf });

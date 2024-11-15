@@ -7,7 +7,15 @@
 #![feature(auto_traits)]
 #![feature(box_patterns)]
 #![allow(incomplete_features)]
+#[macro_use]
+extern crate rust_i18n;
 
+i18n!("locales", 
+    fallback = "en",
+    minify_key = true,
+    minify_key_len = 12,
+    minify_key_prefix = "tr_",
+    minify_key_thresh = 8);
 mod app;
 mod camera;
 mod combo_filter;

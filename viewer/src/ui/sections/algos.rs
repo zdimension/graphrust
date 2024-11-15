@@ -46,13 +46,11 @@ impl AlgosSection {
                        graph: &Arc<MyRwLock<RenderedGraph>>,
                        stats: &Arc<MyRwLock<NodeStats>>,
                        modal: &impl ModalWriter) {
-        CollapsingHeader::new("Algorithmes")
+        CollapsingHeader::new(t!("Algorithms"))
             .default_open(false)
             .show(ui, |ui| {
                 if data.read().persons.len() > 50_000 {
-                    ui.label("⚠ Le graphe affiché est très grand. Au-delà de 50k nœuds, les \
-                    algorithmes seront lents, voire inutilisables. Essayez d'afficher un sous-graphe \
-                    en utilisant le voisinage ou la liste des classes.");
+                    ui.label(t!("large_graph_warning"));
                 }
                 if ui.add_enabled(self.louvain_state.is_none(), egui::Button::new("Louvain")).clicked() {
                     let (status_tx, status_rx) = status_pipe(ui.ctx());
@@ -75,10 +73,8 @@ impl AlgosSection {
                         log_progress!(status_tx, ITERATIONS, ITERATIONS);
                         if louvain.nodes.len() > RenderedGraph::MAX_RENDER_CLASSES {
                             return Err(CancelableError::Custom(ModalInfo {
-                                title: "Trop de classes".to_string(),
-                                body: format!("Trop de classes ({}) pour afficher le résultat.\
-                            La limite actuelle est {}.\n\n\
-                            Essayez de diminuer la précision.", louvain.nodes.len(), RenderedGraph::MAX_RENDER_CLASSES).into(),
+                                title: t!("Too many classes").to_string(),
+                                body: t!("Too many classes (%{len}) to display the result. The current limit is %{max}.\n\nTry decreasing the precision.", len = louvain.nodes.len(), max = RenderedGraph::MAX_RENDER_CLASSES).into(),
                             }.into()));
                         }
 
@@ -144,7 +140,7 @@ impl AlgosSection {
                     }
                 } else {
                     ui.horizontal(|ui| {
-                        ui.label("Précision :");
+                        ui.label(t!("Precision:"));
                         ui.add(egui::Slider::new(&mut self.louvain_precision, 1e-7..=1.0)
                             .logarithmic(true)
                             .custom_formatter(|n, _| format!("{:.1e}", n))
@@ -164,11 +160,11 @@ impl AlgosSection {
                     // TODO: better ranges for these
                     // TODO: presets?
                     let fields = [
-                        ("Theta", &mut self.force_atlas_state.settings.theta),
-                        ("Ka", &mut self.force_atlas_state.settings.ka),
-                        ("Kg", &mut self.force_atlas_state.settings.kg),
-                        ("Kr", &mut self.force_atlas_state.settings.kr),
-                        ("Speed", &mut self.force_atlas_state.settings.speed),
+                        (t!("Theta"), &mut self.force_atlas_state.settings.theta),
+                        (t!("Ka"), &mut self.force_atlas_state.settings.ka),
+                        (t!("Kg"), &mut self.force_atlas_state.settings.kg),
+                        (t!("Kr"), &mut self.force_atlas_state.settings.kr),
+                        (t!("Speed"), &mut self.force_atlas_state.settings.speed),
                     ];
 
                     for (name, field) in fields.into_iter() {
@@ -177,11 +173,11 @@ impl AlgosSection {
                         ui.end_row();
                     }
 
-                    ui.label("Lin-Log");
+                    ui.label(t!("Lin-Log"));
                     upd |= ui.checkbox(&mut self.force_atlas_state.settings.lin_log, "").changed();
                     ui.end_row();
 
-                    ui.label("Strong gravity");
+                    ui.label(t!("Strong gravity"));
                     upd |= ui.checkbox(&mut self.force_atlas_state.settings.strong_gravity, "").changed();
                     ui.end_row();
 

@@ -20,6 +20,7 @@ use crate::threading::{Cancelable, MyRwLock, StatusReader, StatusWriter, StatusW
 use crate::ui::modal::{show_modal, ModalInfo};
 use crate::ui::tabs::{GraphTab, GraphTabLoaded, TabViewer};
 use eframe::emath::Align;
+use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use parking_lot::RwLock;
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread as thread;
@@ -28,13 +29,16 @@ pub use wasm_thread as thread;
 
 #[macro_export]
 macro_rules! log {
-    ($ch:expr, $($arg:tt)*) => {
+    ($ch:expr, $fmt:literal, $($arg:tt)+) => {
         {
             use $crate::threading::StatusWriterInterface;
-            let msg = format!($($arg)*);
+            let msg = format!($fmt, $($arg)+);
             log::info!("{}", &msg);
             $ch.send(msg.clone())?;
         }
+    };
+    ($ch:expr, $e: expr) => {
+        $crate::log!($ch, "{}", $e)
     }
 }
 
@@ -309,6 +313,7 @@ pub struct GraphViewApp {
     tasks: Receiver<EguiTask>,
     modal: (Receiver<ModalInfo>, Sender<ModalInfo>),
     state: AppState,
+    md_cache: CommonMarkCache,
 }
 
 pub enum AppState {
@@ -398,6 +403,7 @@ impl GraphViewApp {
             modal: (modal_rx, modal_tx),
             tasks: ctx_rx,
             state: AppState::Loading { status_rx, file_rx },
+            md_cache: CommonMarkCache::default(),
         }
     }
 }
@@ -444,7 +450,7 @@ impl eframe::App for GraphViewApp {
                         tree: DockState::new(vec![GraphTab {
                             id: Id::new(("main_tab", chrono::Utc::now())),
                             closeable: false,
-                            title: "Graphe".to_string(),
+                            title: t!("Graph").to_string(),
                             state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),
                         }]),
                         string_tables: file.strings,
@@ -452,7 +458,7 @@ impl eframe::App for GraphViewApp {
                     threading::spawn_cancelable(self.modal.1.clone(), move || {
                         let mut min = Point::new(f32::INFINITY, f32::INFINITY);
                         let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
-                        log!(status_tx, "Calcul des limites du graphes...");
+                        log!(status_tx, t!("Computing graph boundaries..."));
                         for p in &*file.viewer.persons {
                             min.x = min.x.min(p.position.x);
                             min.y = min.y.min(p.position.y);
@@ -540,28 +546,38 @@ impl GraphViewApp {
                     );
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 10.0;
-                        egui::widgets::global_theme_preference_buttons(ui);
+                        ui.vertical(|ui| {
+                            egui::widgets::global_theme_preference_buttons(ui);
+                            ui.horizontal(|ui| {
+                                let locale = rust_i18n::locale();
+                                for (iso, name) in [("en", "English"), ("fr", "Français")] {
+                                    if ui.selectable_label(&*locale == iso, name).clicked() {
+                                        rust_i18n::set_locale(iso);
+                                    }
+                                }
+                            });
+                        });
                         ui.add_space(15.0);
                     });
                 });
                 ui.vertical(|ui| {
-                    md!(ui, r#"
-Si l'interface est **lente**:
-- décocher **Afficher les liens**
-- augmenter **Degré minimum**"#);
+                    CommonMarkViewer::new().show(ui, &mut self.md_cache, &*t!(
+"If the app is **slow**:
+- uncheck **Show links**
+- increase **Minimum degree**"));
                 });
                 ui.vertical(|ui| {
-                    md!(ui, r#"
-Chaque **nœud** du graphe est un **compte Facebook**, et deux nœuds sont **reliés** s'ils sont **amis**.
+                    CommonMarkViewer::new().show(ui, &mut self.md_cache, &*t!(
+"Each **node** in the graph is a **Facebook account**, and two nodes are **linked** if they are **friends**.
 
-Un **groupe** de comptes **fortement connectés** entre eux forme une **classe**, représentée par une **couleur**.
+A **group** of accounts **strongly connected** to each other forms a **class**, represented by a **color**.
 
-Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortement connectées."#);
+Nodes are positioned so as to group together strongly connected classes."));
                 });
 
                 ui.with_layout(Layout::default().with_cross_align(Align::RIGHT), |ui| {
                     ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
-                        if ui.button("Réduire l'en-tête ⏫").clicked() {
+                        if ui.button(t!("Hide header ⏫")).clicked() {
                             self.top_bar = false;
                         }
                     });

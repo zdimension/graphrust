@@ -145,7 +145,7 @@ impl PathSection {
             }
         }
 
-        CollapsingHeader::new("Chemin le plus court")
+        CollapsingHeader::new(t!("Shortest path"))
             .default_open(true)
             .show(ui, |ui| {
                 let c1 = ui
@@ -177,8 +177,8 @@ impl PathSection {
                     .inner;
 
                 ui.horizontal(|ui| {
-                    ui.label("Exclure :");
-                    if ui.button("✖").on_hover_text("Vider la liste d'exclusion").clicked() {
+                    ui.label(t!("Excluded:"));
+                    if ui.button("✖").on_hover_text(t!("Clear the exclusion list")).clicked() {
                         self.path_settings.exclude_ids.clear();
                         self.path_dirty = true;
                     }
@@ -191,7 +191,7 @@ impl PathSection {
                     for (i, id) in self.path_settings.exclude_ids.iter().enumerate() {
                         ui.horizontal(|ui| {
                             self.person_button(&data, ui, id, &mut cur_excl);
-                            if ui.button("✖").on_hover_text("Retirer de la liste d'exclusion").clicked() {
+                            if ui.button("✖").on_hover_text(t!("Remove from the exclusion list")).clicked() {
                                 del_excl = Some(i);
                             }
                         });
@@ -206,9 +206,9 @@ impl PathSection {
                 }
 
                 if (self.path_dirty || c1.changed() || c2.changed())
-                    | ui.checkbox(&mut self.path_settings.path_no_direct, "Éviter chemin direct")
+                    | ui.checkbox(&mut self.path_settings.path_no_direct, t!("Avoid direct link"))
                     .changed()
-                    | ui.checkbox(&mut self.path_settings.path_no_mutual, "Éviter amis communs")
+                    | ui.checkbox(&mut self.path_settings.path_no_mutual, t!("Avoid mutual friends"))
                     .changed()
                 {
                     self.path_dirty = false;
@@ -238,16 +238,16 @@ impl PathSection {
                     use PathStatus::*;
                     use crate::ui;
                     match st {
-                        SameSrcDest => { ui.label("🚫 Source et destination sont identiques"); }
+                        SameSrcDest => { ui.label(t!("🚫 Source and destination are the same")); }
                         Loading => {
                             ui.horizontal(|ui| {
                                 ui.spinner();
-                                ui.label("Calcul...");
+                                ui.label(t!("Loading..."));
                             });
                         }
-                        NoPath => { ui.label("🗙 Aucun chemin entre les deux nœuds"); }
+                        NoPath => { ui.label(t!("🗙 No path found between the two nodes")); }
                         PathFound(path) => {
-                            ui.label(format!("✔ Chemin trouvé, distance {}", path.len() - 1));
+                            ui.label(t!("✔ Path found, distance %{dist}", dist = path.len() - 1));
 
                             let mut del_path = None;
                             let mut cur_path = None;
@@ -257,7 +257,7 @@ impl PathSection {
                                     ui::set_bg_color_tinted(Color32::RED, ui);
                                     self.person_button(&data, ui, id, &mut cur_path);
                                     if i != 0 && i != path.len() - 1 &&
-                                        ui.button("✖").on_hover_text("Exclure du chemin").clicked() {
+                                        ui.button("✖").on_hover_text(t!("Exclude this person from the path")).clicked() {
                                         del_path = Some(*id);
                                     }
                                 });

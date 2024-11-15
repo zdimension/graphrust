@@ -268,12 +268,12 @@ pub struct ProcessedData {
 }
 
 pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<ProcessedData> {
-    log!(status_tx, "Binary content loaded");
-    log!(status_tx, "Class count: {}", content.class_count);
-    log!(status_tx, "Node count: {}", content.node_count);
+    log!(status_tx, t!("Binary content loaded"));
+    log!(status_tx, t!("Class count: %{count}", count = content.classes.len()));
+    log!(status_tx, t!("Node count: %{count}", count = content.nodes.len()));
     //log!(status_tx, "Edge count: {}", content.edge_count);
 
-    log!(status_tx, "Processing modularity classes");
+    log!(status_tx, t!("Processing modularity classes"));
 
     let modularity_classes = content
         .classes
@@ -283,7 +283,7 @@ pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<P
         .map(|(id, color)| ModularityClass::new(color, id as u16))
         .collect_vec();
 
-    log!(status_tx, "Processing nodes");
+    log!(status_tx, t!("Processing nodes"));
 
     let start = chrono::Local::now();
     let mut person_data: Vec<_> = iter_progress(content.nodes.iter(), status_tx)
@@ -306,11 +306,10 @@ pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<P
 
     log!(
         status_tx,
-        "Done, took {}ms",
-        (chrono::Local::now() - start).num_milliseconds()
+        t!("Done, took %{time}ms", time = (chrono::Local::now() - start).num_milliseconds())
     );
 
-    log!(status_tx, "Generating neighbor lists");
+    log!(status_tx, t!("Generating neighbor lists"));
 
     let start = chrono::Local::now();
 
@@ -330,8 +329,7 @@ pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<P
 
     log!(
         status_tx,
-        "Done, took {}ms",
-        (chrono::Local::now() - start).num_milliseconds()
+        t!("Done, took %{time}ms", time = (chrono::Local::now() - start).num_milliseconds())
     );
 
     Ok(ProcessedData {

@@ -28,7 +28,7 @@ impl ClassSection {
         modal: &impl ModalWriter,
         stats: &Arc<MyRwLock<NodeStats>>,
     ) {
-        CollapsingHeader::new(format!("Classes ({})", stats.read().node_classes.len()))
+        CollapsingHeader::new(t!("Classes (%{num})", num = stats.read().node_classes.len()))
             .id_salt("classes")
             .default_open(false)
             .show(ui, |ui| {

@@ -133,7 +133,7 @@ pub fn combo_with_filter(
 
         let (selected_text, dim) = match current_item {
             Some(value) => (WidgetText::from(viewer_data.read().persons[*value].name), false),
-            None => (WidgetText::from("Cliquer ici pour rechercher"), true),
+            None => (WidgetText::from(t!("Click here to search")), true),
         };
 
         let galley =
@@ -254,7 +254,7 @@ pub fn combo_with_filter(
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     if show_count == 0 {
-                        ui.add_enabled(false, SelectableLabel::new(false, "Aucun résultat trouvé"));
+                        ui.add_enabled(false, SelectableLabel::new(false, t!("No results found")));
                     } else {
                         let data = viewer_data.read();
                         for i in 0..show_count {

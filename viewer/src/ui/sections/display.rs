@@ -22,24 +22,24 @@ pub struct DisplaySection {
 
 impl DisplaySection {
     pub(crate) fn show(&mut self, graph: &Arc<MyRwLock<RenderedGraph>>, ui: &mut Ui) {
-        CollapsingHeader::new("Affichage")
+        CollapsingHeader::new(t!("Display"))
             .default_open(true)
             .show(ui, |ui| {
-                ui.checkbox(&mut self.g_show_nodes, "Afficher les nœuds");
+                ui.checkbox(&mut self.g_show_nodes, t!("Show nodes"));
                 if self.g_show_nodes {
                     ui.add(
                         egui::Slider::new(&mut self.g_opac_nodes, 0.0..=1.0)
-                            .text("Opacité")
+                            .text(t!("Opacity"))
                             .custom_formatter(ui::percent_formatter)
                             .custom_parser(ui::percent_parser)
                             .clamping(SliderClamping::Always),
                     );
                 }
-                ui.checkbox(&mut self.g_show_edges, "Afficher les liens");
+                ui.checkbox(&mut self.g_show_edges, t!("Show links"));
                 if self.g_show_edges {
                     ui.add(
                         egui::Slider::new(&mut self.g_opac_edges, 0.0..=1.0)
-                            .text("Opacité")
+                            .text(t!("Opacity"))
                             .custom_formatter(ui::percent_formatter)
                             .custom_parser(ui::percent_parser)
                             .clamping(SliderClamping::Always),
@@ -55,7 +55,7 @@ impl DisplaySection {
                                 egui::DragValue::new(&mut graph.node_filter.degree_filter.0)
                                     .speed(1)
                                     .range(1..=graph.node_filter.degree_filter.1)
-                                    .prefix("Degré minimum : "),
+                                    .prefix(t!("Minimum degree: ")),
                             )
                             .changed();
                         let end = ui
@@ -63,7 +63,7 @@ impl DisplaySection {
                                 egui::DragValue::new(&mut graph.node_filter.degree_filter.1)
                                     .speed(1)
                                     .range(graph.node_filter.degree_filter.0..=self.max_degree)
-                                    .prefix("Degré maximum : "),
+                                    .prefix(t!("Maximum degree: ")),
                             )
                             .changed();
                         if start || end {
@@ -71,12 +71,12 @@ impl DisplaySection {
                         }
                     });
                     ui.vertical(|ui| {
-                        ui.checkbox(&mut graph.node_filter.filter_nodes, "Filtrer les nœuds");
+                        ui.checkbox(&mut graph.node_filter.filter_nodes, t!("Filter nodes"));
                     });
                 });
 
                 ui.horizontal(|ui| {
-                    ui.label("Nœuds affichés :");
+                    ui.label(t!("Visible nodes: "));
                     ui.label(format!("{}", self.node_count));
                 });
             });

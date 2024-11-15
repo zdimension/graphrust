@@ -1,0 +1,312 @@
+'Angle:':
+  en: 'Angle:'
+  fr: 'Angle :'
+'Class:':
+  en: 'Class:'
+  fr: 'Class :'
+Degree:
+  en: Degree
+  fr: Degré
+Details:
+  en: Details
+  fr: Détails
+Display:
+  en: Display
+  fr: Affichage
+Error:
+  en: Error
+  fr: Erreur
+Friends:
+  en: Friends
+  fr: Amis
+'Friends:':
+  en: 'Friends:'
+  fr: 'Amis :'
+Graph:
+  en: Graph
+  fr: Graphe
+Infos:
+  en: Infos
+  fr: Infos
+Ka:
+  en: Ka
+  fr: Ka
+Kg:
+  en: Kg
+  fr: Kg
+Kr:
+  en: Kr
+  fr: Kr
+Lin-Log:
+  en: Lin-Log
+  fr: Lin-Log
+Opacity:
+  en: Opacity
+  fr: Opacité
+'Scale:':
+  en: 'Scale:'
+  fr: 'Échelle :'
+Speed:
+  en: Speed
+  fr: Vitesse
+Theta:
+  en: Theta
+  fr: Theta
+_version: 2
+tr_16pQTJA3xEr2:
+  en: |-
+    Each **node** in the graph is a **Facebook account**, and two nodes are **linked** if they are **friends**.
+
+    A **group** of accounts **strongly connected** to each other forms a **class**, represented by a **color**.
+
+    Nodes are positioned so as to group together strongly connected classes.
+  fr: |-
+    Chaque **nœud** du graphe est un **compte Facebook**, et deux nœuds sont **reliés** s'ils sont **amis**.
+
+    Un **groupe** de comptes **fortement connectés** entre eux forme une **classe**, représentée par une **couleur**.
+
+    Les nœuds sont positionnés de sorte à regrouper ensemble les classes fortement connectées.
+tr_1Py1J4msHKLk:
+  en: |-
+    If the app is **slow**:
+    - uncheck **Show links**
+    - increase **Minimum degree**
+  fr: |-
+    Si l'interface est **lente**:
+    - décocher **Afficher les liens**
+    - augmenter **Degré minimum**
+tr_1QXV1Iw8u3vP:
+  en: 'Position (world):'
+  fr: 'Position (monde) :'
+tr_1dZeWOTPplw5:
+  en: Binary content loaded
+  fr: Contenu binaire chargé
+tr_1gj42Ah9jw9k:
+  en: Creating tab with %{n} nodes and %{m} edges
+  fr: Création d'un onglet avec %{n} nœuds et %{m} liens
+tr_1hjgMhqlP77Z:
+  en: Reset camera
+  fr: Réinitialiser la caméra
+tr_1ilcxFV63X2t:
+  en: Creating new neighbor lists and edge list
+  fr: Création de nouvelles listes de voisinage et de liens
+tr_1kBqxZ9EqRCP:
+  en: Show nodes
+  fr: Afficher les nœuds
+tr_1mtffnuHOTVS:
+  en: Loading...
+  fr: Chargement...
+tr_1oMF77fbujtR:
+  en: 'Maximum degree: '
+  fr: 'Degré maximum : '
+tr_1vxBY84g0V2o:
+  en: Failed to get response text
+  fr: Échec de la récupération du texte de la réponse
+tr_22G0lc3CafAH:
+  en: Classes (%{num})
+  fr: Classes (%{num})
+tr_2HuXyyBRG6UF:
+  en: Computing maximum degree...
+  fr: Calcul du degré maximum...
+tr_2JiyskzoOyuH:
+  en: Filter nodes
+  fr: Filtrer les nœuds
+tr_2Uqy0n8iWWPX:
+  en: 'Node count: %{count}'
+  fr: 'Nombre de nœuds : %{count}'
+tr_2VgIxsXv4cLO:
+  en: 🗙 No path found between the two nodes
+  fr: 🗙 Aucun chemin trouvé entre les deux nœuds
+tr_2WwZvrXJEngJ:
+  en: Friendship paradox
+  fr: Paradoxe de l'amitié
+tr_2bKrJ6U7JKUT:
+  en: Center camera
+  fr: Centrer la caméra
+tr_2pTmBXufueYa:
+  en: 'Failed to download: %{code}'
+  fr: 'Échec du téléchargement : %{code}'
+tr_2vYMARrL6Z0l:
+  en: Show links
+  fr: Afficher les liens
+tr_2yLPe5mo3BqY:
+  en: Algorithms
+  fr: Algorithmes
+tr_2yYJZWDSqmjB:
+  en: Creating path array
+  fr: Création du tableau de chemin
+tr_35TK8ECkqXTF:
+  en: Shortest path
+  fr: Plus court chemin
+tr_3EmqyDTdeISu:
+  en: 'Visible nodes: '
+  fr: 'Nœuds visibles : '
+tr_3NG6EAKwJLyk:
+  en: 'Done: %{time}'
+  fr: 'Terminé : %{time}'
+tr_3TSHkb39vXQc:
+  en: 'Minimum degree: '
+  fr: 'Degré minimum : '
+tr_3bq0LP4GTo3m:
+  en: More than %{got}MB of vertices (%{num}), truncating
+  fr: Plus de %{got}Mo de vertex (%{num}), troncature
+tr_3fC8ai9pfqku:
+  en: '%{num} new friends at degree %{deg}'
+  fr: '%{num} nouveaux amis au degré %{deg}'
+tr_3gqlO5WvsfeD:
+  en: 'Friends of friends (max):'
+  fr: 'Amis des amis (max) : '
+tr_3jEpfvt5HTSx:
+  en: Got %{len} friends
+  fr: Obtenu %{len} amis
+tr_3jTMWiY0xHmq:
+  en: Avoid mutual friends
+  fr: Éviter les amis communs
+tr_3ljKooOYvdhd:
+  en: Clear the exclusion list
+  fr: Vider la liste d'exclusion
+tr_46nbPWdLcDXT:
+  en: No results found
+  fr: Aucun résultat trouvé
+tr_47JJ1iTu5txE:
+  en: 'Excluded:'
+  fr: 'Exclus :'
+tr_4MRyVj4mS5PC:
+  en: 'Friends of friends (min):'
+  fr: 'Amis des amis (min) : '
+tr_4SfsW6jJzkfN:
+  en: ⏬ Show header
+  fr: ⏬ Show header
+tr_4XURykKV6f0d:
+  en: 'Friends of friends (average):'
+  fr: 'Amis des amis (moy) : '
+tr_4XWqqPdj3zPe:
+  en: Computing min edge filter
+  fr: Calcul du filtre de liens
+tr_4guUSCvFF0hJ:
+  en: Exclude this person from the path
+  fr: Exclure cette personne du chemin
+tr_4hAKgY6w9CWG:
+  en: 'Facebook ID:'
+  fr: 'ID Facebook :'
+tr_4rv3JyBR0gfR:
+  en: Processing modularity classes
+  fr: Traitement des classes de modularité
+tr_57FENzJPF73M:
+  en: Show neighborhood
+  fr: Afficher le voisinage
+tr_59bY3rsJtfvi:
+  en: Allocating vertex buffer
+  fr: Allocation du buffer de vertex
+tr_5EEEXKW8QlhQ:
+  en: Strong gravity
+  fr: Gravité forte
+tr_5FHjsppIGsFl:
+  en: Remove from the exclusion list
+  fr: Retirer de la liste d'exclusion
+tr_5FvqT77lCx4d:
+  en: Show friends up to a certain distance from the person. Degree 1 will show direct friends, degree 2 friends of friends, etc.
+  fr: Afficher les amis jusqu'à une certaine distance de la personne. Le degré 1 affichera les amis directs, le degré 2 les amis des amis, etc.
+tr_4wv9ZeevisyM:
+  en: Class %{class}
+  fr: Classe %{class}
+tr_5z1VezKrfvvG:
+  en: ✔ Path found, distance %{dist}
+  fr: ✔ Chemin trouvé, distance %{dist}
+tr_5zSWfth3tkz5:
+  en: Too many classes
+  fr: Trop de classes
+tr_603FqfAIsB8C:
+  en: Unable to send request
+  fr: Impossible d'envoyer la requête
+tr_60wxiDkphlLj:
+  en: |+
+    An error occurred:
+
+  fr: |+
+    Une erreur est survenue :
+
+tr_61GtS7prd4Na:
+  en: Compiling shaders
+  fr: Compilation des shaders
+tr_65FfLDonwSBr:
+  en: Processing nodes
+  fr: Traitement des nœuds
+tr_65kOcwh6ZMJu:
+  en: Hide header ⏫
+  fr: Réduire l'en-tête ⏫
+tr_661d21s87L1n:
+  en: 'Precision:'
+  fr: 'Précision :'
+tr_66fijA7e41jc:
+  en: Avoid direct link
+  fr: Éviter le chemin direct
+tr_67OJIbJhF2AV:
+  en: Maximum degree is %{d}
+  fr: Le degré maximum est %{d}
+tr_6McUf0TFnPF0:
+  en: 'Position:'
+  fr: 'Position :'
+tr_6TuOrZWIzTuH:
+  en: No new friends at degree %{deg}
+  fr: Aucun nouvel ami au degré %{deg}
+tr_1WWLwvYmEPpG:
+  en: '%{deg}-neighborhood of %{name}'
+  fr: '%{deg}-voisinage de %{name}'
+tr_6aVLhDmN2OV1:
+  en: Generating neighbor lists
+  fr: Génération des listes de voisinage
+tr_6sCgk72TImPl:
+  en: Processing person list and creating ID map
+  fr: Traitement de la liste des personnes et création du mapping d'IDs
+tr_6u2yER41IoEZ:
+  en: Computing graph boundaries...
+  fr: Calcul des limites du graphe...
+tr_754PTudoLgyg:
+  en: Unable to open request
+  fr: Impossible de créer la requête
+tr_7AWpKKfsnx1r:
+  en: At %{deg}
+  fr: À %{deg}
+tr_7Ef2NaViP2N4:
+  en: Click here to search
+  fr: Cliquer ici pour rechercher
+tr_7QfnwblLX2qs:
+  en: >
+    ⚠ The displayed graph is very large. Beyond 50k nodes, algorithms will be slow, or even unusable. 
+    Try displaying a subgraph using the neighborhood or class list.
+  fr: >
+    ⚠ Le graphe affiché est très grand. Au-delà de 50k nœuds, les
+    algorithmes seront lents, voire inutilisables. Essayez d'afficher un sous-graphe
+    en utilisant le voisinage ou la liste des classes.
+tr_7cFCnCnKkaM5:
+  en: 🚫 Source and destination are the same
+  fr: 🚫 Source et destination sont identiques
+tr_7dxzygI8pE5u:
+  en: Less than %{got}MB of vertices (%{num}), keeping all
+  fr: Moins de %{got}Mo de vertex (%{num}), pas de troncature
+tr_7fJrEyUZEc2u:
+  en: 'Class count: %{count}'
+  fr: 'Nombre de classes : %{count}'
+tr_7g1cZlhpFMpt:
+  en: |-
+    Too many classes (%{len}) to display the result. The current limit is %{max}.
+
+    Try decreasing the precision.
+  fr: |-
+    Trop de classes (%{len}) pour afficher le résultat. La limite actuelle est %{max}.
+
+    Essayez de diminuer la précision.
+tr_7j1nPfcwPt29:
+  en: Buffering %{num} vertices
+  fr: Mise en tampon de %{num} vertex
+tr_8PLTSIBmhSZo:
+  en: 'Translation:'
+  fr: 'Translation :'
+tr_Rh4jrJx3T1Nc:
+  en: Done, took %{time}ms
+  fr: Terminé, a pris %{time}ms
+tr_STvwhvBrHgqX:
+  en: Creating vertice list
+  fr: Création de la liste de vertex
+

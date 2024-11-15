@@ -133,7 +133,7 @@ impl RenderedGraph {
                 ],
             ];
 
-            log!(status_tx, "Compiling shaders");
+            log!(status_tx, t!("Compiling shaders"));
             let Shaders([program_basic, program_edge, program_node]) = gl.run(move |gl| {
                 Shaders(programs.map(|shader_sources| {
                     let program = gl.create_program().expect("Cannot create program");
@@ -178,7 +178,7 @@ impl RenderedGraph {
             let edges = edges.take(10_000_000);
 
             let edges_count = edges.len();
-            log!(status_tx, "Creating vertice list");
+            log!(status_tx, t!("Creating vertice list"));
             const VERTS_PER_NODE: usize = 1;
             let node_vertices = viewer
                 .persons
@@ -205,17 +205,17 @@ impl RenderedGraph {
                 const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / std::mem::size_of::<PersonVertex>();
                 let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * crate::geom_draw::VERTS_PER_EDGE;
                 if num_vertices > MAX_VERTS_IN_ONE_GIG {
-                    log!(status_tx, "More than {}MB of vertices ({}), truncating", THRESHOLD / 1024 / 1024, num_vertices);
+                    log!(status_tx, t!("More than %{got}MB of vertices (%{num}), truncating", got = THRESHOLD / 1024 / 1024, num = num_vertices));
                     vertices.take(MAX_VERTS_IN_ONE_GIG).collect_vec()
                 } else {
-                    log!(status_tx, "Less than {}MB of vertices ({}), not truncating", THRESHOLD / 1024 / 1024, num_vertices);
+                    log!(status_tx, t!("Less than %{got}MB of vertices (%{num}), keeping all", got = THRESHOLD / 1024 / 1024, num = num_vertices));
                     vertices.collect_vec()
                 }
             };
 
             let vertices_count = vertices.len();
 
-            log!(status_tx, "Allocating vertex buffer");
+            log!(status_tx, t!("Allocating vertex buffer"));
             let VertArray(vertices_array, vertices_buffer) = gl.run(move |gl: &glow::Context| {
                 let vertices_array = gl
                     .create_vertex_array()
@@ -255,7 +255,7 @@ impl RenderedGraph {
                 panic!("Failed to create vertices array");
             };
 
-            log!(status_tx, "Buffering {} vertices", vertices.len());
+            log!(status_tx, t!("Buffering %{num} vertices", num = vertices.len()));
 
             let vertices = std::sync::Arc::new(vertices);
 
@@ -283,7 +283,7 @@ impl RenderedGraph {
                 })?;
             });
 
-            log!(status_tx, "Creating path array");
+            log!(status_tx, t!("Creating path array"));
             let PathArray(path_array, path_buffer) = gl.run(|gl| {
                 let path_array = gl
                     .create_vertex_array()
@@ -316,7 +316,7 @@ impl RenderedGraph {
                 panic!("Failed to create path array");
             };
 
-            log!(status_tx, "Done: {}", chrono::Local::now().format("%H:%M:%S.%3f"));
+            log!(status_tx, t!("Done: %{time}", time = chrono::Local::now().format("%H:%M:%S.%3f")));
 
             Ok(Self {
                 program_basic,

@@ -195,10 +195,10 @@ pub fn spawn_cancelable(ms: impl ModalWriter, f: impl FnOnce() -> Cancelable<()>
             }
             Err(CancelableError::Other(e)) => {
                 ms.send(ModalInfo {
-                    title: "Error".to_string(),
+                    title: t!("Error").to_string(),
                     body: {
                         let mut job = LayoutJob::default();
-                        job.append("An error occurred:\n\n", 0.0, TextFormat {
+                        job.append(&*t!("An error occurred:\n\n"), 0.0, TextFormat {
                             font_id: FontId::new(14.0, FontFamily::Proportional),
                             ..Default::default()
                         });

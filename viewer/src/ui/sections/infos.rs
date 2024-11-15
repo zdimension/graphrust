@@ -44,7 +44,7 @@ impl InfosSection {
         sel_field: &mut SelectedUserField,
         modal: &impl ModalWriter,
     ) {
-        CollapsingHeader::new("Informations")
+        CollapsingHeader::new(t!("Infos"))
             .default_open(true)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -58,7 +58,7 @@ impl InfosSection {
                     let class = person.modularity_class;
 
                     egui::Grid::new("#infos").show(ui, |ui| {
-                        ui.label("ID Facebook :");
+                        ui.label(t!("Facebook ID:"));
                         ui.horizontal(|ui| {
                             ui.add(
                                 Hyperlink::from_label_and_url(
@@ -78,10 +78,10 @@ impl InfosSection {
                             }
                         });
                         ui.end_row();
-                        ui.label("Amis :");
+                        ui.label(t!("Friends:"));
                         ui.label(format!("{}", person.neighbors.len()));
                         ui.end_row();
-                        ui.label("Classe :");
+                        ui.label(t!("Class:"));
                         ui.horizontal(|ui| {
                             ClassSection::class_circle(ui, &data.modularity_classes[class as usize]);
                             self.create_class_subgraph(data_rw, tab_request, camera, path_section, modal, class, ui);
@@ -89,7 +89,7 @@ impl InfosSection {
                         ui.end_row();
                     });
 
-                    CollapsingHeader::new("Liste d'amis")
+                    CollapsingHeader::new(t!("Friends"))
                         .default_open(false)
                         .show(ui, |ui| {
                             egui::ScrollArea::vertical().max_height(200.0).show(
@@ -114,7 +114,7 @@ impl InfosSection {
                             );
                         });
 
-                    CollapsingHeader::new("Paradoxe de l'amitié")
+                    CollapsingHeader::new(t!("Friendship paradox"))
                         .default_open(false)
                         .show(ui, |ui| {
                             if self.paradox.current != self.infos_current {
@@ -135,16 +135,16 @@ impl InfosSection {
                             let state = &self.paradox;
 
                             egui::Grid::new("#paradox").show(ui, |ui| {
-                                ui.label("Amis :");
+                                ui.label(t!("Friends:"));
                                 ui.label(format!("{}", person.neighbors.len()));
                                 ui.end_row();
-                                ui.label("Amis de mes amis (moy) :");
+                                ui.label(t!("Friends of friends (average):"));
                                 ui.label(format!("{}", state.sum / person.neighbors.len()));
                                 ui.end_row();
-                                ui.label("Amis de mes amis (min) :");
+                                ui.label(t!("Friends of friends (min):"));
                                 ui.label(format!("{}", state.min));
                                 ui.end_row();
-                                ui.label("Amis de mes amis (max) :");
+                                ui.label(t!("Friends of friends (max):"));
                                 ui.label(format!("{}", state.max));
                                 ui.end_row();
                             });
@@ -154,16 +154,16 @@ impl InfosSection {
                         ui.style_mut().spacing.slider_width = 100.0;
                         ui.add(
                             egui::Slider::new(&mut self.neighborhood_degree, 1..=13)
-                                .text("Degré")
+                                .text(t!("Degree"))
                                 .clamping(SliderClamping::Always),
                         );
 
-                        if ui.button("Afficher voisinage")
-                            .on_hover_text("Afficher les amis jusqu'à une certaine distance de la personne. Le degré 1 affichera les amis directs, le degré 2 les amis des amis, etc.")
+                        if ui.button(t!("Show neighborhood"))
+                            .on_hover_text(t!("Show friends up to a certain distance from the person. Degree 1 will show direct friends, degree 2 friends of friends, etc."))
                             .clicked() {
                             let neighborhood_degree = self.neighborhood_degree;
                             self.create_subgraph(
-                                format!("{}-voisinage de {}", neighborhood_degree, person.name),
+                                t!("%{deg}-neighborhood of %{name}", deg = neighborhood_degree, name = person.name).to_string(),
                                 data_rw, tab_request, camera, path_section, ui, modal.clone(),
                                 move |status_tx, data| {
                                     let mut new_included = AHashSet::from([id]);
@@ -180,18 +180,18 @@ impl InfosSection {
                                             );
                                         }
                                         if new_friends.is_empty() {
-                                            log!(status_tx, "No new friends at degree {}", i + 1);
+                                            log!(status_tx, t!("No new friends at degree %{deg}", deg = i + 1));
                                             if last_batch.len() < 50 {
-                                                log!(status_tx, "At {}: {:?}", i, last_batch.iter().map(|i| data.persons[*i].name).collect::<Vec<_>>());
+                                                log!(status_tx, "{}: {:?}", t!("At %{deg}", deg = i), last_batch.iter().map(|i| data.persons[*i].name).collect::<Vec<_>>());
                                             }
                                             break;
                                         }
                                         new_included.extend(new_friends.iter().copied());
-                                        log!(status_tx, "{} new friends at degree {}", new_friends.len(), i + 1);
+                                        log!(status_tx, t!("%{num} new friends at degree %{deg}", num = new_friends.len(), deg = i + 1));
                                         last_batch = new_friends;
                                     }
 
-                                    log!(status_tx, "Got {} persons total", new_included.len());
+                                    log!(status_tx, t!("Got %{len} friends", len = new_included.len()));
                                     Ok(new_included)
                                 });
                         }
@@ -210,7 +210,7 @@ impl InfosSection {
                                         ui: &mut Ui) {
         if ui.button(format!("{}", class)).clicked() {
             self.create_subgraph(
-                format!("Classe {}", class),
+                t!("Class %{class}", class = class).to_string(),
                 data_rw, tab_request, camera, path_section, ui, modal.clone(),
                 move |_, data| {
                     Ok(data.persons
@@ -258,7 +258,7 @@ impl InfosSection {
             let mut id_map = AHashMap::new();
             let mut class_list = AHashSet::new();
 
-            log!(status_tx, "Processing person list and creating ID map");
+            log!(status_tx, t!("Processing person list and creating ID map"));
             {
                 let data = data.read();
                 for &id in new_included.iter() {
@@ -274,7 +274,7 @@ impl InfosSection {
 
             let mut edges = Vec::new();
 
-            log!(status_tx, "Creating new neighbor lists and edge list");
+            log!(status_tx, t!("Creating new neighbor lists and edge list"));
             {
                 let data = data.read();
                 for_progress!(status_tx, (&old_id, &new_id) in id_map.iter(), {
@@ -297,7 +297,7 @@ impl InfosSection {
                 });
             }
 
-            log!(status_tx, "Computing min edge filter");
+            log!(status_tx, t!("Computing min edge filter"));
 
             let mut filter = 1;
             const MAX: usize = 10000;
