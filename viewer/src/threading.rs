@@ -6,7 +6,6 @@ use eframe::epaint::{FontFamily, FontId};
 use egui::Context;
 use parking_lot::lock_api::{RwLockReadGuard, RwLockWriteGuard};
 use parking_lot::{RawRwLock, RwLock};
-use std::fmt::Display;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -198,7 +197,7 @@ pub fn spawn_cancelable(ms: impl ModalWriter, f: impl FnOnce() -> Cancelable<()>
                     title: t!("Error").to_string(),
                     body: {
                         let mut job = LayoutJob::default();
-                        job.append(&*t!("An error occurred:\n\n"), 0.0, TextFormat {
+                        job.append(&t!("An error occurred:\n\n"), 0.0, TextFormat {
                             font_id: FontId::new(14.0, FontFamily::Proportional),
                             ..Default::default()
                         });

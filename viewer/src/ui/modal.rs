@@ -1,7 +1,6 @@
 use derivative::Derivative;
 use egui::{Align, Context, Id, Layout, WidgetText};
 use egui_modal::{Icon, Modal, ModalStyle};
-use std::fmt::Pointer;
 use std::sync::mpsc::{Receiver, Sender};
 
 #[derive(Clone, Derivative)]

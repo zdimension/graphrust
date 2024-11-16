@@ -20,22 +20,17 @@ pub struct ForceAtlasRenderDone;
 
 #[derive(Default)]
 pub struct AlgosSection {
-    //algo_task: Option<Box<dyn FnOnce(&UiState) + 'static>>,
     louvain_precision: f32,
     louvain_state: Option<LouvainState>,
     force_atlas_state: ForceAtlasState,
-    times: Vec<Duration>,
 }
 
 pub struct LouvainState {
     thread: JoinHandle<()>,
     status_rx: StatusReader,
-    //data_rx: Receiver<()>,
-    //status_tx: Sender<LouvainStatus>,
 }
 
 pub struct ForceAtlasThread {
-    thread: JoinHandle<()>,
     status_tx: Sender<bool>,
 }
 
@@ -206,7 +201,7 @@ impl AlgosSection {
                         let layout_thr = layout.clone();
                         let settings_thr = self.force_atlas_state.new_settings.clone();
 
-                        let thread = thread::spawn(move || {
+                        thread::spawn(move || {
                             loop {
                                 loop {
                                     {
@@ -240,7 +235,7 @@ impl AlgosSection {
                                 }
                             }
                         });
-                        (layout, Some(ForceAtlasThread { thread, status_tx }))
+                        (layout, Some(ForceAtlasThread { status_tx }))
                     }).0.clone();
 
                     let (s, r, _t) = self.force_atlas_state.render_thread.get_or_insert_with(|| {

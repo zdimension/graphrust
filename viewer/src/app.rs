@@ -6,9 +6,6 @@ use eframe::{egui_glow, glow};
 use egui::{vec2, Color32, Context, FontFamily, FontId, Hyperlink, Id, Layout, RichText, TextFormat, TextStyle, Ui, Vec2, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3b, Point};
-use graphrust_macros::md;
-use std::fmt::Display;
-use std::mem::MaybeUninit;
 
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
@@ -16,12 +13,11 @@ use zearch::{Document, Index, Search};
 
 use crate::graph_render::{GlForwarder, GlMpsc};
 use crate::threading;
-use crate::threading::{Cancelable, MyRwLock, StatusReader, StatusWriter, StatusWriterInterface};
+use crate::threading::{Cancelable, StatusReader, StatusWriter, StatusWriterInterface};
 use crate::ui::modal::{show_modal, ModalInfo};
 use crate::ui::tabs::{GraphTab, GraphTabLoaded, TabViewer};
 use eframe::emath::Align;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
-use parking_lot::RwLock;
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread as thread;
 #[cfg(target_arch = "wasm32")]
@@ -149,6 +145,7 @@ pub struct ViewerData {
 pub struct SearchIndex {
     fuzzy: Index<'static>,
     exact: Vec<(&'static str, u32)>,
+    #[allow(dead_code)]
     persons: Arc<Vec<Person>>,
 }
 
@@ -161,7 +158,7 @@ impl Document<'_, 'static> for Person {
 impl SearchIndex {
     pub fn new(persons: Arc<Vec<Person>>) -> Self {
         log::info!("Initializing search engine");
-        let mut fuzzy = Index::new_in_memory(&persons);
+        let fuzzy = Index::new_in_memory(&persons);
         log::info!("Fuzzy index initialized");
         let mut exact = Vec::with_capacity(persons.len());
         for (i, p) in persons.iter().enumerate() {
@@ -178,7 +175,7 @@ impl SearchIndex {
 
     pub fn search(&self, query: &str, max_results: usize) -> Vec<u32> {
         let exact = self.exact.binary_search_by_key(&query, |(name, _)| *name).ok();
-        let mut fuzzy = self.fuzzy.search(Search::new(&query).with_limit(max_results));
+        let mut fuzzy = self.fuzzy.search(Search::new(query).with_limit(max_results));
         if let Some(e) = exact {
             let exact_match = self.exact[e].1;
             if let Some(i) = fuzzy.iter().position(|&i| i == exact_match) {
@@ -561,13 +558,13 @@ impl GraphViewApp {
                     });
                 });
                 ui.vertical(|ui| {
-                    CommonMarkViewer::new().show(ui, &mut self.md_cache, &*t!(
+                    CommonMarkViewer::new().show(ui, &mut self.md_cache, &t!(
 "If the app is **slow**:
 - uncheck **Show links**
 - increase **Minimum degree**"));
                 });
                 ui.vertical(|ui| {
-                    CommonMarkViewer::new().show(ui, &mut self.md_cache, &*t!(
+                    CommonMarkViewer::new().show(ui, &mut self.md_cache, &t!(
 "Each **node** in the graph is a **Facebook account**, and two nodes are **linked** if they are **friends**.
 
 A **group** of accounts **strongly connected** to each other forms a **class**, represented by a **color**.

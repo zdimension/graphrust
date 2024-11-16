@@ -50,7 +50,7 @@ struct ParadoxState {
     max: usize,
 }
 
-fn rerender_graph(persons: &Vec<Person>) -> GlTask {
+fn rerender_graph(persons: &[Person]) -> GlTask {
     let nodes = persons
         .iter()
         .map(|p| {
@@ -159,7 +159,7 @@ impl UiState {
     ) {
         ui.spacing_mut().slider_width = 200.0;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            self.display.show(graph, ui);
+            self.display.show(graph, ui, &self.stats);
 
             if self.display.deg_filter_changed {
                 *self.stats.write() = NodeStats::new(&data.read(), graph.read().node_filter);

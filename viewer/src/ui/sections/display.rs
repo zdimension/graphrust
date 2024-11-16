@@ -1,6 +1,7 @@
 use crate::graph_render::RenderedGraph;
 use crate::threading::MyRwLock;
 use crate::ui;
+use crate::ui::NodeStats;
 use derivative::Derivative;
 use egui::{CollapsingHeader, SliderClamping, Ui};
 use std::sync::Arc;
@@ -17,11 +18,10 @@ pub struct DisplaySection {
     pub g_opac_edges: f32,
     pub deg_filter_changed: bool,
     pub max_degree: u16,
-    pub node_count: usize,
 }
 
 impl DisplaySection {
-    pub(crate) fn show(&mut self, graph: &Arc<MyRwLock<RenderedGraph>>, ui: &mut Ui) {
+    pub(crate) fn show(&mut self, graph: &Arc<MyRwLock<RenderedGraph>>, ui: &mut Ui, stats: &Arc<MyRwLock<NodeStats>>) {
         CollapsingHeader::new(t!("Display"))
             .default_open(true)
             .show(ui, |ui| {
@@ -77,7 +77,7 @@ impl DisplaySection {
 
                 ui.horizontal(|ui| {
                     ui.label(t!("Visible nodes: "));
-                    ui.label(format!("{}", self.node_count));
+                    ui.label(format!("{}", stats.read().node_count));
                 });
             });
     }

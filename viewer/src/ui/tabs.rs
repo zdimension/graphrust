@@ -74,7 +74,6 @@ pub fn create_tab<'a>(
         tab_camera: TabCamera { camera, camera_default: camera, cam_animating: None },
         ui_state: UiState {
             display: display::DisplaySection {
-                node_count: viewer.persons.len(),
                 g_opac_edges: (400000.0 / edges.len() as f32).min(0.22),
                 g_opac_nodes: ((70000.0 / viewer.persons.len() as f32)
                     * if hide_edges { 5.0 } else { 2.0 })
@@ -375,7 +374,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                         }
 
                         ui.style_mut().text_styles.insert(
-                            egui::TextStyle::Button,
+                            TextStyle::Button,
                             egui::FontId::new(24.0, eframe::epaint::FontFamily::Proportional),
                         );
                         const PADDING: f32 = 4.0;

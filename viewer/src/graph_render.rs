@@ -202,7 +202,7 @@ impl RenderedGraph {
 
             let vertices = {
                 const THRESHOLD: usize = 1024 * 1024 * 1024;
-                const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / std::mem::size_of::<PersonVertex>();
+                const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / size_of::<PersonVertex>();
                 let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * crate::geom_draw::VERTS_PER_EDGE;
                 if num_vertices > MAX_VERTS_IN_ONE_GIG {
                     log!(status_tx, t!("More than %{got}MB of vertices (%{num}), truncating", got = THRESHOLD / 1024 / 1024, num = num_vertices));
@@ -225,7 +225,7 @@ impl RenderedGraph {
                 gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices_buffer));
                 gl.buffer_data_size(
                     glow::ARRAY_BUFFER,
-                    (vertices_count * std::mem::size_of::<PersonVertex>()).try_into().unwrap(),
+                    (vertices_count * size_of::<PersonVertex>()).try_into().unwrap(),
                     glow::STATIC_DRAW,
                 );
                 let err = gl.get_error();
@@ -270,10 +270,10 @@ impl RenderedGraph {
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices_buffer));
                     gl.buffer_sub_data_u8_slice(
                         glow::ARRAY_BUFFER,
-                        (start * std::mem::size_of::<PersonVertex>()).try_into().unwrap(),
+                        (start * size_of::<PersonVertex>()).try_into().unwrap(),
                         std::slice::from_raw_parts(
                             batch.as_ptr() as *const u8,
-                            std::mem::size_of_val(batch),
+                            size_of_val(batch),
                         ),
                     );
                     let err = gl.get_error();
@@ -282,39 +282,6 @@ impl RenderedGraph {
                     }
                 })?;
             });
-
-            log!(status_tx, t!("Creating path array"));
-            let PathArray(path_array, path_buffer) = gl.run(|gl| {
-                let path_array = gl
-                    .create_vertex_array()
-                    .expect("Cannot create vertex array");
-                let path_buffer = gl.create_buffer().expect("Cannot create buffer");
-
-                gl.bind_vertex_array(Some(path_array));
-                gl.bind_buffer(glow::ARRAY_BUFFER, Some(path_buffer));
-                gl.vertex_attrib_pointer_f32(
-                    0,
-                    2,
-                    glow::FLOAT,
-                    false,
-                    size_of::<Vertex>() as i32,
-                    0,
-                );
-                gl.enable_vertex_attrib_array(0);
-                gl.vertex_attrib_pointer_f32(
-                    1,
-                    3,
-                    glow::UNSIGNED_BYTE,
-                    true,
-                    size_of::<Vertex>() as i32,
-                    size_of::<Point>() as i32,
-                );
-                gl.enable_vertex_attrib_array(1);
-
-                PathArray(path_array, path_buffer)
-            })? else {
-                panic!("Failed to create path array");
-            };
 
             log!(status_tx, t!("Done: %{time}", time = chrono::Local::now().format("%H:%M:%S.%3f")));
 
