@@ -80,6 +80,8 @@ fn button_frame(
 
 pub const COMBO_WIDTH: f32 = 300.0;
 
+const RESULTS: usize = 100;
+
 /// Drop-down combobox with filtering
 pub fn combo_with_filter(
     ui: &mut Ui,
@@ -90,7 +92,7 @@ pub fn combo_with_filter(
     #[derive(Derivative, Clone)]
     #[derivative(Default)]
     struct ComboFilterState {
-        #[derivative(Default(value = "(0..100).collect()"))]
+        #[derivative(Default(value = "(0..RESULTS).collect()"))]
         item_vector: Vec<usize>,
         loading: bool,
         pattern: String,
@@ -220,8 +222,6 @@ pub fn combo_with_filter(
                 txt_resp.state.store(ui.ctx(), txt_resp.response.id);
             }
             let changed = txt.changed();
-
-            const RESULTS: usize = 100;
 
             if changed {
                 if state.pattern.is_empty() {
