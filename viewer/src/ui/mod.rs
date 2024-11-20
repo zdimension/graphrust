@@ -13,6 +13,7 @@ use std::sync::Arc;
 pub mod sections;
 pub(crate) mod tabs;
 pub(crate) mod modal;
+mod widgets;
 
 use sections::*;
 use tabs::{NewTabRequest, TabCamera};
@@ -54,11 +55,11 @@ fn rerender_graph(persons: &[Person]) -> GlTask {
     let nodes = persons
         .iter()
         .map(|p| {
-            crate::geom_draw::create_node_vertex(p)
+            crate::graph_render::geom_draw::create_node_vertex(p)
         });
 
     let edges = persons.iter().get_edges().flat_map(
-        |(a, b)| crate::geom_draw::create_edge_vertices(&persons[a], &persons[b])
+        |(a, b)| crate::graph_render::geom_draw::create_edge_vertices(&persons[a], &persons[b])
     );
     let vertices = nodes.chain(edges).collect_vec();
 

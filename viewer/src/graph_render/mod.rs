@@ -9,6 +9,9 @@ use std::collections::VecDeque;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
+pub mod camera;
+pub mod geom_draw;
+
 pub enum GlWorkResult {
     Shaders([glow::Program; 3]),
     PathArray(glow::VertexArray, glow::Buffer),
@@ -184,7 +187,7 @@ impl RenderedGraph {
                 .persons
                 .iter()
                 .map(|p| {
-                    crate::geom_draw::create_node_vertex(p)
+                    geom_draw::create_node_vertex(p)
                 });
 
             let edge_vertices = edges
@@ -194,7 +197,7 @@ impl RenderedGraph {
                     (pa, pb)
                 })
                 .flat_map(|(pa, pb)| {
-                    crate::geom_draw::create_edge_vertices(pa, pb)
+                    geom_draw::create_edge_vertices(pa, pb)
                 });
 
             let vertices = node_vertices
@@ -203,7 +206,7 @@ impl RenderedGraph {
             let vertices = {
                 const THRESHOLD: usize = 1024 * 1024 * 1024;
                 const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / size_of::<PersonVertex>();
-                let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * crate::geom_draw::VERTS_PER_EDGE;
+                let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * geom_draw::VERTS_PER_EDGE;
                 if num_vertices > MAX_VERTS_IN_ONE_GIG {
                     log!(status_tx, t!("More than %{got}MB of vertices (%{num}), truncating", got = THRESHOLD / 1024 / 1024, num = num_vertices));
                     vertices.take(MAX_VERTS_IN_ONE_GIG).collect_vec()

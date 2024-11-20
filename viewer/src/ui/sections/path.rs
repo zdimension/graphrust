@@ -1,6 +1,6 @@
 use crate::algorithms::AbstractNode;
 use crate::app::ViewerData;
-use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
+use crate::ui::widgets::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::thread;
 use crate::thread::JoinHandle;
 use crate::threading::MyRwLock;

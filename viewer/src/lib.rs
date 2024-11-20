@@ -17,9 +17,6 @@ i18n!("locales",
     minify_key_prefix = "tr_",
     minify_key_thresh = 8);
 mod app;
-mod camera;
-mod combo_filter;
-mod geom_draw;
 pub mod graph_storage;
 mod ui;
 pub mod utils;
@@ -28,6 +25,7 @@ mod threading;
 mod graph_render;
 mod gfonts;
 mod http;
+mod search;
 
 pub use app::thread;
 pub use app::GraphViewApp;

@@ -1,5 +1,5 @@
 use crate::app::{GraphTabState, Person, ViewerData};
-use crate::camera::{CamXform, Camera};
+use crate::graph_render::camera::{CamXform, Camera};
 use crate::graph_render::{GlForwarder, RenderedGraph};
 use crate::threading::{Cancelable, MyRwLock, StatusWriter};
 use crate::ui::modal::ModalInfo;

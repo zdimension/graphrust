@@ -1,6 +1,6 @@
 use crate::app::{GraphTabState, Person, ViewerData};
-use crate::camera::Camera;
-use crate::combo_filter::{combo_with_filter, COMBO_WIDTH};
+use crate::graph_render::camera::Camera;
+use crate::ui::widgets::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::graph_render::GlForwarder;
 use crate::threading::{spawn_cancelable, status_pipe, Cancelable, MyRwLock, StatusWriter};
 use crate::ui::class::ClassSection;

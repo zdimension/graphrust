@@ -1,5 +1,5 @@
 use crate::app::{ModularityClass, ViewerData};
-use crate::camera::Camera;
+use crate::graph_render::camera::Camera;
 use crate::threading::MyRwLock;
 use crate::ui::infos::InfosSection;
 use crate::ui::modal::ModalWriter;
