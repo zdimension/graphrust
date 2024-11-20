@@ -216,17 +216,15 @@ impl PathSection {
                         (Some(x), Some(y)) if x == y => Some(PathStatus::SameSrcDest),
                         (None, _) | (_, None) => None,
                         _ => {
+                            log::info!("Starting pathfinding");
                             let settings = self.path_settings.clone();
                             let data = data.clone();
                             self.path_thread = Some(thread::spawn(move || {
-                                struct SmallNode(Vec<usize>);
-                                impl AbstractNode for SmallNode {
-                                    fn neighbors(&self) -> &Vec<usize> {
-                                        &self.0
-                                    }
-                                }
-                                let data = data.read().persons.iter().map(|p| SmallNode(p.neighbors.clone())).collect_vec();
-                                Self::do_pathfinding(settings, &data)
+                                let start = std::time::Instant::now();
+                                let data = data.read().persons.clone();
+                                let res = Self::do_pathfinding(settings, &data);
+                                log::info!("Pathfinding took {:?}", start.elapsed());
+                                res
                             }));
                             Some(PathStatus::Loading)
                         }
