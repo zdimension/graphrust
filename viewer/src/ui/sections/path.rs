@@ -53,7 +53,7 @@ impl PathSection {
         let src = &data[src_id];
         let dest = &data[dest_id];
 
-        let intersect: AHashSet<usize> = if settings.path_no_mutual {
+        let mutual: AHashSet<usize> = if settings.path_no_mutual {
             AHashSet::<_>::from_iter(src.neighbors().iter().copied())
                 .intersection(&AHashSet::<_>::from_iter(dest.neighbors().iter().copied()))
                 .copied()
@@ -64,50 +64,67 @@ impl PathSection {
 
         let exclude_set: AHashSet<usize> = AHashSet::from_iter(settings.exclude_ids.iter().cloned());
 
-        let mut queue = VecDeque::new();
-        let mut visited = vec![false; data.len()];
-        let mut pred = vec![None; data.len()];
-        let mut dist = vec![i32::MAX; data.len()];
+        let mut queue_f = VecDeque::new();
+        let mut queue_b = VecDeque::new();
+        let mut visited_f = vec![false; data.len()];
+        let mut visited_b = vec![false; data.len()];
+        let mut pred_f = vec![None; data.len()];
+        let mut pred_b = vec![None; data.len()];
 
-        visited[src_id] = true;
-        dist[src_id] = 0;
-        queue.push_back(src_id);
+        visited_f[src_id] = true;
+        visited_b[dest_id] = true;
+        queue_f.push_back(src_id);
+        queue_b.push_back(dest_id);
 
-        while let Some(id) = queue.pop_front() {
-            let person = &data[id];
-            for &i in person.neighbors().iter() {
-                if settings.path_no_direct && id == src_id && i == dest_id {
-                    continue;
-                }
+        while let Some(id_f) = queue_f.pop_front() && let Some(id_b) = queue_b.pop_front() {
+            let bfs = |current: usize,
+                       queue: &mut VecDeque<usize>,
+                       visited: &mut Vec<bool>,
+                       pred: &mut Vec<Option<usize>>,
+                       visited_other: &Vec<bool>| {
+                let person = &data[current];
+                for &i in person.neighbors().iter() {
+                    if settings.path_no_direct && current == src_id && i == dest_id {
+                        continue;
+                    }
 
-                if settings.path_no_mutual && intersect.contains(&i) {
-                    continue;
-                }
+                    if settings.path_no_mutual && mutual.contains(&i) {
+                        continue;
+                    }
 
-                if exclude_set.contains(&i) {
-                    continue;
-                }
+                    if exclude_set.contains(&i) {
+                        continue;
+                    }
 
-                if !visited[i] {
-                    visited[i] = true;
-                    dist[i] = dist[id] + 1;
-                    pred[i] = Some(id);
-                    queue.push_back(i);
-
-                    if i == dest_id {
-                        let mut path = Vec::new();
-
-                        path.push(dest_id);
-
-                        let mut cur = dest_id;
-                        while let Some(p) = pred[cur] {
-                            path.push(p);
-                            cur = p;
+                    if !visited[i] {
+                        visited[i] = true;
+                        pred[i] = Some(current);
+                        if visited_other[i] {
+                            return Some(i);
                         }
-
-                        return Some(PathSectionResults { path });
+                        queue.push_back(i);
                     }
                 }
+                None
+            };
+
+            let intersect = bfs(id_f, &mut queue_f, &mut visited_f, &mut pred_f, &visited_b)
+                .or_else(|| bfs(id_b, &mut queue_b, &mut visited_b, &mut pred_b, &visited_f));
+
+            if let Some(intersect) = intersect {
+                let mut path = vec![intersect];
+                let mut cur = intersect;
+                while let Some(pred) = pred_f[cur] {
+                    path.push(pred);
+                    cur = pred;
+                }
+                path.reverse();
+                cur = intersect;
+                while let Some(pred) = pred_b[cur] {
+                    path.push(pred);
+                    cur = pred;
+                }
+                return Some(PathSectionResults { path });
             }
         }
         None

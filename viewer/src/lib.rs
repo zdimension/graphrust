@@ -6,6 +6,7 @@
 #![feature(negative_impls)]
 #![feature(auto_traits)]
 #![feature(box_patterns)]
+#![feature(let_chains)]
 #![allow(incomplete_features)]
 #[macro_use]
 extern crate rust_i18n;
