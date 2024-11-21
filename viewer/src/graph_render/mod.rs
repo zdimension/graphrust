@@ -1,6 +1,7 @@
 use crate::app::ViewerData;
 use crate::threading::{Cancelable, StatusWriter};
 use crate::{for_progress, log};
+use anyhow::anyhow;
 use derivative::Derivative;
 use eframe::glow;
 use graph_format::nalgebra::Matrix4;
@@ -12,42 +13,17 @@ use std::sync::mpsc::{Receiver, Sender};
 pub mod camera;
 pub mod geom_draw;
 
-pub enum GlWorkResult {
-    Shaders([glow::Program; 3]),
-    PathArray(glow::VertexArray, glow::Buffer),
-    VertArray(glow::VertexArray, glow::Buffer),
-}
-
-pub trait GlWorkGetter<R>: FnOnce(&glow::Context) -> R {
-    fn get(rx: &Receiver<GlWorkResult>) -> Cancelable<R>;
-    fn to_boxed(self) -> GlWork;
-}
-
-impl<T: Send + FnOnce(&glow::Context) -> GlWorkResult + 'static> GlWorkGetter<GlWorkResult> for T {
-    fn get(rx: &Receiver<GlWorkResult>) -> Cancelable<GlWorkResult> {
-        Ok(rx.recv()?)
-    }
-
-    fn to_boxed(self) -> GlWork {
-        GlWork(Box::new(move |gl, tx| {
-            tx.send(self(gl)).unwrap();
-        }))
-    }
-}
-
-impl<T: Send + FnOnce(&glow::Context) + 'static> GlWorkGetter<()> for T {
-    fn get(_: &Receiver<GlWorkResult>) -> Cancelable<()> { Ok(()) }
-    fn to_boxed(self) -> GlWork {
-        GlWork(Box::new(move |gl, _| {
-            self(gl);
-        }))
-    }
-}
+pub type GlWorkResult = Box<dyn std::any::Any + Send>;
 
 pub struct GlWork(pub(crate) Box<dyn Send + FnOnce(&glow::Context, &Sender<GlWorkResult>)>);
 
 pub type GlMpsc = (Receiver<GlWork>, Sender<GlWorkResult>);
 
+/// A forwarder for sending work to the GL thread
+///
+/// This is a simple wrapper around an MPSC channel that allows sending work to the GL thread.
+/// Internally, it sends a boxed closure that is run on the next frame, and returns the result 
+/// inside a Box<dyn Any>.
 pub struct GlForwarder {
     tx: Sender<GlWork>,
     rx: Receiver<GlWorkResult>,
@@ -66,9 +42,11 @@ impl GlForwarder {
         )
     }
 
-    pub fn run<R, T: GlWorkGetter<R>>(&self, work: T) -> Cancelable<R> {
-        self.tx.send(work.to_boxed())?;
-        T::get(&self.rx)
+    pub fn run<R: Send + 'static, T: FnOnce(&glow::Context) -> R + Send + 'static>(&self, work: T) -> Cancelable<R> {
+        self.tx.send(GlWork(Box::new(move |gl, tx| {
+            tx.send(Box::new(work(gl))).unwrap();
+        })))?;
+        Ok(*self.rx.recv()?.downcast().map_err(|_| anyhow!("Failed to downcast"))?)
     }
 }
 
@@ -103,7 +81,6 @@ impl RenderedGraph {
         status_tx: StatusWriter,
     ) -> Cancelable<Self> {
         use glow::HasContext as _;
-        use GlWorkResult::*;
         use graph_format::Point;
         use std::collections::VecDeque;
         use itertools::Itertools;
@@ -137,8 +114,8 @@ impl RenderedGraph {
             ];
 
             log!(status_tx, t!("Compiling shaders"));
-            let Shaders([program_basic, program_edge, program_node]) = gl.run(move |gl| {
-                Shaders(programs.map(|shader_sources| {
+            let [program_basic, program_edge, program_node] = gl.run(move |gl| {
+                programs.map(|shader_sources| {
                     let program = gl.create_program().expect("Cannot create program");
 
                     let shaders: Vec<_> = shader_sources
@@ -172,10 +149,8 @@ impl RenderedGraph {
                     }
 
                     program
-                }))
-            })? else {
-                panic!("Failed to compile shaders");
-            };
+                })
+            })?;
 
             #[cfg(target_arch = "wasm32")]
             let edges = edges.take(10_000_000);
@@ -219,7 +194,7 @@ impl RenderedGraph {
             let vertices_count = vertices.len();
 
             log!(status_tx, t!("Allocating vertex buffer"));
-            let VertArray(vertices_array, vertices_buffer) = gl.run(move |gl: &glow::Context| {
+            let (vertices_array, vertices_buffer) = gl.run(move |gl: &glow::Context| {
                 let vertices_array = gl
                     .create_vertex_array()
                     .expect("Cannot create vertex array");
@@ -253,10 +228,8 @@ impl RenderedGraph {
                 );
                 gl.enable_vertex_attrib_array(1);
 
-                VertArray(vertices_array, vertices_buffer)
-            })? else {
-                panic!("Failed to create vertices array");
-            };
+                (vertices_array, vertices_buffer)
+            })?;
 
             log!(status_tx, t!("Buffering %{num} vertices", num = vertices.len()));
 
