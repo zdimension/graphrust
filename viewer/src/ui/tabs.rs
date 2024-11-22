@@ -312,7 +312,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                         let opac_nodes = tab.ui_state.display.g_opac_nodes;
 
                         let cam = tab.tab_camera.camera.get_matrix();
-                        let class_colors = tab.viewer_data.read().modularity_classes.iter().map(|c| c.color.to_f32()).collect_vec();
+                        let class_colors = tab.viewer_data.read().modularity_classes.iter().map(|c| c.color.to_u32()).collect_vec();
                         let callback = egui::PaintCallback {
                             rect,
                             callback: Arc::new(egui_glow::CallbackFn::new(

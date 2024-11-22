@@ -22,7 +22,7 @@ pub type GlMpsc = (Receiver<GlWork>, Sender<GlWorkResult>);
 /// A forwarder for sending work to the GL thread
 ///
 /// This is a simple wrapper around an MPSC channel that allows sending work to the GL thread.
-/// Internally, it sends a boxed closure that is run on the next frame, and returns the result 
+/// Internally, it sends a boxed closure that is run on the next frame, and returns the result
 /// inside a Box<dyn Any>.
 pub struct GlForwarder {
     tx: Sender<GlWork>,
@@ -293,7 +293,7 @@ impl RenderedGraph {
         }
     }
 
-    pub const MAX_RENDER_CLASSES: usize = 512;
+    pub const MAX_RENDER_CLASSES: usize = 900;
 
     pub(crate) fn paint(
         &mut self,
@@ -301,7 +301,7 @@ impl RenderedGraph {
         cam: Matrix4<f32>,
         edges: (bool, f32),
         nodes: (bool, f32),
-        class_colors: &[Color3f],
+        class_colors: &[u32],
     ) {
         if self.destroyed {
             return;
@@ -319,7 +319,7 @@ impl RenderedGraph {
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
 
-            let mut all_colors = [Color3f::new(0.0, 0.0, 0.0); Self::MAX_RENDER_CLASSES];
+            let mut all_colors = [0; Self::MAX_RENDER_CLASSES];
             all_colors[..class_colors.len()].copy_from_slice(class_colors);
 
             if edges.0 {
@@ -347,13 +347,12 @@ impl RenderedGraph {
                     edges.1,
                 );
 
-                gl.uniform_3_f32_slice(
+                gl.uniform_1_u32_slice(
                     Some(
                         &gl.get_uniform_location(self.program_edge, "u_class_colors")
                             .unwrap(),
                     ),
-                    // SAFETY: Color3f is repr(C) and is equivalent to [f32; 3]
-                    unsafe { std::slice::from_raw_parts(all_colors.as_ptr() as *const f32, 512 * 3) },
+                    &all_colors,
                 );
                 let verts = 2 * 3 * self.edges_count as i32;
                 // if wasm, clamp verts at 30M, because Firefox refuses to draw anything above that
@@ -390,12 +389,12 @@ impl RenderedGraph {
                     nodes.1,
                 );
 
-                gl.uniform_3_f32_slice(
+                gl.uniform_1_u32_slice(
                     Some(
                         &gl.get_uniform_location(self.program_node, "u_class_colors")
                             .unwrap(),
                     ),
-                    unsafe { std::slice::from_raw_parts(all_colors.as_ptr() as *const f32, 512 * 3) },
+                    &all_colors,
                 );
                 gl.draw_arrays(glow::POINTS, 0, self.nodes_count as i32);
             }
