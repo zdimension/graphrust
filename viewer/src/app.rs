@@ -258,6 +258,8 @@ pub type EguiTask = Box<dyn FnOnce(&Context) + Send>;
 impl GraphViewApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        cc.egui_ctx.style_mut(|s| s.animation_time = 1.0 / 6.0);
+
         let gl = cc
             .gl
             .as_ref()
@@ -352,9 +354,7 @@ impl eframe::App for GraphViewApp {
             task(ctx);
         }
 
-        if self.top_bar {
-            self.show_top_bar(ctx);
-        }
+        self.show_top_bar(ctx, self.top_bar);
 
         show_modal(ctx, &self.modal.0, "modal");
 
@@ -439,8 +439,8 @@ impl eframe::App for GraphViewApp {
 }
 
 impl GraphViewApp {
-    fn show_top_bar(&mut self, ctx: &Context) {
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+    fn show_top_bar(&mut self, ctx: &Context, shown: bool) {
+        egui::TopBottomPanel::top("top_panel").show_animated(ctx, shown, |ui| {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 50.0;
