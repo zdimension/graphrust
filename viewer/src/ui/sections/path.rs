@@ -1,10 +1,11 @@
+use crate::algorithms::pathfinding::{do_pathfinding, PathSectionResults, PathSectionSettings};
 use crate::algorithms::AbstractNode;
 use crate::app::ViewerData;
-use crate::ui::widgets::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::thread;
 use crate::thread::JoinHandle;
 use crate::threading::MyRwLock;
 use crate::ui::infos::InfosSection;
+use crate::ui::widgets::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::ui::SelectedUserField;
 use ahash::AHashSet;
 use derivative::Derivative;
@@ -32,104 +33,7 @@ pub enum PathStatus {
     PathFound(Vec<usize>),
 }
 
-#[derive(Derivative)]
-#[derivative(Default, Clone)]
-pub struct PathSectionSettings {
-    pub path_src: Option<usize>,
-    pub path_dest: Option<usize>,
-    pub exclude_ids: Vec<usize>,
-    pub path_no_direct: bool,
-    pub path_no_mutual: bool,
-}
-
-pub struct PathSectionResults {
-    pub path: Vec<usize>,
-}
-
 impl PathSection {
-    fn do_pathfinding(settings: PathSectionSettings, data: &[impl AbstractNode]) -> Option<PathSectionResults> {
-        let src_id = settings.path_src.unwrap();
-        let dest_id = settings.path_dest.unwrap();
-        let src = &data[src_id];
-        let dest = &data[dest_id];
-
-        let mutual: AHashSet<usize> = if settings.path_no_mutual {
-            AHashSet::<_>::from_iter(src.neighbors().iter().copied())
-                .intersection(&AHashSet::<_>::from_iter(dest.neighbors().iter().copied()))
-                .copied()
-                .collect()
-        } else {
-            AHashSet::new()
-        };
-
-        let exclude_set: AHashSet<usize> = AHashSet::from_iter(settings.exclude_ids.iter().cloned());
-
-        let mut queue_f = VecDeque::new();
-        let mut queue_b = VecDeque::new();
-        let mut visited_f = vec![false; data.len()];
-        let mut visited_b = vec![false; data.len()];
-        let mut pred_f = vec![None; data.len()];
-        let mut pred_b = vec![None; data.len()];
-
-        visited_f[src_id] = true;
-        visited_b[dest_id] = true;
-        queue_f.push_back(src_id);
-        queue_b.push_back(dest_id);
-
-        while let Some(id_f) = queue_f.pop_front() && let Some(id_b) = queue_b.pop_front() {
-            let bfs = |current: usize,
-                       queue: &mut VecDeque<usize>,
-                       visited: &mut Vec<bool>,
-                       pred: &mut Vec<Option<usize>>,
-                       visited_other: &Vec<bool>| {
-                let person = &data[current];
-                for &i in person.neighbors().iter() {
-                    if settings.path_no_direct && current == src_id && i == dest_id {
-                        continue;
-                    }
-
-                    if settings.path_no_mutual && mutual.contains(&i) {
-                        continue;
-                    }
-
-                    if exclude_set.contains(&i) {
-                        continue;
-                    }
-
-                    if !visited[i] {
-                        visited[i] = true;
-                        pred[i] = Some(current);
-                        if visited_other[i] {
-                            return Some(i);
-                        }
-                        queue.push_back(i);
-                    }
-                }
-                None
-            };
-
-            let intersect = bfs(id_f, &mut queue_f, &mut visited_f, &mut pred_f, &visited_b)
-                .or_else(|| bfs(id_b, &mut queue_b, &mut visited_b, &mut pred_b, &visited_f));
-
-            if let Some(intersect) = intersect {
-                let mut path = vec![intersect];
-                let mut cur = intersect;
-                while let Some(pred) = pred_f[cur] {
-                    path.push(pred);
-                    cur = pred;
-                }
-                path.reverse();
-                cur = intersect;
-                while let Some(pred) = pred_b[cur] {
-                    path.push(pred);
-                    cur = pred;
-                }
-                return Some(PathSectionResults { path });
-            }
-        }
-        None
-    }
-
     fn person_button(
         &self,
         data: &ViewerData,
@@ -239,7 +143,7 @@ impl PathSection {
                             self.path_thread = Some(thread::spawn(move || {
                                 let start = std::time::Instant::now();
                                 let data = data.read().persons.clone();
-                                let res = Self::do_pathfinding(settings, &data);
+                                let res = do_pathfinding(settings, &data);
                                 log::info!("Pathfinding took {:?}", start.elapsed());
                                 res
                             }));

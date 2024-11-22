@@ -75,7 +75,7 @@ macro_rules! for_progress {
     }
 }
 
-pub fn iter_progress<'a, T>(iter: T, ch: &'a StatusWriter) -> impl Iterator<Item=T::Item> + 'a
+pub fn iter_progress<'a, T>(iter: T, ch: &'a impl StatusWriterInterface) -> impl Iterator<Item=T::Item> + 'a
 where
     T: ExactSizeIterator + 'a,
 {

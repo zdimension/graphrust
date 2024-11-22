@@ -8,7 +8,7 @@ use speedy::Readable;
 
 use crate::utils::{str_from_null_terminated_utf8, SliceExt};
 
-use crate::threading::{Cancelable, StatusWriter};
+use crate::threading::{Cancelable, StatusWriter, StatusWriterInterface};
 use crate::{for_progress, log};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -18,7 +18,7 @@ const GRAPH_NAME: &str = "graph_n4j.bin";
 //const GRAPH_NAME: &str = "graph_n4j_5.57M_400k.bin";
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn load_file(_status_tx: &StatusWriter) -> Cancelable<GraphFile> {
+pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFile> {
     GraphFile::read_from_file(format!("{}/../{}", env!("CARGO_MANIFEST_DIR"), GRAPH_NAME))
         .map_err(Into::into)
 }
@@ -267,7 +267,7 @@ pub struct ProcessedData {
     pub edges: Vec<EdgeStore>,
 }
 
-pub fn load_binary(status_tx: &StatusWriter, content: GraphFile) -> Cancelable<ProcessedData> {
+pub fn load_binary(status_tx: &impl StatusWriterInterface, content: GraphFile) -> Cancelable<ProcessedData> {
     log!(status_tx, t!("Binary content loaded"));
     log!(status_tx, t!("Class count: %{count}", count = content.classes.len()));
     log!(status_tx, t!("Node count: %{count}", count = content.nodes.len()));
