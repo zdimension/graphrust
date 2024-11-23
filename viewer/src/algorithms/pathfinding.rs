@@ -59,11 +59,11 @@ pub fn do_pathfinding(
             }
 
             if !visited[nb_id] {
-                visited[nb_id] = true;
                 pred[nb_id] = Some(current);
                 if visited_other[nb_id] {
                     return Some(nb_id);
                 }
+                visited[nb_id] = true;
                 queue.push_back(nb_id);
             }
         }
