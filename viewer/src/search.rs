@@ -1,7 +1,6 @@
+use crate::app::{thread, Person};
 use std::sync::{Arc, Condvar, Mutex};
-use std::thread;
 use zearch::{Document, Index, Search};
-use crate::app::Person;
 
 pub struct SearchIndex {
     fuzzy: Index<'static>,
@@ -35,8 +34,13 @@ impl SearchIndex {
     }
 
     pub fn search(&self, query: &str, max_results: usize) -> Vec<u32> {
-        let exact = self.exact.binary_search_by_key(&query, |(name, _)| *name).ok();
-        let mut fuzzy = self.fuzzy.search(Search::new(query).with_limit(max_results));
+        let exact = self
+            .exact
+            .binary_search_by_key(&query, |(name, _)| *name)
+            .ok();
+        let mut fuzzy = self
+            .fuzzy
+            .search(Search::new(query).with_limit(max_results));
         if let Some(e) = exact {
             let exact_match = self.exact[e].1;
             if let Some(i) = fuzzy.iter().position(|&i| i == exact_match) {
@@ -65,9 +69,7 @@ impl SearchEngine {
             cvar.notify_all();
         });
 
-        SearchEngine {
-            inner
-        }
+        SearchEngine { inner }
     }
 
     pub fn get_blocking<T>(&self, op: impl FnOnce(&SearchIndex) -> T) -> T {
