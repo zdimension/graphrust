@@ -72,7 +72,12 @@ impl PathSection {
                 let c1 = ui
                     .horizontal(|ui| {
                         ui.radio_value(sel_field, SelectedUserField::PathSource, "");
-                        let c = combo_with_filter(ui, "#path_src", &mut self.path_settings.path_src, data);
+                        let c = combo_with_filter(
+                            ui,
+                            "#path_src",
+                            &mut self.path_settings.path_src,
+                            data,
+                        );
                         if c.changed() {
                             infos.set_infos_current(self.path_settings.path_src);
                         }
@@ -86,7 +91,12 @@ impl PathSection {
                 let c2 = ui
                     .horizontal(|ui| {
                         ui.radio_value(sel_field, SelectedUserField::PathDest, "");
-                        let c = combo_with_filter(ui, "#path_dest", &mut self.path_settings.path_dest, data);
+                        let c = combo_with_filter(
+                            ui,
+                            "#path_dest",
+                            &mut self.path_settings.path_dest,
+                            data,
+                        );
                         if c.changed() {
                             infos.set_infos_current(self.path_settings.path_dest);
                         }
@@ -99,7 +109,11 @@ impl PathSection {
 
                 ui.horizontal(|ui| {
                     ui.label(t!("Excluded:"));
-                    if ui.button("✖").on_hover_text(t!("Clear the exclusion list")).clicked() {
+                    if ui
+                        .button("✖")
+                        .on_hover_text(t!("Clear the exclusion list"))
+                        .clicked()
+                    {
                         self.path_settings.exclude_ids.clear();
                         self.path_dirty = true;
                     }
@@ -112,7 +126,11 @@ impl PathSection {
                     for (i, id) in self.path_settings.exclude_ids.iter().enumerate() {
                         ui.horizontal(|ui| {
                             self.person_button(&data, ui, id, &mut cur_excl);
-                            if ui.button("✖").on_hover_text(t!("Remove from the exclusion list")).clicked() {
+                            if ui
+                                .button("✖")
+                                .on_hover_text(t!("Remove from the exclusion list"))
+                                .clicked()
+                            {
                                 del_excl = Some(i);
                             }
                         });
@@ -127,44 +145,55 @@ impl PathSection {
                 }
 
                 if (self.path_dirty || c1.changed() || c2.changed())
-                    | ui.checkbox(&mut self.path_settings.path_no_direct, t!("Avoid direct link"))
+                    | ui.checkbox(
+                        &mut self.path_settings.path_no_direct,
+                        t!("Avoid direct link"),
+                    )
                     .changed()
-                    | ui.checkbox(&mut self.path_settings.path_no_mutual, t!("Avoid mutual friends"))
+                    | ui.checkbox(
+                        &mut self.path_settings.path_no_mutual,
+                        t!("Avoid mutual friends"),
+                    )
                     .changed()
                 {
                     self.path_dirty = false;
-                    self.path_status = match (self.path_settings.path_src, self.path_settings.path_dest) {
-                        (Some(x), Some(y)) if x == y => Some(PathStatus::SameSrcDest),
-                        (None, _) | (_, None) => None,
-                        _ => {
-                            log::info!("Starting pathfinding");
-                            let settings = self.path_settings.clone();
-                            let data = data.clone();
-                            self.path_thread = Some(thread::spawn(move || {
-                                let start = std::time::Instant::now();
-                                let data = data.read().persons.clone();
-                                let res = do_pathfinding(settings, &data);
-                                log::info!("Pathfinding took {:?}", start.elapsed());
-                                res
-                            }));
-                            Some(PathStatus::Loading)
+                    self.path_status =
+                        match (self.path_settings.path_src, self.path_settings.path_dest) {
+                            (Some(x), Some(y)) if x == y => Some(PathStatus::SameSrcDest),
+                            (None, _) | (_, None) => None,
+                            _ => {
+                                log::info!("Starting pathfinding");
+                                let settings = self.path_settings.clone();
+                                let data = data.clone();
+                                self.path_thread = Some(thread::spawn(move || {
+                                    let start = chrono::Utc::now();
+                                    let data = data.read().persons.clone();
+                                    let res = do_pathfinding(settings, &data);
+                                    log::info!("Pathfinding took {:?}", chrono::Utc::now() - start);
+                                    res
+                                }));
+                                Some(PathStatus::Loading)
+                            }
                         }
-                    }
                 }
 
                 if let Some(st) = &self.path_status {
+                    use crate::ui;
                     use eframe::epaint::Color32;
                     use PathStatus::*;
-                    use crate::ui;
                     match st {
-                        SameSrcDest => { ui.label(t!("🚫 Source and destination are the same")); }
+                        SameSrcDest => {
+                            ui.label(t!("🚫 Source and destination are the same"));
+                        }
                         Loading => {
                             ui.horizontal(|ui| {
                                 ui.spinner();
                                 ui.label(t!("Loading..."));
                             });
                         }
-                        NoPath => { ui.label(t!("🗙 No path found between the two nodes")); }
+                        NoPath => {
+                            ui.label(t!("🗙 No path found between the two nodes"));
+                        }
                         PathFound(path) => {
                             ui.label(t!("✔ Path found, distance %{dist}", dist = path.len() - 1));
 
@@ -175,8 +204,13 @@ impl PathSection {
                                 ui.horizontal(|ui| {
                                     ui::set_bg_color_tinted(Color32::RED, ui);
                                     self.person_button(&data, ui, id, &mut cur_path);
-                                    if i != 0 && i != path.len() - 1 &&
-                                        ui.button("✖").on_hover_text(t!("Exclude this person from the path")).clicked() {
+                                    if i != 0
+                                        && i != path.len() - 1
+                                        && ui
+                                            .button("✖")
+                                            .on_hover_text(t!("Exclude this person from the path"))
+                                            .clicked()
+                                    {
                                         del_path = Some(*id);
                                     }
                                 });
