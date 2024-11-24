@@ -1,5 +1,6 @@
 use crate::algorithms::AbstractNode;
 use ahash::AHashSet;
+use bit_set::BitSet;
 use derivative::*;
 use std::collections::VecDeque;
 
@@ -25,15 +26,15 @@ pub fn do_pathfinding(
 
     let mut queue_f = VecDeque::new();
     let mut queue_b = VecDeque::new();
-    let mut visited_f = vec![false; data.len()];
-    let mut visited_b = vec![false; data.len()];
+    let mut visited_f = BitSet::with_capacity(data.len());
+    let mut visited_b = BitSet::with_capacity(data.len());
     let mut pred_f = vec![None; data.len()];
     let mut pred_b = vec![None; data.len()];
     let mut dist_f = vec![i32::MAX; data.len()];
     let mut dist_b = vec![i32::MAX; data.len()];
 
-    visited_f[src_id] = true;
-    visited_b[dest_id] = true;
+    visited_f.insert(src_id);
+    visited_b.insert(dest_id);
     queue_f.push_back(src_id);
     queue_b.push_back(dest_id);
     dist_f[src_id] = 0;
@@ -41,9 +42,9 @@ pub fn do_pathfinding(
 
     let bfs = |current: usize,
                queue: &mut VecDeque<usize>,
-               visited: &mut Vec<bool>,
+               visited: &mut BitSet,
                pred: &mut Vec<Option<usize>>,
-               visited_other: &Vec<bool>| {
+               visited_other: &BitSet| {
         let person = &data[current];
         for &nb_id in person.neighbors().iter() {
             if settings.path_no_direct && current == src_id && nb_id == dest_id {
@@ -58,12 +59,12 @@ pub fn do_pathfinding(
                 continue;
             }
 
-            if !visited[nb_id] {
+            if !visited.contains(nb_id) {
                 pred[nb_id] = Some(current);
-                if visited_other[nb_id] {
+                if visited_other.contains(nb_id) {
                     return Some(nb_id);
                 }
-                visited[nb_id] = true;
+                visited.insert(nb_id);
                 queue.push_back(nb_id);
             }
         }

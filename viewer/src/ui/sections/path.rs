@@ -169,7 +169,10 @@ impl PathSection {
                                     let start = chrono::Utc::now();
                                     let data = data.read().persons.clone();
                                     let res = do_pathfinding(settings, &data);
-                                    log::info!("Pathfinding took {:?}", chrono::Utc::now() - start);
+                                    log::info!(
+                                        "Pathfinding took {}ms",
+                                        (chrono::Utc::now() - start).num_milliseconds()
+                                    );
                                     res
                                 }));
                                 Some(PathStatus::Loading)
