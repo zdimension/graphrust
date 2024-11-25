@@ -43,7 +43,9 @@ pub fn do_pathfinding(
                visited_other: &BitSet| {
         let person = &data[current];
         for &nb_id in person.neighbors().iter() {
-            if settings.path_no_direct && current == src_id && nb_id == dest_id {
+            if settings.path_no_direct
+                && ((current, nb_id) == (src_id, dest_id) || (current, nb_id) == (dest_id, src_id))
+            {
                 continue;
             }
 
@@ -71,7 +73,10 @@ pub fn do_pathfinding(
         // Balancing the bidirectional BFS (instead of visiting each k-neighborhood alternatively)
         // shortens the usual runtime on my machine for long paths (>11) from 500ms to 10ms.
         // Thanks to https://arxiv.org/pdf/2410.22186
-        if visited_b.len() < visited_f.len() && !queue_b.is_empty() {
+        if queue_b.is_empty() || queue_f.is_empty() {
+            return None;
+        }
+        if visited_b.len() < visited_f.len() {
             let mut queue_new_b = VecDeque::new();
             while let Some(id_b) = queue_b.pop_front() {
                 if let Some(inter) = bfs(
@@ -85,7 +90,7 @@ pub fn do_pathfinding(
                 }
             }
             queue_b = queue_new_b;
-        } else if !queue_f.is_empty() {
+        } else {
             let mut queue_new_f = VecDeque::new();
             while let Some(id_f) = queue_f.pop_front() {
                 if let Some(inter) = bfs(
@@ -99,8 +104,6 @@ pub fn do_pathfinding(
                 }
             }
             queue_f = queue_new_f;
-        } else {
-            return None;
         }
     };
 
