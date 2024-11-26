@@ -35,12 +35,14 @@ pub struct ForceAtlasThread {
 }
 
 impl AlgosSection {
-    pub(crate) fn show(&mut self,
-                       data: &Arc<MyRwLock<ViewerData>>,
-                       ui: &mut Ui,
-                       graph: &Arc<MyRwLock<RenderedGraph>>,
-                       stats: &Arc<MyRwLock<NodeStats>>,
-                       modal: &impl ModalWriter) {
+    pub(crate) fn show(
+        &mut self,
+        data: &Arc<MyRwLock<ViewerData>>,
+        ui: &mut Ui,
+        graph: &Arc<MyRwLock<RenderedGraph>>,
+        stats: &Arc<MyRwLock<NodeStats>>,
+        modal: &impl ModalWriter,
+    ) {
         CollapsingHeader::new(t!("Algorithms"))
             .default_open(false)
             .show(ui, |ui| {
@@ -256,6 +258,9 @@ impl AlgosSection {
 
                                 {
                                     let mut data_w = thr_data.write();
+                                    for (old, new) in data_w.persons.iter().zip(persons.iter_mut()) {
+                                        new.modularity_class = old.modularity_class;
+                                    }
                                     data_w.persons = Arc::new(persons);
 
                                     let mut graph = graph.write();
