@@ -27,7 +27,7 @@ fn init_logs() {
 fn it_works() {
     // print the current directory
     //println!("Current directory: {:?}", env::current_dir().unwrap());
-    println!("Loadiong");
+    println!("Loading");
     let res = load_file(&NullStatusWriter).unwrap();
     println!("Loaded; processing");
     let bin = load_binary(&NullStatusWriter, res).unwrap();
@@ -43,16 +43,6 @@ fn it_works() {
         println!("{}: {:?}", name, r);
         r
     };
-
-    let swann = get("Benziane Swann");
-
-    let craby = get("Craby Craby");
-
-    let blaibiron = get("Charli BlaBiron");
-
-    let etienne = get("Etienne Marais");
-
-    let tom = get("Tom Niget");
 
     let path = do_pathfinding(
         PathSectionSettings {

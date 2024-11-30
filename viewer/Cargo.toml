@@ -39,6 +39,11 @@ deadlock_detection = ["parking_lot/deadlock_detection"]
 
 [dev-dependencies]
 log = "*"
+criterion = "0.5"
+
+[[bench]]
+name = "pathfinding"
+harness = false
 
 [build-dependencies]
 anyhow = "1"
