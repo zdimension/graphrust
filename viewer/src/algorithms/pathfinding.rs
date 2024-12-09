@@ -78,33 +78,31 @@ pub fn do_pathfinding(
             return None;
         }
         if visited_b.len() < visited_f.len() {
-            let mut queue_new_b = VecDeque::new();
+            let mut level_count = queue_b.len();
             while let Some(id_b) = queue_b.pop_front() {
-                if let Some(inter) = bfs(
-                    id_b,
-                    &mut queue_new_b,
-                    &mut visited_b,
-                    &mut pred_b,
-                    &visited_f,
-                ) {
+                if let Some(inter) =
+                    bfs(id_b, &mut queue_b, &mut visited_b, &mut pred_b, &visited_f)
+                {
                     break 'main inter;
                 }
+                if level_count == 1 {
+                    continue 'main;
+                }
+                level_count -= 1;
             }
-            queue_b = queue_new_b;
         } else {
-            let mut queue_new_f = VecDeque::new();
+            let mut level_count = queue_f.len();
             while let Some(id_f) = queue_f.pop_front() {
-                if let Some(inter) = bfs(
-                    id_f,
-                    &mut queue_new_f,
-                    &mut visited_f,
-                    &mut pred_f,
-                    &visited_b,
-                ) {
+                if let Some(inter) =
+                    bfs(id_f, &mut queue_f, &mut visited_f, &mut pred_f, &visited_b)
+                {
                     break 'main inter;
                 }
+                if level_count == 1 {
+                    continue 'main;
+                }
+                level_count -= 1;
             }
-            queue_f = queue_new_f;
         }
     };
 

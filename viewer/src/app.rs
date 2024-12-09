@@ -3,7 +3,10 @@ use crate::graph_storage::{load_binary, load_file, ProcessedData};
 use crate::ui::{tabs, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
-use egui::{vec2, Color32, Context, FontFamily, FontId, Hyperlink, Id, Layout, RichText, TextFormat, TextStyle, Ui, Vec2, WidgetText};
+use egui::{
+    vec2, Color32, Context, FontFamily, FontId, Hyperlink, Id, Layout, RichText, TextFormat,
+    TextStyle, Ui, Vec2, WidgetText,
+};
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3b, Point};
 
@@ -12,6 +15,7 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use zearch::{Document, Index, Search};
 
 use crate::graph_render::{GlForwarder, GlMpsc};
+use crate::search::SearchEngine;
 use crate::threading;
 use crate::threading::{Cancelable, StatusReader, StatusWriter, StatusWriterInterface};
 use crate::ui::modal::{show_modal, ModalInfo};
@@ -19,10 +23,9 @@ use crate::ui::tabs::{GraphTab, GraphTabLoaded, TabViewer};
 use eframe::emath::Align;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 #[cfg(not(target_arch = "wasm32"))]
-pub use std::thread as thread;
+pub use std::thread;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_thread as thread;
-use crate::search::SearchEngine;
 
 #[macro_export]
 macro_rules! log {
@@ -41,15 +44,13 @@ macro_rules! log {
 
 #[macro_export]
 macro_rules! try_log_progress {
-    ($ch: expr, $val:expr, $max:expr) => {
-        {
-            use $crate::threading::StatusWriterInterface;
-            $ch.send($crate::threading::Progress {
-                max: $max,
-                val: $val,
-            })
-        }
-    }
+    ($ch: expr, $val:expr, $max:expr) => {{
+        use $crate::threading::StatusWriterInterface;
+        $ch.send($crate::threading::Progress {
+            max: $max,
+            val: $val,
+        })
+    }};
 }
 
 #[macro_export]
@@ -61,21 +62,22 @@ macro_rules! log_progress {
 
 #[macro_export]
 macro_rules! for_progress {
-    ($ch:expr, $var:pat in $iter:expr, $block:block) => {
-        {
-            let max = ExactSizeIterator::len(&$iter);
-            let how_often = (max / 100).max(1);
-            for (i_, $var) in $iter.enumerate() {
-                $block;
-                if i_ % how_often == 0 {
-                    $crate::log_progress!($ch, i_, max);
-                }
+    ($ch:expr, $var:pat in $iter:expr, $block:block) => {{
+        let max = ExactSizeIterator::len(&$iter);
+        let how_often = (max / 100).max(1);
+        for (i_, $var) in $iter.enumerate() {
+            $block;
+            if i_ % how_often == 0 {
+                $crate::log_progress!($ch, i_, max);
             }
         }
-    }
+    }};
 }
 
-pub fn iter_progress<'a, T>(iter: T, ch: &'a impl StatusWriterInterface) -> impl Iterator<Item=T::Item> + 'a
+pub fn iter_progress<'a, T>(
+    iter: T,
+    ch: &'a impl StatusWriterInterface,
+) -> impl Iterator<Item = T::Item> + 'a
 where
     T: ExactSizeIterator + 'a,
 {
@@ -142,7 +144,6 @@ pub struct ViewerData {
     pub modularity_classes: Vec<ModularityClass>,
     pub engine: Arc<SearchEngine>,
 }
-
 
 impl ViewerData {
     pub fn new(
@@ -280,11 +281,13 @@ impl GraphViewApp {
                 let task: EguiTask = Box::new(move |ctx: &Context| {
                     let mut fonts = egui::FontDefinitions::default();
                     let name = "Noto Sans Arabic";
-                    fonts.font_data.insert(
-                        name.to_string(),
-                        egui::FontData::from_owned(font),
-                    );
-                    fonts.families.entry(FontFamily::Proportional).or_default()
+                    fonts
+                        .font_data
+                        .insert(name.to_string(), egui::FontData::from_owned(font));
+                    fonts
+                        .families
+                        .entry(FontFamily::Proportional)
+                        .or_default()
                         .push(name.to_string());
                     ctx.set_fonts(fonts);
                     log::info!("Arabic font loaded");
@@ -341,7 +344,11 @@ pub(crate) fn show_status(ui: &mut Ui, status_rx: &mut StatusReader) {
 
 pub fn show_progress_bar(ui: &mut Ui, status_rx: &StatusReader) {
     if let Some(p) = status_rx.progress {
-        ui.add(egui::ProgressBar::new(p.val as f32 / p.max as f32).desired_height(12.0).desired_width(230.0));
+        ui.add(
+            egui::ProgressBar::new(p.val as f32 / p.max as f32)
+                .desired_height(12.0)
+                .desired_width(230.0),
+        );
     }
 }
 
@@ -412,10 +419,7 @@ impl eframe::App for GraphViewApp {
                     });
                 }
             }
-            AppState::Loaded {
-                tree,
-                ..
-            } => {
+            AppState::Loaded { tree, .. } => {
                 DockArea::new(tree)
                     .style({
                         let style = Style::from_egui(ctx.style().as_ref());
@@ -443,7 +447,7 @@ impl GraphViewApp {
         egui::TopBottomPanel::top("top_panel").show_animated(ctx, shown, |ui| {
             ui.add_space(10.0);
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 50.0;
+                //ui.spacing_mut().item_spacing.x = 50.0;
                 ui.vertical(|ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
@@ -481,12 +485,14 @@ impl GraphViewApp {
                         ui.add_space(15.0);
                     });
                 });
+                ui.separator();
                 ui.vertical(|ui| {
                     CommonMarkViewer::new().show(ui, &mut self.md_cache, &t!(
 "If the app is **slow**:
 - uncheck **Show links**
 - increase **Minimum degree**"));
                 });
+                ui.separator();
                 ui.vertical(|ui| {
                     CommonMarkViewer::new().show(ui, &mut self.md_cache, &t!(
 "Each **node** in the graph is a **Facebook account**, and two nodes are **linked** if they are **friends**.
@@ -508,4 +514,3 @@ Nodes are positioned so as to group together strongly connected classes."));
         });
     }
 }
-
