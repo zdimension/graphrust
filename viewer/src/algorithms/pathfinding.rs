@@ -77,32 +77,21 @@ pub fn do_pathfinding(
         if queue_b.is_empty() || queue_f.is_empty() {
             return None;
         }
-        if visited_b.len() < visited_f.len() {
-            let mut level_count = queue_b.len();
-            while let Some(id_b) = queue_b.pop_front() {
-                if let Some(inter) =
-                    bfs(id_b, &mut queue_b, &mut visited_b, &mut pred_b, &visited_f)
-                {
-                    break 'main inter;
-                }
-                if level_count == 1 {
-                    continue 'main;
-                }
-                level_count -= 1;
-            }
+
+        let (queue, visited, pred, queue_other) = if visited_b.len() < visited_f.len() {
+            (&mut queue_b, &mut visited_b, &mut pred_b, &visited_f)
         } else {
-            let mut level_count = queue_f.len();
-            while let Some(id_f) = queue_f.pop_front() {
-                if let Some(inter) =
-                    bfs(id_f, &mut queue_f, &mut visited_f, &mut pred_f, &visited_b)
-                {
-                    break 'main inter;
-                }
-                if level_count == 1 {
-                    continue 'main;
-                }
-                level_count -= 1;
+            (&mut queue_f, &mut visited_f, &mut pred_f, &visited_b)
+        };
+        let mut level_count = queue.len();
+        while let Some(id) = queue.pop_front() {
+            if let Some(inter) = bfs(id, queue, visited, pred, queue_other) {
+                break 'main inter;
             }
+            if level_count == 1 {
+                continue 'main;
+            }
+            level_count -= 1;
         }
     };
 
