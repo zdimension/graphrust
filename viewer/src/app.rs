@@ -4,8 +4,8 @@ use crate::ui::{tabs, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
 use egui::{
-    vec2, Color32, Context, FontFamily, FontId, Hyperlink, Id, Layout, RichText, TextFormat,
-    TextStyle, Ui, Vec2, WidgetText,
+    vec2, CentralPanel, Color32, Context, FontFamily, FontId, Frame, Hyperlink, Id, Layout,
+    RichText, TextFormat, TextStyle, Ui, Vec2, WidgetText,
 };
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3b, Point};
@@ -365,80 +365,97 @@ impl eframe::App for GraphViewApp {
 
         show_modal(ctx, &self.modal.0, "modal");
 
-        match &mut self.state {
-            AppState::Loading { status_rx, file_rx } => {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    show_status(ui, status_rx);
-                });
-                if let Ok(file) = file_rx.try_recv() {
-                    let (status_tx, status_rx) = threading::status_pipe(ctx);
-                    let (state_tx, state_rx) = mpsc::channel();
-                    let (gl_fwd, gl_mpsc) = GlForwarder::new();
-                    self.state = AppState::Loaded {
-                        tree: DockState::new(vec![GraphTab {
-                            id: Id::new(("main_tab", chrono::Utc::now())),
-                            closeable: false,
-                            title: t!("Graph").to_string(),
-                            state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),
-                        }]),
-                        string_tables: file.strings,
-                    };
-                    threading::spawn_cancelable(self.modal.1.clone(), move || {
-                        let mut min = Point::new(f32::INFINITY, f32::INFINITY);
-                        let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
-                        log!(status_tx, t!("Computing graph boundaries..."));
-                        for p in &*file.viewer.persons {
-                            min.x = min.x.min(p.position.x);
-                            min.y = min.y.min(p.position.y);
-                            max.x = max.x.max(p.position.x);
-                            max.y = max.y.max(p.position.y);
+        CentralPanel::default()
+            .frame(Frame::central_panel(&ctx.style()).inner_margin(0.))
+            .show(ctx, |ui| {
+                match &mut self.state {
+                    AppState::Loading { status_rx, file_rx } => {
+                        show_status(ui, status_rx);
+                        if let Ok(file) = file_rx.try_recv() {
+                            let (status_tx, status_rx) = threading::status_pipe(ctx);
+                            let (state_tx, state_rx) = mpsc::channel();
+                            let (gl_fwd, gl_mpsc) = GlForwarder::new();
+                            self.state = AppState::Loaded {
+                                tree: DockState::new(vec![GraphTab {
+                                    id: Id::new(("main_tab", chrono::Utc::now())),
+                                    closeable: false,
+                                    title: t!("Graph").to_string(),
+                                    state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),
+                                }]),
+                                string_tables: file.strings,
+                            };
+                            threading::spawn_cancelable(self.modal.1.clone(), move || {
+                                let mut min = Point::new(f32::INFINITY, f32::INFINITY);
+                                let mut max = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
+                                log!(status_tx, t!("Computing graph boundaries..."));
+                                for p in &*file.viewer.persons {
+                                    min.x = min.x.min(p.position.x);
+                                    min.y = min.y.min(p.position.y);
+                                    max.x = max.x.max(p.position.x);
+                                    max.y = max.y.max(p.position.y);
+                                }
+                                let center = (min + max) / 2.0;
+                                let mut cam = Camera::new(center);
+                                // cam is normalized on the [-1, 1] range
+                                // compute x and y scaling to fit the circle, take the best
+                                let fig_size = max - min;
+                                let scale_x = 1.0 / fig_size.x;
+                                let scale_y = 1.0 / fig_size.y;
+                                let scale = scale_x.min(scale_y) * 0.98;
+                                cam.transf.append_scaling_mut(scale);
+
+                                let tab = tabs::create_tab(
+                                    file.viewer,
+                                    file.edges.iter(),
+                                    gl_fwd,
+                                    110,
+                                    cam,
+                                    UiState::default(),
+                                    status_tx,
+                                )?;
+
+                                state_tx.send(tab)?;
+
+                                Ok(())
+                            });
                         }
-                        let center = (min + max) / 2.0;
-                        let mut cam = Camera::new(center);
-                        // cam is normalized on the [-1, 1] range
-                        // compute x and y scaling to fit the circle, take the best
-                        let fig_size = max - min;
-                        let scale_x = 1.0 / fig_size.x;
-                        let scale_y = 1.0 / fig_size.y;
-                        let scale = scale_x.min(scale_y) * 0.98;
-                        cam.transf.append_scaling_mut(scale);
+                    }
+                    AppState::Loaded { tree, .. } => {
+                        DockArea::new(tree)
+                            .style({
+                                let style = Style::from_egui(ctx.style().as_ref());
+                                style
+                            })
+                            .show_inside(
+                                ui,
+                                &mut TabViewer {
+                                    tab_request: &mut new_tab_request,
+                                    top_bar: &mut self.top_bar,
+                                    frame,
+                                    modal: self.modal.1.clone(),
+                                },
+                            );
+                        if let Some(request) = new_tab_request {
+                            tree.push_to_focused_leaf(request);
+                        }
+                    }
+                };
 
-                        let tab = tabs::create_tab(
-                            file.viewer,
-                            file.edges.iter(),
-                            gl_fwd,
-                            110,
-                            cam,
-                            UiState::default(),
-                            status_tx,
-                        )?;
-
-                        state_tx.send(tab)?;
-
-                        Ok(())
-                    });
+                if !self.top_bar {
+                    let rect = ctx.screen_rect().translate(vec2(-4.0, 26.0));
+                    if ui
+                        .put(rect, |ui: &mut Ui| {
+                            ui.with_layout(Layout::default().with_cross_align(Align::RIGHT), |ui| {
+                                ui.button(t!("⏬ Show header"))
+                            })
+                            .inner
+                        })
+                        .clicked()
+                    {
+                        self.top_bar = true;
+                    }
                 }
-            }
-            AppState::Loaded { tree, .. } => {
-                DockArea::new(tree)
-                    .style({
-                        let style = Style::from_egui(ctx.style().as_ref());
-                        style
-                    })
-                    .show(
-                        ctx,
-                        &mut TabViewer {
-                            tab_request: &mut new_tab_request,
-                            top_bar: &mut self.top_bar,
-                            frame,
-                            modal: self.modal.1.clone(),
-                        },
-                    );
-                if let Some(request) = new_tab_request {
-                    tree.push_to_focused_leaf(request);
-                }
-            }
-        };
+            });
     }
 }
 
@@ -446,6 +463,14 @@ impl GraphViewApp {
     fn show_top_bar(&mut self, ctx: &Context, shown: bool) {
         egui::TopBottomPanel::top("top_panel").show_animated(ctx, shown, |ui| {
             ui.add_space(10.0);
+            macro_rules! hide_header {
+                ($ui:expr) => {
+                    if $ui.button(t!("Hide header ⏫")).clicked() {
+                        self.top_bar = false;
+                    }
+                }
+            };
+            let small_window = ctx.screen_rect().width() < 1100.0;
             ui.horizontal(|ui| {
                 //ui.spacing_mut().item_spacing.x = 50.0;
                 ui.vertical(|ui| {
@@ -481,6 +506,9 @@ impl GraphViewApp {
                                     }
                                 }
                             });
+                            if small_window {
+                                hide_header!(ui);
+                            }
                         });
                         ui.add_space(15.0);
                     });
@@ -501,14 +529,13 @@ A **group** of accounts **strongly connected** to each other forms a **class**, 
 
 Nodes are positioned so as to group together strongly connected classes."));
                 });
-
-                ui.with_layout(Layout::default().with_cross_align(Align::RIGHT), |ui| {
-                    ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
-                        if ui.button(t!("Hide header ⏫")).clicked() {
-                            self.top_bar = false;
-                        }
+                if !small_window {
+                    ui.with_layout(Layout::default().with_cross_align(Align::RIGHT), |ui| {
+                        ui.with_layout(Layout::bottom_up(Align::RIGHT), |ui| {
+                            hide_header!(ui);
+                        });
                     });
-                });
+                }
             });
             ui.add_space(10.0);
         });

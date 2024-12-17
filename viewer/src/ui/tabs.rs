@@ -8,11 +8,11 @@ use crate::ui::sections::path::PathStatus;
 use crate::ui::{SelectedUserField, UiState};
 use crate::{app, log};
 use eframe::egui_glow;
-use eframe::emath::{vec2, Vec2};
+use eframe::emath::{vec2, Align, Vec2};
 use eframe::epaint::text::TextWrapMode;
 use eframe::epaint::Shape::LineSegment;
 use eframe::epaint::{CircleShape, Color32, PathStroke, TextShape};
-use egui::{emath, Id, Rect, RichText, TextStyle, Ui, WidgetText};
+use egui::{emath, pos2, Id, Layout, Rect, RichText, TextStyle, Ui, WidgetText};
 use graph_format::nalgebra::{Similarity3, Vector4};
 use graph_format::EdgeStore;
 use itertools::Itertools;
@@ -49,14 +49,21 @@ pub struct GraphTab {
 
 pub fn create_tab<'a>(
     viewer: ViewerData,
-    edges: impl ExactSizeIterator<Item=&'a EdgeStore>,
+    edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
     gl: GlForwarder,
     default_filter: u16,
     camera: Camera,
     ui_state: UiState,
     status_tx: StatusWriter,
 ) -> Cancelable<GraphTabLoaded> {
-    log!(status_tx, t!("Creating tab with %{n} nodes and %{m} edges", n = viewer.persons.len(), m = edges.len()));
+    log!(
+        status_tx,
+        t!(
+            "Creating tab with %{n} nodes and %{m} edges",
+            n = viewer.persons.len(),
+            m = edges.len()
+        )
+    );
     log!(status_tx, t!("Computing maximum degree..."));
     let max_degree = viewer
         .persons
@@ -71,13 +78,17 @@ pub fn create_tab<'a>(
         false
     };
     Ok(GraphTabLoaded {
-        tab_camera: TabCamera { camera, camera_default: camera, cam_animating: None },
+        tab_camera: TabCamera {
+            camera,
+            camera_default: camera,
+            cam_animating: None,
+        },
         ui_state: UiState {
             display: display::DisplaySection {
                 g_opac_edges: (400000.0 / edges.len() as f32).min(0.22),
                 g_opac_nodes: ((70000.0 / viewer.persons.len() as f32)
                     * if hide_edges { 5.0 } else { 2.0 })
-                    .min(0.58),
+                .min(0.58),
                 max_degree,
                 g_show_edges: !hide_edges,
                 ..Default::default()
@@ -100,8 +111,7 @@ pub struct TabViewer<'tab_request, 'frame> {
     pub modal: Sender<ModalInfo>,
 }
 
-impl egui_dock::TabViewer for TabViewer<'_, '_>
-{
+impl egui_dock::TabViewer for TabViewer<'_, '_> {
     type Tab = GraphTab;
 
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
@@ -131,9 +141,6 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                 egui::SidePanel::left("settings")
                     .resizable(false)
                     .show_inside(ui, |ui| {
-                        if !*self.top_bar && ui.button(t!("⏬ Show header")).clicked() {
-                            *self.top_bar = true;
-                        }
                         tab.ui_state.draw_ui(
                             ui,
                             &tab.viewer_data,
@@ -164,7 +171,12 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                         if !response.is_pointer_button_down_on() {
                             if let Some(v) = tab.tab_camera.cam_animating {
                                 const DUR: f32 = 0.5;
-                                let anim = ui.ctx().animate_bool_with_time_and_easing(cid, false, DUR, emath::easing::circular_out);
+                                let anim = ui.ctx().animate_bool_with_time_and_easing(
+                                    cid,
+                                    false,
+                                    DUR,
+                                    emath::easing::circular_out,
+                                );
                                 if anim == 0.0 {
                                     tab.tab_camera.cam_animating = None;
                                     match v {
@@ -178,7 +190,9 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                                 } else {
                                     match v {
                                         CamAnimating::Pan(delta) => {
-                                            tab.tab_camera.camera.pan(delta.x * anim, delta.y * anim);
+                                            tab.tab_camera
+                                                .camera
+                                                .pan(delta.x * anim, delta.y * anim);
                                         }
                                         CamAnimating::Rot(rot) => {
                                             tab.tab_camera.camera.rotate(rot * anim);
@@ -200,10 +214,11 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                                                 from * (1.0 - t) + to * t
                                             }
 
-                                            tab.tab_camera.camera.transf = Similarity3::from_isometry(
-                                                from.isometry.lerp_slerp(&to.isometry, t),
-                                                lerp(from.scaling(), to.scaling(), t),
-                                            );
+                                            tab.tab_camera.camera.transf =
+                                                Similarity3::from_isometry(
+                                                    from.isometry.lerp_slerp(&to.isometry, t),
+                                                    lerp(from.scaling(), to.scaling(), t),
+                                                );
                                         }
                                     }
                                 }
@@ -216,11 +231,13 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             let centered_pos = 2.0 * centered_pos_raw / rect.size();
 
                             if response.dragged_by(egui::PointerButton::Primary) {
-                                tab.tab_camera.camera
+                                tab.tab_camera
+                                    .camera
                                     .pan(response.drag_delta().x, response.drag_delta().y);
 
                                 ui.ctx().animate_bool_with_time(cid, true, 0.0);
-                                tab.tab_camera.cam_animating = Some(CamAnimating::Pan(response.drag_delta()));
+                                tab.tab_camera.cam_animating =
+                                    Some(CamAnimating::Pan(response.drag_delta()));
                             } else if response.dragged_by(egui::PointerButton::Secondary) {
                                 let prev_pos = centered_pos_raw - response.drag_delta();
                                 let rot = centered_pos_raw.angle() - prev_pos.angle();
@@ -235,12 +252,13 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
                             let pos_world = (tab.tab_camera.camera.get_inverse_matrix()
                                 * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
-                                .xy();
+                            .xy();
                             tab.ui_state.details.mouse_pos_world = Some(pos_world);
 
                             if response.clicked() {
                                 let closest = tab
-                                    .viewer_data.read()
+                                    .viewer_data
+                                    .read()
                                     .persons
                                     .iter()
                                     .map(|p| {
@@ -267,13 +285,15 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                                             tab.ui_state.infos.infos_open = true;
                                         }
                                         SelectedUserField::PathSource => {
-                                            tab.ui_state.path.path_settings.path_src = Some(closest);
+                                            tab.ui_state.path.path_settings.path_src =
+                                                Some(closest);
                                             tab.ui_state.path.path_dirty = true;
                                             tab.ui_state.selected_user_field =
                                                 SelectedUserField::PathDest;
                                         }
                                         SelectedUserField::PathDest => {
-                                            tab.ui_state.path.path_settings.path_dest = Some(closest);
+                                            tab.ui_state.path.path_settings.path_dest =
+                                                Some(closest);
                                             tab.ui_state.path.path_dirty = true;
                                         }
                                     }
@@ -312,7 +332,13 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                         let opac_nodes = tab.ui_state.display.g_opac_nodes;
 
                         let cam = tab.tab_camera.camera.get_matrix();
-                        let class_colors = tab.viewer_data.read().modularity_classes.iter().map(|c| c.color.to_u32()).collect_vec();
+                        let class_colors = tab
+                            .viewer_data
+                            .read()
+                            .modularity_classes
+                            .iter()
+                            .map(|c| c.color.to_u32())
+                            .collect_vec();
                         let callback = egui::PaintCallback {
                             rect,
                             callback: Arc::new(egui_glow::CallbackFn::new(
@@ -339,8 +365,12 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             let txt = WidgetText::from(person.name)
                                 .background_color(color)
                                 .color(Color32::WHITE);
-                            let gal =
-                                txt.into_galley(ui, Some(TextWrapMode::Extend), f32::INFINITY, TextStyle::Heading);
+                            let gal = txt.into_galley(
+                                ui,
+                                Some(TextWrapMode::Extend),
+                                f32::INFINITY,
+                                TextStyle::Heading,
+                            );
                             clipped_painter.add(CircleShape::filled(
                                 rect.center() + vec2(pos_scr.x, -pos_scr.y) * rect.size() * 0.5,
                                 7.0,
@@ -355,13 +385,20 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                             ));
                         };
 
-                        if let Some(PathStatus::PathFound(ref path)) = tab.ui_state.path.path_status {
+                        if let Some(PathStatus::PathFound(ref path)) = tab.ui_state.path.path_status
+                        {
                             for (a, b) in path.iter().tuple_windows() {
                                 let a = (cam * Vector4::from(data.persons[*a].position)).xy();
                                 let b = (cam * Vector4::from(data.persons[*b].position)).xy();
                                 clipped_painter.add(LineSegment {
-                                    points: [rect.center() + vec2(a.x, -a.y) * rect.size() * 0.5, rect.center() + vec2(b.x, -b.y) * rect.size() * 0.5],
-                                    stroke: PathStroke::new(2.0, Color32::from_rgba_unmultiplied(150, 0, 0, 200)),
+                                    points: [
+                                        rect.center() + vec2(a.x, -a.y) * rect.size() * 0.5,
+                                        rect.center() + vec2(b.x, -b.y) * rect.size() * 0.5,
+                                    ],
+                                    stroke: PathStroke::new(
+                                        2.0,
+                                        Color32::from_rgba_unmultiplied(150, 0, 0, 200),
+                                    ),
                                 });
                             }
                             for &p in path {
@@ -379,14 +416,23 @@ impl egui_dock::TabViewer for TabViewer<'_, '_>
                         );
                         const PADDING: f32 = 4.0;
                         const BUTTON_SIZE: f32 = 30.0;
-                        if ui.put(Rect::from_min_size(
-                            rect.max - vec2(BUTTON_SIZE + PADDING, BUTTON_SIZE + PADDING),
-                            vec2(BUTTON_SIZE, BUTTON_SIZE)),
-                                  egui::Button::new("⌖"),
-                        ).on_hover_text(t!("Center camera")).clicked() {
+                        if ui
+                            .put(
+                                Rect::from_min_size(
+                                    rect.max - vec2(BUTTON_SIZE + PADDING, BUTTON_SIZE + PADDING),
+                                    vec2(BUTTON_SIZE, BUTTON_SIZE),
+                                ),
+                                egui::Button::new("⌖"),
+                            )
+                            .on_hover_text(t!("Center camera"))
+                            .clicked()
+                        {
                             ui.ctx().animate_bool_with_time(cid, true, 0.0);
                             let camera = &mut tab.tab_camera;
-                            camera.cam_animating = Some(CamAnimating::PanTo { from: camera.camera.transf, to: camera.camera_default.transf });
+                            camera.cam_animating = Some(CamAnimating::PanTo {
+                                from: camera.camera.transf,
+                                to: camera.camera_default.transf,
+                            });
                         }
                     });
             }
