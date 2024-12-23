@@ -1,5 +1,6 @@
 use env_logger;
 use itertools::Itertools;
+use rand::Rng;
 use std::env;
 use viewer::algorithms::pathfinding::{do_pathfinding, PathSectionSettings};
 use viewer::graph_storage::{load_binary, load_file};
@@ -35,14 +36,55 @@ fn it_works() {
     println!("File processed");
 
     let viewer = &bin.viewer;
+    let rng = &mut rand::thread_rng();
+    for _ in 0..1000 {
+        let node1 = rng.gen_range(0..viewer.persons.len());
+        let node2 = rng.gen_range(0..viewer.persons.len());
 
-    let get = |name| {
+        let path = do_pathfinding(
+            PathSectionSettings {
+                path_src: Some(node1),
+                path_dest: Some(node2),
+                exclude_ids: vec![],
+                path_no_direct: false,
+                path_no_mutual: false,
+            },
+            &viewer.persons,
+        )
+        .unwrap();
+
+        let path2 = do_pathfinding(
+            PathSectionSettings {
+                path_src: Some(node1),
+                path_dest: Some(node2),
+                exclude_ids: vec![],
+                path_no_direct: false,
+                path_no_mutual: false,
+            },
+            &viewer.persons,
+        )
+        .unwrap();
+
+        assert_eq!(path.path, path2.path);
+    }
+
+    /* let get = |name| {
         let r = viewer
             .engine
             .get_blocking(|s| s.search(name, 1)[0] as usize);
         println!("{}: {:?}", name, r);
         r
     };
+
+    let swann = get("Benziane Swann");
+
+    let craby = get("Craby Craby");
+
+    let blaibiron = get("Charli BlaBiron");
+
+    let etienne = get("Etienne Marais");
+
+    let tom = get("Tom Niget");
 
     let path = do_pathfinding(
         PathSectionSettings {
@@ -62,5 +104,5 @@ fn it_works() {
             .iter()
             .map(|&id| &viewer.persons[id].name)
             .collect_vec()
-    );
+    );*/
 }
