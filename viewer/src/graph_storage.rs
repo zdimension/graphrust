@@ -24,10 +24,12 @@ pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFil
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(inline_js = "export function downloadGraph(filesize, progressHandler) {
+#[wasm_bindgen(
+    inline_js = "export function downloadGraph(filesize, progressHandler) {
     const DB_NAME = 'graphCacheDB';
     const DB_VERSION = 1;
     const STORE_NAME = 'files';
+    const FILE_NAME = 'graph_n4j.bin.br';
 
     // Open the IndexedDB
     return openIndexedDB().then(db => {
@@ -76,34 +78,56 @@ pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFil
     function getFileFromDB(db, filesize) {
         return new Promise((resolve, reject) => {
             if (!db) {
-                reject('No IndexedDB available');
-                return;
+                return reject('No IndexedDB available');
             }
-
+    
             const transaction = db.transaction([STORE_NAME], 'readonly');
             const store = transaction.objectStore(STORE_NAME);
-            const request = store.get('graph_n4j.bin.br');
-
-            request.onsuccess = event => {
-                const file = event.target.result;
-                if (file && file.size === filesize) {
-                    console.log('File found with correct size');
-                    resolve(file.data);
+            const metaRequest = store.get(FILE_NAME);
+    
+            metaRequest.onsuccess = event => {
+                const meta = event.target.result;
+                if (meta && meta.size === filesize && meta.parts) {
+                    const parts = new Array(meta.parts).fill(null).map((_, i) => {
+                        return new Promise((resolve, reject) => {
+                            const partRequest = store.get(`${FILE_NAME}_part${i}`);
+                            partRequest.onsuccess = event => {
+                                const data = event.target.result.data;
+                                if (!data || data == {}) {
+                                    reject(`Part ${i} not found in IndexedDB`);
+                                }   
+                                resolve(event.target.result.data);
+                            };
+                            partRequest.onerror = event => {
+                                reject(`Error retrieving part ${i} from IndexedDB: ${event.target.errorCode}`);
+                            };
+                        });
+                    });
+    
+                    Promise.all(parts).then(chunks => {
+                        const fileData = new Uint8Array(filesize);
+                        let offset = 0;
+                        chunks.forEach(chunk => {
+                            fileData.set(new Uint8Array(chunk), offset);
+                            offset += chunk.byteLength;
+                        });
+                        resolve(fileData.buffer);
+                    }).catch(reject);
                 } else {
                     console.log('File not found or size mismatch');
                     resolve(null); // Return null if file not found or size mismatch
                 }
             };
-
-            request.onerror = event => {
-                reject('Error retrieving file from IndexedDB: ' + event.target.errorCode);
+    
+            metaRequest.onerror = event => {
+                reject(`Error retrieving metadata from IndexedDB: ${event.target.errorCode}`);
             };
         });
     }
 
     // Download file and cache it in IndexedDB
     function fetchAndCacheFile(db, filesize, progressHandler) {
-        return fetch('graph_n4j.bin.br?size=' + filesize, {
+        return fetch(FILE_NAME + '?size=' + filesize, {
                 cache: 'force-cache',
                 headers: {
                     'Cache-Control': 'max-age=31536000',
@@ -157,27 +181,56 @@ pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFil
             .then(a => a.arrayBuffer())
             .then(arrayBuffer => {
                 if (db) {
-                    // Store the downloaded file in IndexedDB
-                    const transaction = db.transaction([STORE_NAME], 'readwrite');
-                    const store = transaction.objectStore(STORE_NAME);
-                    const request = store.put({
-                        id: 'graph_n4j.bin.br',
-                        size: filesize,
-                        data: arrayBuffer
-                    });
+                    const CHUNK_SIZE = 200 * 1024 * 1024; // 200MB, because Firefox has a limit
+                    const totalParts = Math.ceil(arrayBuffer.byteLength / CHUNK_SIZE);
 
-                    request.onsuccess = () => {
-                        console.log('File cached in IndexedDB');
-                    };
+                    try {        
+                        for (let i = 0; i < totalParts; i++) {
+                            const transaction = db.transaction([STORE_NAME], 'readwrite');
+                            const store = transaction.objectStore(STORE_NAME);
+                            const start = i * CHUNK_SIZE;
+                            const end = Math.min(start + CHUNK_SIZE, arrayBuffer.byteLength);
+                            const chunk = arrayBuffer.slice(start, end);
+                
+                            const request = store.put({
+                                id: `${FILE_NAME}_part${i}`,
+                                data: chunk
+                            });
+                
+                            request.onsuccess = () => {
+                                console.log(`Part ${i} cached in IndexedDB`);
+                            };
+                
+                            request.onerror = event => {
+                                console.error(`Error caching part ${i} in IndexedDB: ` + event.target.errorCode);
+                            };
+                        }
 
-                    request.onerror = event => {
-                        console.error('Error caching file in IndexedDB: ' + event.target.errorCode);
-                    };
+                        const transaction = db.transaction([STORE_NAME], 'readwrite');
+                        const store = transaction.objectStore(STORE_NAME);
+                
+                        const metaRequest = store.put({
+                            id: FILE_NAME,
+                            size: arrayBuffer.byteLength,
+                            parts: totalParts
+                        });
+                
+                        metaRequest.onsuccess = () => {
+                            console.log('Metadata cached in IndexedDB');
+                        };
+                
+                        metaRequest.onerror = event => {
+                            console.error('Error caching metadata in IndexedDB: ' + event.target.errorCode);
+                        };
+                    } catch (error) {
+                        console.error('Error caching file in IndexedDB: ' + error);
+                    }
                 }
                 return arrayBuffer;
             });
     }
-}")]
+}"
+)]
 extern "C" {
     fn downloadGraph(filesize: u32, progress: &js_sys::Function) -> js_sys::Promise;
 }
@@ -236,20 +289,28 @@ pub async fn load_file(status_tx: &StatusWriter) -> Cancelable<GraphFile> {
     let global = js_sys::global().unchecked_into::<web_sys::WorkerGlobalScope>();
     // function downloadFile(progress)
     /*let download_file_fn = global
-        .get("downloadFile")
-        .unwrap()
-        .dyn_into::<js_sys::Function>()
-        .unwrap();*/
+    .get("downloadFile")
+    .unwrap()
+    .dyn_into::<js_sys::Function>()
+    .unwrap();*/
     log!(status_tx, "Downloading file");
     let status_tx_ = status_tx.clone();
     use crate::threading::StatusWriterInterface;
     let progress_handler = Closure::wrap(Box::new(move |progress: usize| {
-        status_tx_.send(crate::threading::Progress { max: 100, val: progress }).unwrap()
+        status_tx_
+            .send(crate::threading::Progress {
+                max: 100,
+                val: progress,
+            })
+            .unwrap()
     }) as Box<dyn FnMut(usize)>);
     js_console_log("Awaiting JS promise");
-    let result = wasm_bindgen_futures::JsFuture::from(downloadGraph(include_str!("../file_size").parse().unwrap(), progress_handler.as_ref().unchecked_ref()))
-        .await
-        .unwrap();
+    let result = wasm_bindgen_futures::JsFuture::from(downloadGraph(
+        include_str!("../file_size").parse().unwrap(),
+        progress_handler.as_ref().unchecked_ref(),
+    ))
+    .await
+    .unwrap();
     js_console_log("Converting to Uint8Array");
     let array_buffer = js_sys::Uint8Array::new(&result);
     js_console_log("Converting to Vec");
@@ -267,10 +328,19 @@ pub struct ProcessedData {
     pub edges: Vec<EdgeStore>,
 }
 
-pub fn load_binary(status_tx: &impl StatusWriterInterface, content: GraphFile) -> Cancelable<ProcessedData> {
+pub fn load_binary(
+    status_tx: &impl StatusWriterInterface,
+    content: GraphFile,
+) -> Cancelable<ProcessedData> {
     log!(status_tx, t!("Binary content loaded"));
-    log!(status_tx, t!("Class count: %{count}", count = content.classes.len()));
-    log!(status_tx, t!("Node count: %{count}", count = content.nodes.len()));
+    log!(
+        status_tx,
+        t!("Class count: %{count}", count = content.classes.len())
+    );
+    log!(
+        status_tx,
+        t!("Node count: %{count}", count = content.nodes.len())
+    );
     //log!(status_tx, "Edge count: {}", content.edge_count);
 
     log!(status_tx, t!("Processing modularity classes"));
@@ -293,7 +363,11 @@ pub fn load_binary(status_tx: &impl StatusWriterInterface, content: GraphFile) -
                 node.size,
                 node.class,
                 // SAFETY: the strings are null-terminated
-                unsafe { str_from_null_terminated_utf8(content.ids.as_ptr().offset(node.offset_id as isize)) },
+                unsafe {
+                    str_from_null_terminated_utf8(
+                        content.ids.as_ptr().offset(node.offset_id as isize),
+                    )
+                },
                 unsafe {
                     str_from_null_terminated_utf8(
                         content.names.as_ptr().offset(node.offset_name as isize),
@@ -306,7 +380,10 @@ pub fn load_binary(status_tx: &impl StatusWriterInterface, content: GraphFile) -
 
     log!(
         status_tx,
-        t!("Done, took %{time}ms", time = (chrono::Local::now() - start).num_milliseconds())
+        t!(
+            "Done, took %{time}ms",
+            time = (chrono::Local::now() - start).num_milliseconds()
+        )
     );
 
     log!(status_tx, t!("Generating neighbor lists"));
@@ -329,7 +406,10 @@ pub fn load_binary(status_tx: &impl StatusWriterInterface, content: GraphFile) -
 
     log!(
         status_tx,
-        t!("Done, took %{time}ms", time = (chrono::Local::now() - start).num_milliseconds())
+        t!(
+            "Done, took %{time}ms",
+            time = (chrono::Local::now() - start).num_milliseconds()
+        )
     );
 
     Ok(ProcessedData {
