@@ -283,7 +283,7 @@ impl GraphViewApp {
                     let name = "Noto Sans Arabic";
                     fonts
                         .font_data
-                        .insert(name.to_string(), egui::FontData::from_owned(font));
+                        .insert(name.to_string(), egui::FontData::from_owned(font).into());
                     fonts
                         .families
                         .entry(FontFamily::Proportional)
