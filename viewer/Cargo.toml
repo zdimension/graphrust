@@ -16,7 +16,6 @@ itertools = "0.13"
 speedy = "0.8"
 log = "0.4"
 graph_format = { path = "../graph_format" }
-graphrust_macros = { path = "../macros" }
 egui_extras = "0.29.1"
 egui_dock = "0.14.0"
 rayon = "1.10"
