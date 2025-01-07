@@ -426,6 +426,8 @@ impl eframe::App for GraphViewApp {
                                 let style = Style::from_egui(ctx.style().as_ref());
                                 style
                             })
+                            .show_leaf_collapse_buttons(false)
+                            .show_leaf_close_all_buttons(false)
                             .show_inside(
                                 ui,
                                 &mut TabViewer {
