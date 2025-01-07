@@ -27,13 +27,6 @@ try:
 <FilesMatch "graph_n4j\.bin\.br">
     Header append X-file-size "{size}"
 </FilesMatch>
-<FilesMatch "(index\.html)|(viewer-.*\.js)">
-	Header set Pragma "no-cache"
-</FilesMatch>
-RewriteEngine On
-RewriteRule viewer_bg\.wasm$ {outfile_name}_bg.wasm [L]
-RewriteCond %{{HTTP_REFERER}} workerHelpers.worker.js$
-RewriteRule ^$ {outfile_name}.js [L]
         """)
 except subprocess.CalledProcessError as e:
     print(e)

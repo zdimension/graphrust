@@ -56,15 +56,15 @@ reqwest = { version = "0.12", features = ["blocking"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "*", features = ["sync", "time"] }
 wasm-bindgen-futures = "0.4"
-wasm-bindgen = "=0.2.93"
+wasm-bindgen = "0.2.99"
 js-sys = "*"
 web-sys = { version = "*", features = ["XmlHttpRequest", "XmlHttpRequestResponseType", "WorkerGlobalScope", "Performance", "ProgressEvent"] }
 parking_lot = { version = "*", features = ["nightly"] }
 wasm-logger = "0.2.0"
-wasm_thread = { version = "0.3.3", git = "https://github.com/zdimension/wasm_thread" }
+wasm_thread = "0.3.3"
 console_error_panic_hook = "0.1.7"
 getrandom = { version = "*", features = ["js"] }
-wasm-bindgen-rayon = "*"
+wasm-bindgen-rayon = { version = "*", features = ["no-bundler"] }
 chrono = { version = "*", features = ["wasmbind"] }
 
 [package.metadata.i18n]

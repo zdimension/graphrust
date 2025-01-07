@@ -27,7 +27,7 @@ pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFil
 #[wasm_bindgen(
     inline_js = "export function downloadGraph(filesize, progressHandler) {
     const DB_NAME = 'graphCacheDB';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
     const STORE_NAME = 'files';
     const FILE_NAME = 'graph_n4j.bin.br';
 
@@ -94,9 +94,11 @@ pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFil
                             partRequest.onsuccess = event => {
                                 const data = event.target.result.data;
                                 if (!data || data == {}) {
-                                    reject(`Part ${i} not found in IndexedDB`);
-                                }   
-                                resolve(event.target.result.data);
+                                    console.warn(`Part ${i} not found in IndexedDB`);
+                                    resolve(null);
+                                } else {
+                                    resolve(event.target.result.data);
+                                }
                             };
                             partRequest.onerror = event => {
                                 reject(`Error retrieving part ${i} from IndexedDB: ${event.target.errorCode}`);
@@ -107,10 +109,15 @@ pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFil
                     Promise.all(parts).then(chunks => {
                         const fileData = new Uint8Array(filesize);
                         let offset = 0;
-                        chunks.forEach(chunk => {
+                        for (const chunk of chunks) {
+                            if (!chunk) {
+                                console.log('Part not found');
+                                resolve(null);
+                                return;
+                            }
                             fileData.set(new Uint8Array(chunk), offset);
                             offset += chunk.byteLength;
-                        });
+                        }
                         resolve(fileData.buffer);
                     }).catch(reject);
                 } else {
