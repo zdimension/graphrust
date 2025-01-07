@@ -42,11 +42,18 @@ impl GlForwarder {
         )
     }
 
-    pub fn run<R: Send + 'static, T: FnOnce(&glow::Context) -> R + Send + 'static>(&self, work: T) -> Cancelable<R> {
+    pub fn run<R: Send + 'static, T: FnOnce(&glow::Context) -> R + Send + 'static>(
+        &self,
+        work: T,
+    ) -> Cancelable<R> {
         self.tx.send(GlWork(Box::new(move |gl, tx| {
             tx.send(Box::new(work(gl))).unwrap();
         })))?;
-        Ok(*self.rx.recv()?.downcast().map_err(|_| anyhow!("Failed to downcast"))?)
+        Ok(*self
+            .rx
+            .recv()?
+            .downcast()
+            .map_err(|_| anyhow!("Failed to downcast"))?)
     }
 }
 
@@ -77,14 +84,14 @@ impl RenderedGraph {
     pub fn new<'a>(
         gl: GlForwarder,
         viewer: &ViewerData,
-        edges: impl ExactSizeIterator<Item=&'a EdgeStore>,
+        edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
         status_tx: StatusWriter,
     ) -> Cancelable<Self> {
+        use eframe::glow::HasContext;
         use glow::HasContext as _;
         use graph_format::Point;
-        use std::collections::VecDeque;
         use itertools::Itertools;
-        use eframe::glow::HasContext;
+        use std::collections::VecDeque;
         let shader_version = if cfg!(target_arch = "wasm32") {
             "#version 300 es"
         } else {
@@ -114,6 +121,7 @@ impl RenderedGraph {
             ];
 
             log!(status_tx, t!("Compiling shaders"));
+            let num_classes = viewer.modularity_classes.len();
             let [program_basic, program_edge, program_node] = gl.run(move |gl| {
                 programs.map(|shader_sources| {
                     let program = gl.create_program().expect("Cannot create program");
@@ -124,7 +132,13 @@ impl RenderedGraph {
                             let shader = gl
                                 .create_shader(*shader_type)
                                 .expect("Cannot create shader");
-                            gl.shader_source(shader, &format!("{shader_version}\n{shader_source}"));
+                            gl.shader_source(
+                                shader,
+                                &format!(
+                                    "{shader_version}\n#define NUM_CLASSES {0}\n{shader_source}",
+                                    num_classes,
+                                ),
+                            );
                             gl.compile_shader(shader);
                             assert!(
                                 gl.get_shader_compile_status(shader),
@@ -161,9 +175,7 @@ impl RenderedGraph {
             let node_vertices = viewer
                 .persons
                 .iter()
-                .map(|p| {
-                    geom_draw::create_node_vertex(p)
-                });
+                .map(|p| geom_draw::create_node_vertex(p));
 
             let edge_vertices = edges
                 .map(|e| {
@@ -171,22 +183,34 @@ impl RenderedGraph {
                     let pb = &viewer.persons[e.b as usize];
                     (pa, pb)
                 })
-                .flat_map(|(pa, pb)| {
-                    geom_draw::create_edge_vertices(pa, pb)
-                });
+                .flat_map(|(pa, pb)| geom_draw::create_edge_vertices(pa, pb));
 
-            let vertices = node_vertices
-                .chain(edge_vertices);
+            let vertices = node_vertices.chain(edge_vertices);
 
             let vertices = {
                 const THRESHOLD: usize = 1024 * 1024 * 1024;
                 const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / size_of::<PersonVertex>();
-                let num_vertices = viewer.persons.len() * VERTS_PER_NODE + edges_count * geom_draw::VERTS_PER_EDGE;
+                let num_vertices =
+                    viewer.persons.len() * VERTS_PER_NODE + edges_count * geom_draw::VERTS_PER_EDGE;
                 if num_vertices > MAX_VERTS_IN_ONE_GIG {
-                    log!(status_tx, t!("More than %{got}MB of vertices (%{num}), truncating", got = THRESHOLD / 1024 / 1024, num = num_vertices));
+                    log!(
+                        status_tx,
+                        t!(
+                            "More than %{got}MB of vertices (%{num}), truncating",
+                            got = THRESHOLD / 1024 / 1024,
+                            num = num_vertices
+                        )
+                    );
                     vertices.take(MAX_VERTS_IN_ONE_GIG).collect_vec()
                 } else {
-                    log!(status_tx, t!("Less than %{got}MB of vertices (%{num}), keeping all", got = THRESHOLD / 1024 / 1024, num = num_vertices));
+                    log!(
+                        status_tx,
+                        t!(
+                            "Less than %{got}MB of vertices (%{num}), keeping all",
+                            got = THRESHOLD / 1024 / 1024,
+                            num = num_vertices
+                        )
+                    );
                     vertices.collect_vec()
                 }
             };
@@ -203,7 +227,9 @@ impl RenderedGraph {
                 gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertices_buffer));
                 gl.buffer_data_size(
                     glow::ARRAY_BUFFER,
-                    (vertices_count * size_of::<PersonVertex>()).try_into().unwrap(),
+                    (vertices_count * size_of::<PersonVertex>())
+                        .try_into()
+                        .unwrap(),
                     glow::STATIC_DRAW,
                 );
                 let err = gl.get_error();
@@ -231,7 +257,10 @@ impl RenderedGraph {
                 (vertices_array, vertices_buffer)
             })?;
 
-            log!(status_tx, t!("Buffering %{num} vertices", num = vertices.len()));
+            log!(
+                status_tx,
+                t!("Buffering %{num} vertices", num = vertices.len())
+            );
 
             let vertices = std::sync::Arc::new(vertices);
 
@@ -259,7 +288,13 @@ impl RenderedGraph {
                 })?;
             });
 
-            log!(status_tx, t!("Done: %{time}", time = chrono::Local::now().format("%H:%M:%S.%3f")));
+            log!(
+                status_tx,
+                t!(
+                    "Done: %{time}",
+                    time = chrono::Local::now().format("%H:%M:%S.%3f")
+                )
+            );
 
             Ok(Self {
                 program_basic,
@@ -293,8 +328,6 @@ impl RenderedGraph {
         }
     }
 
-    pub const MAX_RENDER_CLASSES: usize = 900;
-
     pub(crate) fn paint(
         &mut self,
         gl: &glow::Context,
@@ -319,9 +352,6 @@ impl RenderedGraph {
             gl.bind_vertex_array(Some(self.nodes_array));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.nodes_buffer));
 
-            let mut all_colors = [0; Self::MAX_RENDER_CLASSES];
-            all_colors[..class_colors.len()].copy_from_slice(class_colors);
-
             if edges.0 {
                 gl.use_program(Some(self.program_edge));
                 gl.uniform_matrix_4_f32_slice(
@@ -337,7 +367,8 @@ impl RenderedGraph {
                         &gl.get_uniform_location(self.program_edge, "u_degfilter")
                             .unwrap(),
                     ),
-                    ((self.node_filter.degree_filter.1 as u32) << 16) | (self.node_filter.degree_filter.0 as u32),
+                    ((self.node_filter.degree_filter.1 as u32) << 16)
+                        | (self.node_filter.degree_filter.0 as u32),
                 );
                 gl.uniform_1_f32(
                     Some(
@@ -352,7 +383,7 @@ impl RenderedGraph {
                         &gl.get_uniform_location(self.program_edge, "u_class_colors")
                             .unwrap(),
                     ),
-                    &all_colors,
+                    &class_colors,
                 );
                 let verts = 2 * 3 * self.edges_count as i32;
                 // if wasm, clamp verts at 30M, because Firefox refuses to draw anything above that
@@ -376,7 +407,8 @@ impl RenderedGraph {
                             .unwrap(),
                     ),
                     if self.node_filter.filter_nodes {
-                        ((self.node_filter.degree_filter.1 as u32) << 16) | (self.node_filter.degree_filter.0 as u32)
+                        ((self.node_filter.degree_filter.1 as u32) << 16)
+                            | (self.node_filter.degree_filter.0 as u32)
                     } else {
                         0xffff_0000
                     },
@@ -394,7 +426,7 @@ impl RenderedGraph {
                         &gl.get_uniform_location(self.program_node, "u_class_colors")
                             .unwrap(),
                     ),
-                    &all_colors,
+                    &class_colors,
                 );
                 gl.draw_arrays(glow::POINTS, 0, self.nodes_count as i32);
             }

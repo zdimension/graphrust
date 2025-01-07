@@ -9,6 +9,7 @@ use std::process::{Command, ExitStatus};
 use graph_format::*;
 use neo4rs::{query, ConfigBuilder, Graph};
 use serde::Deserialize;
+use speedy::Readable;
 use std::io::{BufRead, BufReader, Write};
 use std::sync::Mutex;
 
@@ -214,7 +215,8 @@ async fn main() {
 
     // graph is scale-free network so the node distribution follows a power law
     // we can estimate and pre allocate
-    let expected_nodes = (0.8 * (config.min_degree as f64).powf(-1.86) * (total_node_count as f64)) as usize;
+    let expected_nodes =
+        (0.8 * (config.min_degree as f64).powf(-1.86) * (total_node_count as f64)) as usize;
 
     log!("Expected node count: {}", expected_nodes);
 
@@ -222,7 +224,8 @@ async fn main() {
     const AVERAGE_NAME_BYTES: usize = 14;
 
     file.ids.reserve(expected_nodes * (AVERAGE_ID_BYTES + 1)); // plus null terminator
-    file.names.reserve(expected_nodes * (AVERAGE_NAME_BYTES + 1));
+    file.names
+        .reserve(expected_nodes * (AVERAGE_NAME_BYTES + 1));
     file.nodes.reserve(expected_nodes);
 
     let mut nodes = graph

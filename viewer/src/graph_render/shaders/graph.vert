@@ -6,7 +6,7 @@ out vec4 v_color;
 uniform mat4 u_projection;
 uniform uint u_degfilter;
 uniform float opacity;
-uniform uint u_class_colors[900];
+uniform uint u_class_colors[NUM_CLASSES];
 const float neg_infinity = uintBitsToFloat(0xFF800000u);
 const float nan = intBitsToFloat(int(0xFFC00000u));
 vec3 unpack_color(uint color) {
