@@ -14,6 +14,7 @@ pub struct DetailsSection {
 impl DetailsSection {
     pub(crate) fn show(&mut self, ui: &mut Ui, camera: &mut TabCamera, cid: Id) {
         CollapsingHeader::new(t!("Details"))
+            .id_salt("details")
             .default_open(false)
             .show(ui, |ui| {
                 let trans = &camera.camera.transf;
@@ -43,9 +44,11 @@ impl DetailsSection {
                 }
                 if ui.button(t!("Center camera")).clicked() {
                     ui.ctx().animate_bool_with_time(cid, true, 0.0);
-                    camera.cam_animating = Some(CamAnimating::PanTo { from: camera.camera.transf, to: camera.camera_default.transf });
+                    camera.cam_animating = Some(CamAnimating::PanTo {
+                        from: camera.camera.transf,
+                        to: camera.camera_default.transf,
+                    });
                 }
-
 
                 let matrix = camera.camera.get_matrix();
                 egui::Grid::new("#cammatrix").show(ui, move |ui| {

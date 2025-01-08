@@ -1,12 +1,12 @@
 use crate::app::{GraphTabState, Person, ViewerData};
 use crate::graph_render::camera::Camera;
-use crate::ui::widgets::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::graph_render::GlForwarder;
 use crate::threading::{spawn_cancelable, status_pipe, Cancelable, MyRwLock, StatusWriter};
 use crate::ui::class::ClassSection;
 use crate::ui::modal::ModalWriter;
 use crate::ui::path::PathSection;
 use crate::ui::tabs::{create_tab, NewTabRequest};
+use crate::ui::widgets::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::ui::{ParadoxState, SelectedUserField, UiState};
 use crate::{for_progress, log, ui};
 use ahash::{AHashMap, AHashSet};
@@ -45,6 +45,7 @@ impl InfosSection {
         modal: &impl ModalWriter,
     ) {
         CollapsingHeader::new(t!("Infos"))
+            .id_salt("infos")
             .default_open(true)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -90,6 +91,7 @@ impl InfosSection {
                     });
 
                     CollapsingHeader::new(t!("Friends"))
+                        .id_salt("friends")
                         .default_open(false)
                         .show(ui, |ui| {
                             egui::ScrollArea::vertical().max_height(200.0).show(
@@ -115,6 +117,7 @@ impl InfosSection {
                         });
 
                     CollapsingHeader::new(t!("Friendship paradox"))
+                        .id_salt("paradox")
                         .default_open(false)
                         .show(ui, |ui| {
                             if self.paradox.current != self.infos_current {
@@ -200,38 +203,49 @@ impl InfosSection {
             });
     }
 
-    pub(crate) fn create_class_subgraph(&self,
-                                        data_rw: &Arc<MyRwLock<ViewerData>>,
-                                        tab_request: &mut Option<NewTabRequest>,
-                                        camera: &Camera,
-                                        path_section: &PathSection,
-                                        modal: &impl ModalWriter,
-                                        class: u16,
-                                        ui: &mut Ui) {
+    pub(crate) fn create_class_subgraph(
+        &self,
+        data_rw: &Arc<MyRwLock<ViewerData>>,
+        tab_request: &mut Option<NewTabRequest>,
+        camera: &Camera,
+        path_section: &PathSection,
+        modal: &impl ModalWriter,
+        class: u16,
+        ui: &mut Ui,
+    ) {
         if ui.button(format!("{}", class)).clicked() {
             self.create_subgraph(
                 t!("Class %{class}", class = class).to_string(),
-                data_rw, tab_request, camera, path_section, ui, modal.clone(),
+                data_rw,
+                tab_request,
+                camera,
+                path_section,
+                ui,
+                modal.clone(),
                 move |_, data| {
-                    Ok(data.persons
+                    Ok(data
+                        .persons
                         .iter()
                         .enumerate()
                         .filter(|(_, p)| p.modularity_class == class)
                         .map(|(i, _)| i)
                         .collect())
-                });
+                },
+            );
         }
     }
 
-    fn create_subgraph(&self,
-                       title: String,
-                       data: &Arc<MyRwLock<ViewerData>>,
-                       tab_request: &mut Option<NewTabRequest>,
-                       camera: &Camera,
-                       path_section: &PathSection,
-                       ui: &mut Ui,
-                       modal_tx: impl ModalWriter,
-                       x: impl FnOnce(&StatusWriter, &ViewerData) -> Cancelable<AHashSet<usize>> + Send + 'static) {
+    fn create_subgraph(
+        &self,
+        title: String,
+        data: &Arc<MyRwLock<ViewerData>>,
+        tab_request: &mut Option<NewTabRequest>,
+        camera: &Camera,
+        path_section: &PathSection,
+        ui: &mut Ui,
+        modal_tx: impl ModalWriter,
+        x: impl FnOnce(&StatusWriter, &ViewerData) -> Cancelable<AHashSet<usize>> + Send + 'static,
+    ) {
         let (status_tx, status_rx) = status_pipe(ui.ctx());
         let (state_tx, state_rx) = mpsc::channel();
         let (gl_fwd, gl_mpsc) = GlForwarder::new();
@@ -252,8 +266,7 @@ impl InfosSection {
         spawn_cancelable(modal_tx, move || {
             let new_included = x(&status_tx, &data.read())?;
 
-            let mut new_persons =
-                Vec::with_capacity(new_included.len());
+            let mut new_persons = Vec::with_capacity(new_included.len());
 
             let mut id_map = AHashMap::new();
             let mut class_list = AHashSet::new();
@@ -301,9 +314,13 @@ impl InfosSection {
 
             let mut filter = 1;
             const MAX: usize = 10000;
-            while new_persons.iter()
+            while new_persons
+                .iter()
                 .filter(|p| p.neighbors.len() as u16 >= filter)
-                .enumerate().any(|(i, _)| i >= MAX) { // count() would iterate all the nodes
+                .enumerate()
+                .any(|(i, _)| i >= MAX)
+            {
+                // count() would iterate all the nodes
                 filter += 1;
             }
 
@@ -313,14 +330,14 @@ impl InfosSection {
 
             // match path and selection
             macro_rules! match_id {
-                                    ($field:expr, $self_expr:expr) => {
-                                        if let Some(current) = $self_expr {
-                                            if let Some(new_id) = id_map.get(&current) {
-                                                $field = Some(*new_id);
-                                            }
-                                        }
-                                    }
-                                }
+                ($field:expr, $self_expr:expr) => {
+                    if let Some(current) = $self_expr {
+                        if let Some(new_id) = id_map.get(&current) {
+                            $field = Some(*new_id);
+                        }
+                    }
+                };
+            }
             match_id!(new_ui.infos.infos_current, infos_current);
             match_id!(new_ui.path.path_settings.path_src, path_src);
             match_id!(new_ui.path.path_settings.path_dest, path_dest);

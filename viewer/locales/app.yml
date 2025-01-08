@@ -28,18 +28,6 @@ Graph:
 Infos:
   en: Infos
   fr: Infos
-Ka:
-  en: Ka
-  fr: Ka
-Kg:
-  en: Kg
-  fr: Kg
-Kr:
-  en: Kr
-  fr: Kr
-Lin-Log:
-  en: Lin-Log
-  fr: Lin-Log
 Opacity:
   en: Opacity
   fr: Opacité
@@ -49,10 +37,43 @@ Opacity:
 Speed:
   en: Speed
   fr: Vitesse
+Gravity:
+  en: Gravity
+  fr: Gravité
+Lin-log:
+  en: Lin-log
+  fr: Lin-log
+_version: 2
+tr_2BI86KXifjaG:
+  en: Gravity does not decrease with distance from origin
+  fr: La gravité ne diminue pas avec la distance à l'origine
+tr_3Pobzlfl0VvY:
+  en: Speed of the simulation
+  fr: Vitesse de la simulation
+tr_3pPDSwPgAjO6:
+  en: Precision for Barnes-Hut approximation
+  fr: Précision pour l'approximation de Barnes-Hut
+tr_4Ni0GOFXRo4t:
+  en: Use linear-logarithmic scaling for attraction
+  fr: Utiliser une échelle linéaire-logarithmique pour l'attraction
+tr_4YWLqemrNNY0:
+  en: Gravity strength towards origin
+  fr: Force de gravité vers l'origine
+tr_5TKjML7B1VSq:
+  en: Repulsion strength between nodes
+  fr: Force de répulsion entre les nœuds
+tr_YaLosbZnAAbI:
+  en: Attraction strength between nodes
+  fr: Force d'attraction entre les nœuds
+tr_4XZGsvshYpTF:
+  en: Repulsion
+  fr: Répulsion
+tr_7d0jCEbqlwn7:
+  en: Attraction
+  fr: Attraction
 Theta:
   en: Theta
-  fr: Theta
-_version: 2
+  fr: Thêta
 tr_16pQTJA3xEr2:
   en: |-
     Each **node** in the graph is a **Facebook account**, and two nodes are **linked** if they are **friends**.

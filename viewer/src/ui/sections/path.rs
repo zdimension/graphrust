@@ -67,6 +67,7 @@ impl PathSection {
         }
 
         CollapsingHeader::new(t!("Shortest path"))
+            .id_salt("path")
             .default_open(true)
             .show(ui, |ui| {
                 let c1 = ui

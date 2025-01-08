@@ -44,13 +44,18 @@ impl AlgosSection {
         modal: &impl ModalWriter,
     ) {
         CollapsingHeader::new(t!("Algorithms"))
+            .id_salt("algos")
             .default_open(false)
             .show(ui, |ui| {
                 if data.read().persons.len() > 50_000 {
                     ui.label(t!("large_graph_warning"));
+                    ui.separator();
                 }
                 if ui
-                    .add_enabled(self.louvain_state.is_none(), egui::Button::new("Louvain"))
+                    .add_enabled(
+                        self.louvain_state.is_none(),
+                        egui::Button::new("Run Louvain community detection"),
+                    )
                     .clicked()
                 {
                     let (status_tx, status_rx) = status_pipe(ui.ctx());
@@ -72,12 +77,6 @@ impl AlgosSection {
                             }
                         }
                         log_progress!(status_tx, ITERATIONS, ITERATIONS);
-                        /*if louvain.nodes.len() > RenderedGraph::MAX_RENDER_CLASSES {
-                            return Err(CancelableError::Custom(ModalInfo {
-                                title: t!("Too many classes").to_string(),
-                                body: t!("Too many classes (%{len}) to display the result. The current limit is %{max}.\n\nTry decreasing the precision.", len = louvain.nodes.len(), max = RenderedGraph::MAX_RENDER_CLASSES).into(),
-                            }.into()));
-                        }*/
 
                         let data_ = data.read();
                         let mut nodes = data_.persons.as_ref().clone();
@@ -159,6 +158,8 @@ impl AlgosSection {
                     });
                 }
 
+                ui.separator();
+
                 if ui
                     .checkbox(&mut self.force_atlas_state.running, "ForceAtlas2")
                     .changed()
@@ -173,39 +174,76 @@ impl AlgosSection {
                 egui::Grid::new("#forceatlas").show(ui, |ui| {
                     let mut upd = false;
 
+                    macro_rules! field {
+                        ($label:expr, $tooltip:expr, $widget:expr) => {{
+                            let label = ui.label($label);
+                            let tooltip = ($tooltip).map(|s| format!("{s}:"));
+                            if let Some(ref text) = tooltip {
+                                label.on_hover_text(text.to_string());
+                            }
+                            let mut resp = $widget;
+                            if let Some(text) = tooltip {
+                                resp = resp.on_hover_text(text);
+                            }
+                            upd |= resp.changed();
+                            ui.end_row();
+                        }};
+                    }
+
                     // TODO: better ranges for these
                     // TODO: presets?
                     let fields = [
-                        (t!("Theta"), &mut self.force_atlas_state.settings.theta),
-                        (t!("Ka"), &mut self.force_atlas_state.settings.ka),
-                        (t!("Kg"), &mut self.force_atlas_state.settings.kg),
-                        (t!("Kr"), &mut self.force_atlas_state.settings.kr),
-                        (t!("Speed"), &mut self.force_atlas_state.settings.speed),
+                        (
+                            t!("Theta"),
+                            &mut self.force_atlas_state.settings.theta,
+                            0.001..=1.0,
+                            Some(t!("Precision for Barnes-Hut approximation")),
+                        ),
+                        (
+                            t!("Attraction"),
+                            &mut self.force_atlas_state.settings.ka,
+                            0.001..=10.0,
+                            Some(t!("Attraction strength between nodes")),
+                        ),
+                        (
+                            t!("Gravity"),
+                            &mut self.force_atlas_state.settings.kg,
+                            0.001..=10.0,
+                            Some(t!("Gravity strength towards origin")),
+                        ),
+                        (
+                            t!("Repulsion"),
+                            &mut self.force_atlas_state.settings.kr,
+                            0.001..=10.0,
+                            Some(t!("Repulsion strength between nodes")),
+                        ),
+                        (
+                            t!("Speed"),
+                            &mut self.force_atlas_state.settings.speed,
+                            0.001..=10.0,
+                            Some(t!("Speed of the simulation")),
+                        ),
                     ];
 
-                    for (name, field) in fields.into_iter() {
-                        ui.label(name);
-                        upd |= ui
-                            .add(
-                                egui::Slider::new(field, 0.001..=10.0)
-                                    .logarithmic(true)
-                                    .text(""),
-                            )
-                            .changed();
-                        ui.end_row();
+                    for (name, field, range, tooltip) in fields.into_iter() {
+                        field!(
+                            name,
+                            tooltip,
+                            ui.add(egui::Slider::new(field, range).logarithmic(true).text(""))
+                        );
                     }
 
-                    ui.label(t!("Lin-Log"));
-                    upd |= ui
-                        .checkbox(&mut self.force_atlas_state.settings.lin_log, "")
-                        .changed();
-                    ui.end_row();
+                    field!(
+                        t!("Lin-log"),
+                        Some(t!("Use linear-logarithmic scaling for attraction")),
+                        ui.checkbox(&mut self.force_atlas_state.settings.lin_log, "")
+                    );
 
-                    ui.label(t!("Strong gravity"));
-                    upd |= ui
-                        .checkbox(&mut self.force_atlas_state.settings.strong_gravity, "")
-                        .changed();
-                    ui.end_row();
+                    field!(
+                        t!("Strong gravity"),
+                        Some(t!("Gravity does not decrease with distance from origin")),
+                        ui.checkbox(&mut self.force_atlas_state.settings.strong_gravity, "")
+                    );
 
                     if upd {
                         *self.force_atlas_state.new_settings.1.lock() =

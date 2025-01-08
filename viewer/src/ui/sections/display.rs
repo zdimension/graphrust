@@ -21,8 +21,14 @@ pub struct DisplaySection {
 }
 
 impl DisplaySection {
-    pub(crate) fn show(&mut self, graph: &Arc<MyRwLock<RenderedGraph>>, ui: &mut Ui, stats: &Arc<MyRwLock<NodeStats>>) {
+    pub(crate) fn show(
+        &mut self,
+        graph: &Arc<MyRwLock<RenderedGraph>>,
+        ui: &mut Ui,
+        stats: &Arc<MyRwLock<NodeStats>>,
+    ) {
         CollapsingHeader::new(t!("Display"))
+            .id_salt("display")
             .default_open(true)
             .show(ui, |ui| {
                 ui.checkbox(&mut self.g_show_nodes, t!("Show nodes"));
