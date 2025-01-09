@@ -318,7 +318,9 @@ impl InfosSection {
                 .iter()
                 .filter(|p| p.neighbors.len() as u16 >= filter)
                 .enumerate()
-                .any(|(i, _)| i >= MAX)
+                .skip(MAX)
+                .next()
+                .is_some()
             {
                 // count() would iterate all the nodes
                 filter += 1;

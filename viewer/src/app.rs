@@ -408,7 +408,11 @@ impl eframe::App for GraphViewApp {
                                     file.viewer,
                                     file.edges.iter(),
                                     gl_fwd,
-                                    110,
+                                    if cfg!(target_arch = "wasm32") {
+                                        120
+                                    } else {
+                                        60
+                                    },
                                     cam,
                                     UiState::default(),
                                     status_tx,

@@ -181,18 +181,26 @@ impl RenderedGraph {
                 .map(|e| {
                     let pa = &viewer.persons[e.a as usize];
                     let pb = &viewer.persons[e.b as usize];
-                    (pa, pb)
+                    let dist = (pa.position - pb.position).norm_squared();
+                    (pa, pb, dist)
                 })
-                .flat_map(|(pa, pb)| geom_draw::create_edge_vertices(pa, pb));
+                //.sorted_unstable_by_key(|(_, _, dist)| std::cmp::Reverse(*dist))
+                .sorted_unstable_by(|(_, _, dist1), (_, _, dist2)| {
+                    dist2.partial_cmp(dist1).unwrap()
+                })
+                .flat_map(|(pa, pb, _)| geom_draw::create_edge_vertices(pa, pb));
 
+            let nodes_count = viewer.persons.len();
+            //let nodes_count = 0;
+            //let node_vertices = node_vertices.take(nodes_count);
             let vertices = node_vertices.chain(edge_vertices);
 
             let vertices = {
-                const THRESHOLD: usize = 1024 * 1024 * 1024;
-                const MAX_VERTS_IN_ONE_GIG: usize = THRESHOLD / size_of::<PersonVertex>();
+                const THRESHOLD: usize = 256 * 1024 * 1024;
+                const MAX_VERTS_IN_THRESHOLD: usize = THRESHOLD / size_of::<PersonVertex>();
                 let num_vertices =
-                    viewer.persons.len() * VERTS_PER_NODE + edges_count * geom_draw::VERTS_PER_EDGE;
-                if num_vertices > MAX_VERTS_IN_ONE_GIG {
+                    nodes_count * VERTS_PER_NODE + edges_count * geom_draw::VERTS_PER_EDGE;
+                if num_vertices > MAX_VERTS_IN_THRESHOLD {
                     log!(
                         status_tx,
                         t!(
@@ -201,7 +209,7 @@ impl RenderedGraph {
                             num = num_vertices
                         )
                     );
-                    vertices.take(MAX_VERTS_IN_ONE_GIG).collect_vec()
+                    vertices.take(MAX_VERTS_IN_THRESHOLD).collect_vec()
                 } else {
                     log!(
                         status_tx,
@@ -216,6 +224,18 @@ impl RenderedGraph {
             };
 
             let vertices_count = vertices.len();
+
+            let edges_count =
+                (vertices_count - (nodes_count * VERTS_PER_NODE)) / geom_draw::VERTS_PER_EDGE;
+
+            log!(
+                status_tx,
+                t!(
+                    "New node count: %{num}, edge count: %{edges}",
+                    num = nodes_count,
+                    edges = edges_count
+                )
+            );
 
             log!(status_tx, t!("Allocating vertex buffer"));
             let (vertices_array, vertices_buffer) = gl.run(move |gl: &glow::Context| {
@@ -301,7 +321,7 @@ impl RenderedGraph {
                 program_edge,
                 program_node,
                 nodes_buffer: vertices_buffer,
-                nodes_count: viewer.persons.len(),
+                nodes_count,
                 nodes_array: vertices_array,
                 edges_count,
                 node_filter: NodeFilter::default(),
