@@ -327,7 +327,13 @@ tr_8PLTSIBmhSZo:
 tr_Rh4jrJx3T1Nc:
   en: Done, took %{time}ms
   fr: Terminé, a pris %{time}ms
-tr_STvwhvBrHgqX:
-  en: Creating vertice list
+tr_6BYtRHixdlI2:
+  en: Creating vertices list
   fr: Création de la liste de vertex
+tr_4zIaFU1wny7y:
+  en: 'New node count: %{num}, edge count: %{edges}'
+  fr: 'Nouveau nombre de nœuds : %{num}, nombre de liens : %{edges}'
+tr_7eKL8ChJmiRi:
+  en: 🔍 Choose two nodes to find the shortest path
+  fr: 🔍 Choisissez deux nœuds pour trouver le plus court chemin
 
