@@ -4,7 +4,7 @@ use crate::ui::{tabs, UiState};
 use eframe::glow::HasContext;
 use eframe::{egui_glow, glow};
 use egui::{
-    vec2, CentralPanel, Color32, Context, FontFamily, FontId, Frame, Hyperlink, Id, Layout,
+    vec2, CentralPanel, Color32, Context, FontFamily, FontId, Frame, Hyperlink, Id, Image, Layout,
     RichText, TextFormat, TextStyle, Ui, Vec2, WidgetText,
 };
 use egui_dock::{DockArea, DockState, Style};
@@ -261,6 +261,8 @@ impl GraphViewApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         cc.egui_ctx.style_mut(|s| s.animation_time = 1.0 / 6.0);
 
+        egui_extras::install_image_loaders(&cc.egui_ctx);
+
         let gl = cc
             .gl
             .as_ref()
@@ -496,10 +498,17 @@ impl GraphViewApp {
                         );
                         ui.label(format!(" ({})", env!("VERGEN_BUILD_DATE")));
                     });
-                    ui.add(
-                        Hyperlink::from_label_and_url("zdimension", "https://zdimension.fr")
-                            .open_in_new_tab(true),
-                    );
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        ui.add(
+                            Image::new(egui::include_image!("../zdimension.gif"))
+                                .fit_to_original_size(1.0)
+                        );
+                        ui.add(
+                            Hyperlink::from_label_and_url("zdimension", "https://zdimension.fr")
+                                .open_in_new_tab(true),
+                        );
+                    });
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 10.0;
                         ui.vertical(|ui| {
