@@ -377,7 +377,14 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                             ));
                         };
 
-                        if let Some(PathStatus::PathFound(ref path)) = tab.ui_state.path.path_status
+                        let alpha = if tab.ui_state.path.path_loading {
+                            Color32::from_white_alpha(30)
+                        } else {
+                            Color32::from_white_alpha(255)
+                        };
+
+                        let path = if let Some(PathStatus::PathFound(ref path)) =
+                            tab.ui_state.path.path_status
                         {
                             for (a, b) in path.iter().tuple_windows() {
                                 let a = (cam * Vector4::from(data.persons[*a].position)).xy();
@@ -389,13 +396,23 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                                     ],
                                     stroke: PathStroke::new(
                                         2.0,
-                                        Color32::from_rgba_unmultiplied(150, 0, 0, 200),
+                                        Color32::from_rgba_unmultiplied(150, 0, 0, 200) * alpha,
                                     ),
                                 });
                             }
-                            for &p in path {
-                                draw_person(p, Color32::from_rgba_unmultiplied(150, 0, 0, 200));
-                            }
+                            path
+                        } else {
+                            &tab.ui_state
+                                .path
+                                .path_settings
+                                .path_src
+                                .iter()
+                                .chain(tab.ui_state.path.path_settings.path_dest.iter())
+                                .copied()
+                                .collect_vec()
+                        };
+                        for &p in path {
+                            draw_person(p, Color32::from_rgba_unmultiplied(150, 0, 0, 200) * alpha);
                         }
 
                         if let Some(sel) = tab.ui_state.infos.infos_current {

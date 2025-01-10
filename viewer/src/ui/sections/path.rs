@@ -5,12 +5,13 @@ use crate::thread;
 use crate::thread::JoinHandle;
 use crate::threading::MyRwLock;
 use crate::ui::infos::InfosSection;
+use crate::ui::sections::path::PathStatus::{NoPath, SameSrcDest};
 use crate::ui::widgets::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::ui::SelectedUserField;
 use ahash::AHashSet;
 use derivative::Derivative;
 use eframe::emath::vec2;
-use egui::{CollapsingHeader, Ui};
+use egui::{CollapsingHeader, Sense, Spinner, TextStyle, Ui};
 use itertools::Itertools;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -20,6 +21,7 @@ use std::sync::Arc;
 pub struct PathSection {
     pub path_settings: PathSectionSettings,
     pub path_dirty: bool,
+    pub path_loading: bool,
     pub path_status: Option<PathStatus>,
     pub path_thread: Option<JoinHandle<Option<PathSectionResults>>>,
 }
@@ -28,7 +30,6 @@ pub struct PathSection {
 pub enum PathStatus {
     #[default]
     SameSrcDest,
-    Loading,
     NoPath,
     PathFound(Vec<usize>),
 }
@@ -56,13 +57,15 @@ impl PathSection {
         infos: &mut InfosSection,
         sel_field: &mut SelectedUserField,
     ) {
+        use PathStatus::*;
         if let Some(thr) = self.path_thread.take_if(|thr| thr.is_finished()) {
             let res = thr.join();
             self.path_thread = None;
+            self.path_loading = false;
             if let Ok(Some(res)) = res {
-                self.path_status = Some(PathStatus::PathFound(res.path));
+                self.path_status = Some(PathFound(res.path));
             } else {
-                self.path_status = Some(PathStatus::NoPath);
+                self.path_status = Some(NoPath);
             }
         }
 
@@ -108,6 +111,101 @@ impl PathSection {
                     })
                     .inner;
 
+                if (self.path_dirty || c1.changed() || c2.changed())
+                    | ui.checkbox(
+                        &mut self.path_settings.path_no_direct,
+                        t!("Avoid direct link"),
+                    )
+                    .changed()
+                    | ui.checkbox(
+                        &mut self.path_settings.path_no_mutual,
+                        t!("Avoid mutual friends"),
+                    )
+                    .changed()
+                {
+                    self.path_dirty = false;
+                    match (self.path_settings.path_src, self.path_settings.path_dest) {
+                        (Some(x), Some(y)) if x == y => {
+                            self.path_status = Some(SameSrcDest);
+                            self.path_loading = false;
+                        }
+                        (None, _) | (_, None) => {
+                            self.path_status = None;
+                            self.path_loading = false;
+                        }
+                        _ => {
+                            log::info!("Starting pathfinding");
+                            let settings = self.path_settings.clone();
+                            let data = data.clone();
+                            self.path_thread = Some(thread::spawn(move || {
+                                let start = chrono::Utc::now();
+                                let data = data.read().persons.clone();
+                                let res = do_pathfinding(settings, &data);
+                                log::info!(
+                                    "Pathfinding took {}ms",
+                                    (chrono::Utc::now() - start).num_milliseconds()
+                                );
+                                res
+                            }));
+                            self.path_loading = true;
+                        }
+                    }
+                }
+
+                ui.horizontal(|ui| {
+                    if self.path_loading {
+                        ui.add(Spinner::new()); //.size(ui.text_style_height(&TextStyle::Body) * 0.75));
+                        ui.label(t!("Loading..."));
+                    } else {
+                        ui.label(match &self.path_status {
+                            Some(SameSrcDest) => t!("🚫 Source and destination are the same"),
+                            Some(NoPath) => t!("🗙 No path found between the two nodes"),
+                            Some(PathFound(path)) => {
+                                t!("✔ Path found, distance %{dist}", dist = path.len() - 1)
+                            }
+                            None => t!("🔍 Choose two nodes to find the shortest path"),
+                        });
+                    }
+                    ui.allocate_exact_size(
+                        vec2(0.0, ui.style().spacing.interact_size.y),
+                        Sense::hover(),
+                    );
+                });
+
+                if let Some(PathFound(path)) = &self.path_status {
+                    use crate::ui;
+                    use eframe::epaint::Color32;
+                    let mut del_path = None;
+                    let mut cur_path = None;
+                    let data = data.read();
+                    ui.add_enabled_ui(true, |ui| {
+                        for (i, id) in path.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                ui::set_bg_color_tinted(Color32::RED, ui);
+                                self.person_button(&data, ui, id, &mut cur_path);
+                                if i != 0
+                                    && i != path.len() - 1
+                                    && ui
+                                        .button("✖")
+                                        .on_hover_text(t!("Exclude this person from the path"))
+                                        .clicked()
+                                {
+                                    del_path = Some(*id);
+                                }
+                            });
+                        }
+                    });
+                    if let Some(id) = cur_path {
+                        infos.set_infos_current(Some(id));
+                    }
+                    if let Some(i) = del_path {
+                        self.path_dirty = true;
+                        if !self.path_settings.exclude_ids.contains(&i) {
+                            self.path_settings.exclude_ids.push(i);
+                        }
+                    }
+                }
+
                 ui.horizontal(|ui| {
                     ui.label(t!("Excluded:"));
                     if ui
@@ -142,91 +240,6 @@ impl PathSection {
                     if let Some(i) = del_excl {
                         self.path_dirty = true;
                         self.path_settings.exclude_ids.remove(i);
-                    }
-                }
-
-                if (self.path_dirty || c1.changed() || c2.changed())
-                    | ui.checkbox(
-                        &mut self.path_settings.path_no_direct,
-                        t!("Avoid direct link"),
-                    )
-                    .changed()
-                    | ui.checkbox(
-                        &mut self.path_settings.path_no_mutual,
-                        t!("Avoid mutual friends"),
-                    )
-                    .changed()
-                {
-                    self.path_dirty = false;
-                    self.path_status =
-                        match (self.path_settings.path_src, self.path_settings.path_dest) {
-                            (Some(x), Some(y)) if x == y => Some(PathStatus::SameSrcDest),
-                            (None, _) | (_, None) => None,
-                            _ => {
-                                log::info!("Starting pathfinding");
-                                let settings = self.path_settings.clone();
-                                let data = data.clone();
-                                self.path_thread = Some(thread::spawn(move || {
-                                    let start = chrono::Utc::now();
-                                    let data = data.read().persons.clone();
-                                    let res = do_pathfinding(settings, &data);
-                                    log::info!(
-                                        "Pathfinding took {}ms",
-                                        (chrono::Utc::now() - start).num_milliseconds()
-                                    );
-                                    res
-                                }));
-                                Some(PathStatus::Loading)
-                            }
-                        }
-                }
-
-                if let Some(st) = &self.path_status {
-                    use crate::ui;
-                    use eframe::epaint::Color32;
-                    use PathStatus::*;
-                    match st {
-                        SameSrcDest => {
-                            ui.label(t!("🚫 Source and destination are the same"));
-                        }
-                        Loading => {
-                            ui.horizontal(|ui| {
-                                ui.spinner();
-                                ui.label(t!("Loading..."));
-                            });
-                        }
-                        NoPath => {
-                            ui.label(t!("🗙 No path found between the two nodes"));
-                        }
-                        PathFound(path) => {
-                            ui.label(t!("✔ Path found, distance %{dist}", dist = path.len() - 1));
-
-                            let mut del_path = None;
-                            let mut cur_path = None;
-                            let data = data.read();
-                            for (i, id) in path.iter().enumerate() {
-                                ui.horizontal(|ui| {
-                                    ui::set_bg_color_tinted(Color32::RED, ui);
-                                    self.person_button(&data, ui, id, &mut cur_path);
-                                    if i != 0
-                                        && i != path.len() - 1
-                                        && ui
-                                            .button("✖")
-                                            .on_hover_text(t!("Exclude this person from the path"))
-                                            .clicked()
-                                    {
-                                        del_path = Some(*id);
-                                    }
-                                });
-                            }
-                            if let Some(id) = cur_path {
-                                infos.set_infos_current(Some(id));
-                            }
-                            if let Some(i) = del_path {
-                                self.path_dirty = true;
-                                self.path_settings.exclude_ids.push(i);
-                            }
-                        }
                     }
                 }
             });
