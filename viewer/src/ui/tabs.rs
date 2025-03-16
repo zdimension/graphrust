@@ -11,7 +11,7 @@ use eframe::egui_glow;
 use eframe::emath::{vec2, Align, Vec2};
 use eframe::epaint::text::TextWrapMode;
 use eframe::epaint::Shape::LineSegment;
-use eframe::epaint::{CircleShape, Color32, PathStroke, TextShape};
+use eframe::epaint::{CircleShape, Color32, PathStroke, Stroke, TextShape};
 use egui::{emath, pos2, Id, Layout, Rect, RichText, TextStyle, Ui, WidgetText};
 use graph_format::nalgebra::{Similarity3, Vector4};
 use graph_format::EdgeStore;
@@ -394,7 +394,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                                         rect.center() + vec2(a.x, -a.y) * rect.size() * 0.5,
                                         rect.center() + vec2(b.x, -b.y) * rect.size() * 0.5,
                                     ],
-                                    stroke: PathStroke::new(
+                                    stroke: Stroke::new(
                                         2.0,
                                         Color32::from_rgba_unmultiplied(150, 0, 0, 200) * alpha,
                                     ),

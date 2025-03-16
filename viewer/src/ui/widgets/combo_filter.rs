@@ -1,11 +1,14 @@
 use crate::app::{thread, ContextUpdater, ViewerData};
 use eframe::emath::{vec2, Align2, NumExt, Rect, Vec2};
 use eframe::epaint;
-use eframe::epaint::{Shape, Stroke};
+use eframe::epaint::{Shape, Stroke, StrokeKind};
 use egui::style::WidgetVisuals;
 use std::ops::Add;
 
-use egui::{Align, Id, Layout, Painter, PopupCloseBehavior, Response, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText};
+use egui::{
+    Align, Id, Layout, Painter, PopupCloseBehavior, Response, ScrollArea, SelectableLabel, Sense,
+    Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText,
+};
 
 use crate::threading::MyRwLock;
 use derivative::Derivative;
@@ -43,11 +46,7 @@ fn button_frame(
     outer_rect.set_height(outer_rect.height().at_least(interact_size.y));
 
     let inner_rect = outer_rect.shrink2(margin);
-    let mut content_ui = ui.new_child(
-        UiBuilder::new()
-            .max_rect(inner_rect)
-            .layout(*ui.layout())
-    );
+    let mut content_ui = ui.new_child(UiBuilder::new().max_rect(inner_rect).layout(*ui.layout()));
     add_contents(&mut content_ui);
 
     let mut outer_rect = content_ui.min_rect().expand2(margin);
@@ -66,9 +65,10 @@ fn button_frame(
             where_to_put_background,
             epaint::RectShape::new(
                 outer_rect.expand(visuals.expansion),
-                visuals.rounding,
+                visuals.corner_radius,
                 visuals.weak_bg_fill,
                 visuals.bg_stroke,
+                StrokeKind::Inside,
             ),
         );
     }
@@ -134,16 +134,23 @@ pub fn combo_with_filter(
         };
 
         let (selected_text, dim) = match current_item {
-            Some(value) => (WidgetText::from(viewer_data.read().persons[*value].name), false),
+            Some(value) => (
+                WidgetText::from(viewer_data.read().persons[*value].name),
+                false,
+            ),
             None => (WidgetText::from(t!("Click here to search")), true),
         };
 
-        let galley =
-            selected_text.into_galley(ui, Some(if wrap_enabled {
+        let galley = selected_text.into_galley(
+            ui,
+            Some(if wrap_enabled {
                 TextWrapMode::Wrap
             } else {
                 TextWrapMode::Extend
-            }), wrap_width, TextStyle::Button);
+            }),
+            wrap_width,
+            TextStyle::Button,
+        );
 
         // The width necessary to contain the whole widget with the currently selected value's text.
         let width = if wrap_enabled {
@@ -192,14 +199,18 @@ pub fn combo_with_filter(
     }
 
     let mut sel_changed = false;
-    let inner = egui::popup::popup_below_widget(ui, popup_id, &button_response, PopupCloseBehavior::CloseOnClick, |ui| {
-        ui.vertical(|ui| {
-            let binding =
-                ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
+    let inner = egui::popup::popup_below_widget(
+        ui,
+        popup_id,
+        &button_response,
+        PopupCloseBehavior::CloseOnClick,
+        |ui| {
+            ui.vertical(|ui| {
+                let binding =
+                    ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
 
-            let layout = Layout::centered_and_justified(ui.layout().main_dir());
-            let txt_box_resp = ui
-                .allocate_ui_with_layout(
+                let layout = Layout::centered_and_justified(ui.layout().main_dir());
+                let txt_box_resp = ui.allocate_ui_with_layout(
                     ui.available_size() * vec2(1.0, 0.0),
                     layout,
                     |ui| {
@@ -208,87 +219,100 @@ pub fn combo_with_filter(
                         r
                     },
                 );
-            let mut txt_resp = txt_box_resp.inner;
-            let txt = &txt_resp.response;
+                let mut txt_resp = txt_box_resp.inner;
+                let txt = &txt_resp.response;
 
-            let mut state = binding.write();
-            if !state.first_open {
-                state.first_open = true;
-                ui.memory_mut(|m| m.request_focus(txt.id));
-                txt_resp.state.cursor.set_char_range(Some(CCursorRange::two(
-                    CCursor::new(0),
-                    CCursor::new(state.pattern.chars().count()),
-                )));
-                txt_resp.state.store(ui.ctx(), txt_resp.response.id);
-            }
-            let changed = txt.changed();
-
-            if changed {
-                if state.pattern.is_empty() {
-                    state.loading = false;
-                    state.item_vector = ComboFilterState::default().item_vector;
-                } else {
-                    state.loading = true;
-                    let pattern = state.pattern.clone();
-                    let engine = viewer_data.read().engine.clone();
-                    let state = binding.clone();
-                    let ctx = ContextUpdater::new(ui.ctx());
-                    thread::spawn(move || {
-                        let res = engine.get_blocking(|s| s.search(&pattern, RESULTS));
-                        let mut state = state.write();
-                        if state.pattern.eq(&pattern) {
-                            state.item_vector = res.iter().map(|&i| i as usize).collect();
-                            state.loading = false;
-                            ctx.update();
-                        }
-                    });
+                let mut state = binding.write();
+                if !state.first_open {
+                    state.first_open = true;
+                    ui.memory_mut(|m| m.request_focus(txt.id));
+                    txt_resp.state.cursor.set_char_range(Some(CCursorRange::two(
+                        CCursor::new(0),
+                        CCursor::new(state.pattern.chars().count()),
+                    )));
+                    txt_resp.state.store(ui.ctx(), txt_resp.response.id);
                 }
-            }
+                let changed = txt.changed();
 
-            let show_count = RESULTS.min(state.item_vector.len());
-
-            let loading = state.loading;
-
-            ScrollArea::vertical()
-                .max_height(ui.spacing().combo_height)
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    if show_count == 0 {
-                        ui.add_enabled(false, SelectableLabel::new(false, t!("No results found")));
+                if changed {
+                    if state.pattern.is_empty() {
+                        state.loading = false;
+                        state.item_vector = ComboFilterState::default().item_vector;
                     } else {
-                        let data = viewer_data.read();
-                        for i in 0..show_count {
-                            let idx = state.item_vector[i];
+                        state.loading = true;
+                        let pattern = state.pattern.clone();
+                        let engine = viewer_data.read().engine.clone();
+                        let state = binding.clone();
+                        let ctx = ContextUpdater::new(ui.ctx());
+                        thread::spawn(move || {
+                            let res = engine.get_blocking(|s| s.search(&pattern, RESULTS));
+                            let mut state = state.write();
+                            if state.pattern.eq(&pattern) {
+                                state.item_vector = res.iter().map(|&i| i as usize).collect();
+                                state.loading = false;
+                                ctx.update();
+                            }
+                        });
+                    }
+                }
 
-                            if ui
-                                .allocate_ui_with_layout(
-                                    ui.available_size() * vec2(1.0, 0.0),
-                                    Layout::centered_and_justified(ui.layout().main_dir())
-                                        .with_cross_align(Align::LEFT),
-                                    |ui| {
-                                        ui.add_enabled(!loading, SelectableLabel::new(
-                                            *current_item == Some(idx),
-                                            data.persons[idx].name,
-                                        ))
-                                    },
-                                )
-                                .inner
-                                .clicked()
-                            {
-                                *current_item = Some(idx);
-                                sel_changed = true;
+                let show_count = RESULTS.min(state.item_vector.len());
+
+                let loading = state.loading;
+
+                ScrollArea::vertical()
+                    .max_height(ui.spacing().combo_height)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        if show_count == 0 {
+                            ui.add_enabled(
+                                false,
+                                SelectableLabel::new(false, t!("No results found")),
+                            );
+                        } else {
+                            let data = viewer_data.read();
+                            for i in 0..show_count {
+                                let idx = state.item_vector[i];
+
+                                if ui
+                                    .allocate_ui_with_layout(
+                                        ui.available_size() * vec2(1.0, 0.0),
+                                        Layout::centered_and_justified(ui.layout().main_dir())
+                                            .with_cross_align(Align::LEFT),
+                                        |ui| {
+                                            ui.add_enabled(
+                                                !loading,
+                                                SelectableLabel::new(
+                                                    *current_item == Some(idx),
+                                                    data.persons[idx].name,
+                                                ),
+                                            )
+                                        },
+                                    )
+                                    .inner
+                                    .clicked()
+                                {
+                                    *current_item = Some(idx);
+                                    sel_changed = true;
+                                }
                             }
                         }
-                    }
-                });
+                    });
 
-            if loading {
-                let rect = ui.min_rect();
-                let txt_rect = txt_box_resp.response.rect;
-                Spinner::new().paint_at(ui, Rect::from_center_size(rect.center().add(vec2(0.0, txt_rect.height() / 2.0)), vec2(20.0, 20.0)));
-            }
-        })
-    });
+                if loading {
+                    let rect = ui.min_rect();
+                    let txt_rect = txt_box_resp.response.rect;
+                    Spinner::new().paint_at(
+                        ui,
+                        Rect::from_center_size(
+                            rect.center().add(vec2(0.0, txt_rect.height() / 2.0)),
+                            vec2(20.0, 20.0),
+                        ),
+                    );
+                }
+            })
+        },
+    );
     if let Some(frame_r) = inner {
         if !sel_changed
             && !frame_r.response.clicked_elsewhere()
