@@ -1,7 +1,9 @@
+use ahash::HashSet;
 use env_logger;
 use itertools::Itertools;
 use rand::Rng;
 use std::env;
+use std::num::NonZeroU16;
 use viewer::algorithms::pathfinding::{do_pathfinding, PathSectionSettings};
 use viewer::graph_storage::{load_binary, load_file};
 use viewer::threading::NullStatusWriter;
@@ -28,16 +30,72 @@ fn init_logs() {
 fn it_works() {
     // print the current directory
     //println!("Current directory: {:?}", env::current_dir().unwrap());
-    println!("Loading");
+    log::info!("Loading");
     let res = load_file(&NullStatusWriter).unwrap();
-    println!("Loaded; processing");
+    log::info!("Loaded; processing");
     let bin = load_binary(&NullStatusWriter, res).unwrap();
 
-    println!("File processed");
+    log::info!("File processed");
 
     let viewer = &bin.viewer;
     let rng = &mut rand::thread_rng();
-    for _ in 0..1000 {
+
+    let mut node = rng.gen_range(0..viewer.persons.len());
+    let mut found_already = HashSet::default();
+    for _ in 0..10 {
+        // find furthest node using bfs
+        let mut dist = vec![0; viewer.persons.len()];
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back(node);
+        dist[node] = 1;
+        while let Some(cur) = queue.pop_front() {
+            for &neigh in &viewer.persons[cur].neighbors {
+                if dist[neigh] == 0 {
+                    dist[neigh] = dist[cur] + 1;
+                    queue.push_back(neigh);
+                }
+            }
+        }
+        /*let max_dist = dist.iter().max().unwrap();
+        let furthest = dist
+            .iter()
+            .enumerate()
+            .find(|(_, &d)| d == *max_dist && !found_already.contains(&d))
+            .unwrap()
+            .0;*/
+        let furthest = dist
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !found_already.contains(i))
+            .max_by_key(|(_, &d)| d)
+            .unwrap()
+            .0;
+        found_already.insert(furthest);
+        let path = do_pathfinding(
+            PathSectionSettings {
+                path_src: Some(node),
+                path_dest: Some(furthest),
+                exclude_ids: vec![],
+                path_no_direct: false,
+                path_no_mutual: false,
+            },
+            &viewer.persons,
+        )
+        .unwrap()
+        .path;
+        log::info!(
+            "diam = {} ({}); path [{}] : [{}]",
+            dist[furthest],
+            furthest,
+            path.len(),
+            path.iter()
+                .map(|i| viewer.persons[*i].neighbors.len().to_string())
+                .join(", ")
+        );
+        node = furthest;
+    }
+
+    /*for _ in 0..1000 {
         let node1 = rng.gen_range(0..viewer.persons.len());
         let node2 = rng.gen_range(0..viewer.persons.len());
 
@@ -66,7 +124,7 @@ fn it_works() {
         .unwrap();
 
         assert_eq!(path.path, path2.path);
-    }
+    }*/
 
     /* let get = |name| {
         let r = viewer
