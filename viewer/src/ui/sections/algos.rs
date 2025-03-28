@@ -31,6 +31,7 @@ pub struct LouvainState {
 }
 
 pub struct ForceAtlasThread {
+    times_rx: single_value_channel::Receiver<f32>,
     status_tx: Sender<bool>,
 }
 
@@ -284,76 +285,91 @@ impl AlgosSection {
                 });
 
                 if self.force_atlas_state.running {
-                    ui.spinner();
+                    const UPD_PER_SEC: usize = 60;
+                    let fa_thread = self.force_atlas_state.data.get_or_insert_with(|| {
+                        let data = data.read();
+                        let layout = Arc::new(RwLock::new(Layout::<f32, 2>::from_positioned(
+                            self.force_atlas_state.settings.clone(),
+                            data.persons
+                                .iter()
+                                .map(|p| Node {
+                                    pos: VecN(p.position.to_array()),
+                                    ..Default::default()
+                                })
+                                .collect(),
+                            data.persons.iter().get_edges().map(|e| (e, 1.0)).collect(),
+                        )));
+                        let (status_tx, status_rx) = mpsc::channel();
+                        let (times_rx, times_tx) = single_value_channel::channel_starting_with(0.0);
+                        let layout_thr = layout.clone();
+                        let settings_thr = self.force_atlas_state.new_settings.clone();
 
-                    let layout = self
-                        .force_atlas_state
-                        .data
-                        .get_or_insert_with(|| {
-                            const UPD_PER_SEC: usize = 60;
-
-                            let data = data.read();
-                            let layout = Arc::new(RwLock::new(Layout::<f32, 2>::from_positioned(
-                                self.force_atlas_state.settings.clone(),
-                                data.persons
-                                    .iter()
-                                    .map(|p| Node {
-                                        pos: VecN(p.position.to_array()),
-                                        ..Default::default()
-                                    })
-                                    .collect(),
-                                data.persons.iter().get_edges().map(|e| (e, 1.0)).collect(),
-                            )));
-                            let (status_tx, status_rx) = mpsc::channel();
-                            let layout_thr = layout.clone();
-                            let settings_thr = self.force_atlas_state.new_settings.clone();
-
-                            thread::spawn(move || {
+                        thread::spawn(move || {
+                            loop {
                                 loop {
-                                    loop {
+                                    let iter_start = std::time::Instant::now();
+                                    {
+                                        let mut layout = layout_thr.write();
+
+                                        layout.iteration();
+
+                                        if settings_thr.0.load(std::sync::atomic::Ordering::Acquire)
                                         {
-                                            let mut layout = layout_thr.write();
-
-                                            layout.iteration();
-
-                                            if settings_thr
+                                            layout.set_settings(settings_thr.1.lock().clone());
+                                            settings_thr
                                                 .0
-                                                .load(std::sync::atomic::Ordering::Acquire)
-                                            {
-                                                layout.set_settings(settings_thr.1.lock().clone());
-                                                settings_thr.0.store(
-                                                    false,
-                                                    std::sync::atomic::Ordering::Release,
-                                                );
-                                            }
+                                                .store(false, std::sync::atomic::Ordering::Release);
                                         }
+                                    }
 
-                                        // check if the layout has been paused
-                                        match status_rx.try_recv() {
-                                            Ok(true) => {}                             // continue
-                                            Ok(false) => break,                        // pause
-                                            Err(TryRecvError::Empty) => {}             // no change
-                                            Err(TryRecvError::Disconnected) => return, // tab closed
-                                        }
+                                    // check if the layout has been paused
+                                    match status_rx.try_recv() {
+                                        Ok(true) => {}                             // continue
+                                        Ok(false) => break,                        // pause
+                                        Err(TryRecvError::Empty) => {}             // no change
+                                        Err(TryRecvError::Disconnected) => return, // tab closed
+                                    }
 
+                                    let elapsed = iter_start.elapsed();
+                                    if times_tx.update(elapsed.as_secs_f32()).is_err() {
+                                        return;
+                                    }
+                                    if elapsed < Duration::from_secs_f32(1.0 / UPD_PER_SEC as f32) {
                                         thread::sleep(Duration::from_secs_f32(
-                                            1.0 / UPD_PER_SEC as f32,
+                                            1.0 / UPD_PER_SEC as f32 - elapsed.as_secs_f32(),
                                         ));
                                     }
-                                    loop {
-                                        // wait for resume
-                                        match status_rx.recv() {
-                                            Ok(true) => break,        // resume
-                                            Ok(false) => {}           // keep paused
-                                            Err(RecvError) => return, // tab closed
-                                        }
+                                }
+                                loop {
+                                    // wait for resume
+                                    match status_rx.recv() {
+                                        Ok(true) => break,        // resume
+                                        Ok(false) => {}           // keep paused
+                                        Err(RecvError) => return, // tab closed
                                     }
                                 }
-                            });
-                            (layout, Some(ForceAtlasThread { status_tx }))
-                        })
-                        .0
-                        .clone();
+                            }
+                        });
+                        (
+                            layout,
+                            Some(ForceAtlasThread {
+                                times_rx,
+                                status_tx,
+                            }),
+                        )
+                    });
+
+                    ui.horizontal(|| {
+                        ui.spinner();
+                        if let Some(thr) = &mut fa_thread.1 {
+                            ui.label(format!(
+                                "{:.1} Hz",
+                                (1.0 / thr.times_rx.latest()).min(UPD_PER_SEC as f32)
+                            ));
+                        }
+                    });
+
+                    let layout = fa_thread.0.clone();
 
                     let (s, r, _t) =
                         self.force_atlas_state.render_thread.get_or_insert_with(|| {

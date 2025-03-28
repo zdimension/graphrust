@@ -32,6 +32,7 @@ serde_json = "1.0"
 rust-i18n = "3"
 egui_commonmark = "0.20.0"
 bit-set = "0.8.0"
+single_value_channel = "1.2.2"
 
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
