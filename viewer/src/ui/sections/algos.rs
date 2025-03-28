@@ -7,7 +7,7 @@ use crate::ui;
 use crate::ui::modal::ModalWriter;
 use crate::ui::NodeStats;
 use crate::{log_progress, thread};
-use egui::{CollapsingHeader, Ui};
+use egui::{Button, CollapsingHeader, Ui};
 use forceatlas2::{Layout, Node, Settings, VecN};
 use graph_format::Point;
 use parking_lot::{Mutex, RwLock};
@@ -159,6 +159,34 @@ impl AlgosSection {
                 }
 
                 ui.separator();
+
+                if ui
+                    .add_enabled(
+                        !self.force_atlas_state.running,
+                        Button::new(t!("Randomize positions")),
+                    )
+                    .clicked()
+                {
+                    self.force_atlas_state.data = None;
+                    self.force_atlas_state.render_thread = None;
+                    let data = data.clone();
+                    let graph = graph.clone();
+                    let thr = spawn_cancelable(modal.clone(), move || {
+                        let mut data = data.write();
+                        let mut persons = data.persons.as_ref().clone();
+                        for person in persons.iter_mut() {
+                            person.position = Point::new(
+                                rand::random::<f32>() * 2.0 - 1.0,
+                                rand::random::<f32>() * 2.0 - 1.0,
+                            );
+                        }
+                        data.persons = Arc::new(persons);
+                        let task = ui::rerender_graph(&data.persons);
+                        let mut graph = graph.write();
+                        graph.tasks.push_back(task);
+                        Ok(())
+                    });
+                }
 
                 if ui
                     .checkbox(&mut self.force_atlas_state.running, "ForceAtlas2")
@@ -364,6 +392,7 @@ impl AlgosSection {
                                             graph.tasks.push_back(closure);
                                         }
                                         if result_tx.send(ForceAtlasRenderDone).is_err() {
+                                            log::info!("Render thread closed");
                                             return; // tab closed
                                         }
                                     }

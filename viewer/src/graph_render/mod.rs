@@ -170,7 +170,7 @@ impl RenderedGraph {
             let edges = edges.take(10_000_000);
 
             let edges_count = edges.len();
-            log!(status_tx, t!("Creating vertice list"));
+            log!(status_tx, t!("Creating vertices list"));
             const VERTS_PER_NODE: usize = 1;
             let node_vertices = viewer
                 .persons
