@@ -152,10 +152,6 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                         let (id, rect) = ui.allocate_space(ui.available_size());
 
                         let sz = rect.size();
-                        if sz != tab.tab_camera.camera.size {
-                            tab.tab_camera.camera.set_window_size(sz);
-                            tab.tab_camera.camera_default.set_window_size(sz);
-                        }
 
                         let response =
                             ui.interact(rect, id, egui::Sense::click().union(egui::Sense::drag()));
@@ -217,19 +213,19 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                             }
                         }
 
+                        let fixed_cam = tab.tab_camera.camera.with_window_size(sz);
+
                         if let Some(pos) = response.interact_pointer_pos().or(response.hover_pos())
                         {
                             let centered_pos_raw = pos - rect.center();
                             let centered_pos = 2.0 * centered_pos_raw / rect.size();
 
                             if response.dragged_by(egui::PointerButton::Primary) {
-                                tab.tab_camera
-                                    .camera
-                                    .pan(response.drag_delta().x, response.drag_delta().y);
+                                let delta = response.drag_delta() / Camera::get_major_axis(sz);
+                                tab.tab_camera.camera.pan(delta.x, delta.y);
 
                                 ui.ctx().animate_bool_with_time(cid, true, 0.0);
-                                tab.tab_camera.cam_animating =
-                                    Some(CamAnimating::Pan(response.drag_delta()));
+                                tab.tab_camera.cam_animating = Some(CamAnimating::Pan(delta));
                             } else if response.dragged_by(egui::PointerButton::Secondary) {
                                 let prev_pos = centered_pos_raw - response.drag_delta();
                                 let rot = centered_pos_raw.angle() - prev_pos.angle();
@@ -239,13 +235,14 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                                 tab.tab_camera.cam_animating = Some(CamAnimating::Rot(rot));
                             }
 
-                            let zero_pos = (pos - rect.min).to_pos2();
-
                             tab.ui_state.details.mouse_pos = Some(centered_pos.to_pos2());
-                            let pos_world = (tab.tab_camera.camera.get_inverse_matrix()
+                            let pos_world = (fixed_cam.get_inverse_matrix()
                                 * Vector4::new(centered_pos.x, -centered_pos.y, 0.0, 1.0))
                             .xy();
                             tab.ui_state.details.mouse_pos_world = Some(pos_world);
+
+                            let zero_pos = pos2(centered_pos_raw.x, centered_pos_raw.y)
+                                / Camera::get_major_axis(sz);
 
                             if response.clicked() {
                                 let closest = tab
@@ -323,7 +320,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                         let opac_edges = tab.ui_state.display.g_opac_edges;
                         let opac_nodes = tab.ui_state.display.g_opac_nodes;
 
-                        let cam = tab.tab_camera.camera.get_matrix();
+                        let cam = fixed_cam.get_matrix();
                         let class_colors = tab
                             .viewer_data
                             .read()

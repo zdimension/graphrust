@@ -1,6 +1,8 @@
-use egui::{vec2, Pos2, Vec2};
+use egui::{Pos2, Vec2};
+use graph_format::nalgebra::{
+    Matrix4, Orthographic3, Point3, Similarity3, Translation3, UnitQuaternion, Vector3,
+};
 use graph_format::Point;
-use graph_format::nalgebra::{Matrix4, Orthographic3, Point3, Similarity3, Translation3, UnitQuaternion, Vector3};
 
 pub type CamXform = Similarity3<f32>;
 
@@ -9,7 +11,6 @@ pub type CamXform = Similarity3<f32>;
 pub struct Camera {
     pub transf: CamXform,
     pub ortho: Orthographic3<f32>,
-    pub size: Vec2,
 }
 
 impl Camera {
@@ -23,7 +24,6 @@ impl Camera {
         Camera {
             transf,
             ortho: Camera::create_orthographic(1, 1),
-            size: vec2(1.0, 1.0),
         }
     }
 
@@ -42,34 +42,31 @@ impl Camera {
         Orthographic3::new(-hw, hw, -hh, hh, -1.0, 1.0)
     }
 
-    pub fn set_window_size(&mut self, size: Vec2) {
-        self.transf.append_scaling_mut(if size.x < size.y {
-            size.x / self.size.x
+    pub fn get_major_axis(size: Vec2) -> f32 {
+        if size.x < size.y {
+            size.x
         } else {
-            size.y / self.size.y
-        });
-        self.size = size;
-        self.ortho = Camera::create_orthographic(size.x as u32, size.y as u32);
+            size.y
+        }
     }
 
-    /// Zooms the view in or out around the specified mouse location.
+    pub fn with_window_size(mut self, size: Vec2) -> Self {
+        self.transf
+            .append_scaling_mut(if size.x < size.y { size.x } else { size.y });
+        self.ortho = Camera::create_orthographic(size.x as u32, size.y as u32);
+        self
+    }
+
+    /// Zooms the view in or out around the specified mouse location (which should be centered around view origin).
     pub fn zoom(&mut self, scaling: f32, mouse: Pos2) {
-        let diffpoint = Point3::new(
-            mouse.x - self.ortho.right(),
-            mouse.y - self.ortho.top(),
-            0.0,
-        );
+        let diffpoint = Point3::new(mouse.x, mouse.y, 0.0);
         let before = self.transf.inverse_transform_point(&diffpoint);
         self.transf.append_scaling_mut(scaling);
         let after = self.transf.inverse_transform_point(&diffpoint);
         let diff = after - before;
         let diff_transf = self.transf.transform_vector(&diff);
         self.transf
-            .append_translation_mut(&Translation3::new(
-                diff_transf.x,
-                -diff_transf.y,
-                0.0,
-            ));
+            .append_translation_mut(&Translation3::new(diff_transf.x, -diff_transf.y, 0.0));
     }
 
     /// Pans the view.
@@ -79,8 +76,43 @@ impl Camera {
     }
     pub fn rotate(&mut self, rot: f32) {
         self.transf
-            .append_rotation_mut(&UnitQuaternion::from_euler_angles(
-                0.0, 0.0, -rot,
-            ));
+            .append_rotation_mut(&UnitQuaternion::from_euler_angles(0.0, 0.0, -rot));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use graph_format::nalgebra::Point3;
+    use graph_format::Point;
+
+    #[test]
+    fn test_zoom_at_origin() {
+        let center = Point { x: 0.0, y: 0.0 };
+        let mut camera = Camera::new(center);
+        let initial_matrix = camera.get_matrix();
+        let p1 = Point3::new(1.0, 0.0, 0.0);
+        let p1_before = camera.transf.transform_point(&p1);
+        camera.zoom(2.0, Pos2 { x: 0.0, y: 0.0 });
+        let p1_after = camera.transf.transform_point(&p1);
+        assert_eq!(p1_after, Point3::new(2.0, 0.0, 0.0));
+        let zoomed_matrix = camera.get_matrix();
+        assert_ne!(initial_matrix, zoomed_matrix);
+        assert_eq!(camera.transf.scaling(), 2.0);
+    }
+
+    #[test]
+    fn test_zoom_at_one() {
+        let center = Point { x: 0.0, y: 0.0 };
+        let mut camera = Camera::new(center);
+        let initial_matrix = camera.get_matrix();
+        let p1 = Point3::new(1.0, 0.0, 0.0);
+        let p1_before = camera.transf.transform_point(&p1);
+        camera.zoom(2.0, Pos2 { x: 1.0, y: 0.0 });
+        let p1_after = camera.transf.transform_point(&p1);
+        assert_eq!(p1_after, Point3::new(1.0, 0.0, 0.0));
+        let zoomed_matrix = camera.get_matrix();
+        assert_ne!(initial_matrix, zoomed_matrix);
+        assert_eq!(camera.transf.scaling(), 2.0);
     }
 }
