@@ -267,6 +267,7 @@ impl InfosSection {
             let new_included = x(&status_tx, &data.read())?;
 
             let mut new_persons = Vec::with_capacity(new_included.len());
+            let mut new_neighbors = Vec::with_capacity(new_included.len());
 
             let mut id_map = AHashMap::new();
             let mut class_list = AHashSet::new();
@@ -278,10 +279,8 @@ impl InfosSection {
                     let pers = &data.persons[id];
                     id_map.insert(id, new_persons.len());
                     class_list.insert(pers.modularity_class);
-                    new_persons.push(Person {
-                        neighbors: vec![],
-                        ..*pers
-                    });
+                    new_persons.push(Person { ..*pers });
+                    new_neighbors.push(vec![]);
                 }
             }
 
@@ -291,13 +290,13 @@ impl InfosSection {
             {
                 let data = data.read();
                 for_progress!(status_tx, (&old_id, &new_id) in id_map.iter(), {
-                    new_persons[new_id].neighbors.extend(
+                    new_neighbors[new_id].extend(
                         data.persons[old_id]
                             .neighbors
                             .iter()
                             .filter_map(|&i| id_map.get(&i)),
                     );
-                    for &nb in new_persons[new_id].neighbors.iter() {
+                    for &nb in new_neighbors[new_id].iter() {
                         if new_id < nb {
                             edges.push(EdgeStore {
                                 a: new_id as u32,
@@ -307,6 +306,10 @@ impl InfosSection {
                             // we do nothing since we'll get it eventually
                         }
                     }
+                });
+                for_progress!(status_tx, (person, nblist) in new_persons.iter_mut().zip(new_neighbors.iter()), {
+                    // SAFETY: neighbor_lists is kept alive
+                    person.neighbors = unsafe { std::mem::transmute(nblist.as_slice()) };
                 });
             }
 
@@ -326,7 +329,11 @@ impl InfosSection {
                 filter += 1;
             }
 
-            let viewer = ViewerData::new(new_persons, data.read().modularity_classes.clone())?;
+            let viewer = ViewerData::new(
+                new_persons,
+                new_neighbors,
+                data.read().modularity_classes.clone(),
+            )?;
 
             let mut new_ui = UiState::default();
 

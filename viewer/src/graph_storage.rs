@@ -363,6 +363,9 @@ pub fn load_binary(
     log!(status_tx, t!("Processing nodes"));
 
     let start = chrono::Local::now();
+    let mut neighbor_lists: Vec<_> = iter_progress(content.nodes.iter(), status_tx)
+        .map(|node| Vec::with_capacity(node.total_edge_count as usize))
+        .collect();
     let mut person_data: Vec<_> = iter_progress(content.nodes.iter(), status_tx)
         .map(|node| {
             Person::new(
@@ -380,7 +383,6 @@ pub fn load_binary(
                         content.names.as_ptr().offset(node.offset_name as isize),
                     )
                 },
-                node.total_edge_count as usize,
             )
         })
         .collect();
@@ -402,13 +404,20 @@ pub fn load_binary(
     for_progress!(status_tx, (i, n) in content.nodes.iter().enumerate(), {
         edges.reserve(n.edge_count as usize);
         for e in n.edges.iter().copied() {
-            person_data[i].neighbors.push(e as usize);
-            person_data[e as usize].neighbors.push(i);
+            neighbor_lists[i].push(e as usize);
+            neighbor_lists[e as usize].push(i);
             edges.push(EdgeStore {
                 a: i as u32,
                 b: e,
             });
         }
+    });
+
+    log!(status_tx, t!("Associating neighbor lists"));
+
+    for_progress!(status_tx, (person, nblist) in person_data.iter_mut().zip(neighbor_lists.iter()), {
+        // SAFETY: neighbor_lists is kept alive
+        person.neighbors = unsafe { std::mem::transmute(nblist.as_slice()) };
     });
 
     log!(
@@ -424,7 +433,7 @@ pub fn load_binary(
             ids: content.ids,
             names: content.names,
         },
-        viewer: ViewerData::new(person_data, modularity_classes)?,
+        viewer: ViewerData::new(person_data, neighbor_lists, modularity_classes)?,
         edges,
     })
 }

@@ -4,13 +4,13 @@ pub mod louvain;
 pub mod pathfinding;
 
 pub trait AbstractNode {
-    fn neighbors(&self) -> &Vec<usize>;
+    fn neighbors(&self) -> &[usize];
     fn display(&self) -> &str;
 }
 
 impl AbstractNode for Person {
-    fn neighbors(&self) -> &Vec<usize> {
-        &self.neighbors
+    fn neighbors(&self) -> &'static [usize] {
+        self.neighbors
     }
     fn display(&self) -> &str {
         self.name

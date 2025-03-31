@@ -91,14 +91,14 @@ where
     })
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Person {
     pub position: Point,
     pub size: f32,
     pub modularity_class: u16,
     pub id: &'static str,
     pub name: &'static str,
-    pub neighbors: Vec<usize>,
+    pub neighbors: &'static [usize],
 }
 
 impl Person {
@@ -108,7 +108,6 @@ impl Person {
         modularity_class: u16,
         id: &'static str,
         name: &'static str,
-        total_edge_count: usize,
     ) -> Person {
         Person {
             position,
@@ -116,7 +115,7 @@ impl Person {
             modularity_class,
             id,
             name,
-            neighbors: Vec::with_capacity(total_edge_count),
+            neighbors: &[],
         }
     }
 }
@@ -141,6 +140,7 @@ impl ModularityClass {
 //#[derive(Clone)]
 pub struct ViewerData {
     pub persons: Arc<Vec<Person>>,
+    pub neighbor_lists: Arc<Vec<Vec<usize>>>,
     pub modularity_classes: Vec<ModularityClass>,
     pub engine: Arc<SearchEngine>,
 }
@@ -148,12 +148,15 @@ pub struct ViewerData {
 impl ViewerData {
     pub fn new(
         persons: Vec<Person>,
+        neighbor_lists: Vec<Vec<usize>>,
         modularity_classes: Vec<ModularityClass>,
     ) -> Cancelable<ViewerData> {
         let persons = Arc::new(persons);
+        let neighbor_lists = Arc::new(neighbor_lists);
         let engine = Arc::new(SearchEngine::new(persons.clone()));
         Ok(ViewerData {
             persons,
+            neighbor_lists,
             modularity_classes,
             engine,
         })
