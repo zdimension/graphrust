@@ -22,10 +22,14 @@ macro_rules! log
 fn main() {
     let file = GraphFile::read_from_file("graph_n4j.bin").unwrap();
 
-    let avg_id = stats::mean(file.nodes.iter().map(|n|
-        unsafe { CStr::from_ptr(file.ids.as_ptr().add(n.offset_id as usize) as *const _) }.count_bytes()));
-    let avg_name = stats::mean(file.nodes.iter().map(|n|
-        unsafe { CStr::from_ptr(file.names.as_ptr().add(n.offset_name as usize) as *const _) }.count_bytes()));
+    let avg_id = stats::mean(file.nodes.iter().map(|n| {
+        unsafe { CStr::from_ptr(file.ids.as_ptr().add(n.offset_id as usize) as *const _) }
+            .count_bytes()
+    }));
+    let avg_name = stats::mean(file.nodes.iter().map(|n| {
+        unsafe { CStr::from_ptr(file.names.as_ptr().add(n.offset_name as usize) as *const _) }
+            .count_bytes()
+    }));
 
     println!("Average id length: {}", avg_id);
     println!("Average name length: {}", avg_name);
@@ -40,14 +44,14 @@ fn main() {
 
     const SCALE: f64 = 0.5;
 
-    let mut res_map = HashMap::<usize, usize>::new();
+    /*let mut res_map = HashMap::<usize, usize>::new();
 
     for freq in persons.iter().map(|p| {
         (p.iter().map(|&f| persons[f as usize].len()).sum::<usize>() as f64 / p.len() as f64) / p.len() as f64
     }) {
         let key = (freq * SCALE) as usize;
         *res_map.entry(key).or_default() += 1;
-    }
+    }*/
 
     /*const SAMPLES: usize = 1000000;
 

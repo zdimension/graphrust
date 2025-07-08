@@ -359,7 +359,7 @@ impl AlgosSection {
                         )
                     });
 
-                    ui.horizontal(|| {
+                    ui.horizontal(|ui| {
                         ui.spinner();
                         if let Some(thr) = &mut fa_thread.1 {
                             ui.label(format!(

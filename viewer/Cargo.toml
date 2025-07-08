@@ -20,8 +20,8 @@ egui_extras = { version = "0.31.1", features = ["image", "gif"] }
 egui_dock = "0.16.0"
 rayon = "1.10"
 zearch = { git = "https://github.com/zdimension/zearch" }
-ahash = "0.8.11"
-rand = "0.8.0"  # pinned to 0.8 since forceatlas2-rs uses it
+ahash = "0.8.12"
+rand = "0.8.5"  # pinned to 0.8 since forceatlas2-rs uses it
 forceatlas2 = { version = "0.7", features = ["default"], git = "https://framagit.org/ZettaScript/forceatlas2-rs" } # 0.7 is broken since it uses some old nightly features
 colourado-iter = "1.2"
 anyhow = "1"
@@ -39,7 +39,11 @@ deadlock_detection = ["parking_lot/deadlock_detection"]
 
 [dev-dependencies]
 log = "*"
-criterion = "0.5"
+criterion = "0.6"
+inline-python = "0.14.3"
+neo4rs = "0.8.0"
+tokio = { version = "1.45.1", features = ["rt", "rt-multi-thread"] }
+futures-util = "0.3.31"
 
 [[bench]]
 name = "pathfinding"
@@ -47,7 +51,7 @@ harness = false
 
 [build-dependencies]
 anyhow = "1"
-vergen-gitcl = { version = "1.0.0", features = ["build"] }
+vergen-gitcl = { version = "1.0.8", features = ["build"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
@@ -57,7 +61,7 @@ reqwest = { version = "0.12", features = ["blocking"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "*", features = ["sync", "time"] }
 wasm-bindgen-futures = "0.4"
-wasm-bindgen = "0.2.99"
+wasm-bindgen = "0.2.100"
 js-sys = "*"
 web-sys = { version = "*", features = ["XmlHttpRequest", "XmlHttpRequestResponseType", "WorkerGlobalScope", "Performance", "ProgressEvent"] }
 parking_lot = { version = "*", features = ["nightly"] }

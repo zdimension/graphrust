@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 ahash = "0.8"
-chrono = "0.4.35"
+chrono = "0.4.41"
 graph_format = { path = "../graph_format" }
-inline-python = "0.12"
-rayon = "1.9.0"
+inline-python = "0.14.3"
+rayon = "1.10.0"
 rand = "0.8"
 streaming-stats = "0.2.3"
