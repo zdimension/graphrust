@@ -7,7 +7,7 @@ edition = "2021"
 ahash = "0.8"
 chrono = "0.4.41"
 graph_format = { path = "../graph_format" }
-inline-python = "0.14.3"
+inline-python = "0.14.4"
 rayon = "1.10.0"
 rand = "0.8"
 streaming-stats = "0.2.3"
