@@ -59,9 +59,10 @@ pub fn create_tab<'a>(
     log!(
         status_tx,
         t!(
-            "Creating tab with %{n} nodes and %{m} edges",
+            "Creating tab with %{n} nodes, %{m} edges, and %{c} classes",
             n = viewer.persons.len(),
-            m = edges.len()
+            m = edges.len(),
+            c = viewer.modularity_classes.len()
         )
     );
     log!(status_tx, t!("Computing maximum degree..."));

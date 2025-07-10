@@ -271,7 +271,7 @@ pub fn combo_with_filter(
                             );
                         } else {
                             let data = viewer_data.read();
-                            for i in 0..show_count {
+                            for i in 0..show_count.min(data.persons.len()) {
                                 let idx = state.item_vector[i];
 
                                 if ui

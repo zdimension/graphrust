@@ -19,8 +19,14 @@ const GRAPH_NAME: &str = "graph_n4j.bin";
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFile> {
-    GraphFile::read_from_file(format!("{}/../{}", env!("CARGO_MANIFEST_DIR"), GRAPH_NAME))
-        .map_err(Into::into)
+    use std::env;
+    let args: Vec<String> = env::args().collect();
+    let file_path = if args.len() > 1 {
+        args[1].clone()
+    } else {
+        format!("{}/../{}", env!("CARGO_MANIFEST_DIR"), GRAPH_NAME)
+    };
+    GraphFile::read_from_file(file_path).map_err(Into::into)
 }
 
 #[cfg(target_arch = "wasm32")]

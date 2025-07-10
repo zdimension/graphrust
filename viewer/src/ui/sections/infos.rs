@@ -270,7 +270,8 @@ impl InfosSection {
             let mut new_neighbors = Vec::with_capacity(new_included.len());
 
             let mut id_map = AHashMap::new();
-            let mut class_list = AHashSet::new();
+            let mut class_map = AHashMap::new();
+            let mut class_list = Vec::new();
 
             log!(status_tx, t!("Processing person list and creating ID map"));
             {
@@ -278,8 +279,16 @@ impl InfosSection {
                 for &id in new_included.iter() {
                     let pers = &data.persons[id];
                     id_map.insert(id, new_persons.len());
-                    class_list.insert(pers.modularity_class);
-                    new_persons.push(Person { ..*pers });
+                    let new_class = *class_map.entry(pers.modularity_class).or_insert_with(|| {
+                        let new_class = class_list.len() as u16;
+                        class_list
+                            .push(data.modularity_classes[pers.modularity_class as usize].clone());
+                        new_class
+                    });
+                    new_persons.push(Person {
+                        modularity_class: new_class,
+                        ..*pers
+                    });
                     new_neighbors.push(vec![]);
                 }
             }
@@ -329,11 +338,7 @@ impl InfosSection {
                 filter += 1;
             }
 
-            let viewer = ViewerData::new(
-                new_persons,
-                new_neighbors,
-                data.read().modularity_classes.clone(),
-            )?;
+            let viewer = ViewerData::new(new_persons, new_neighbors, class_list)?;
 
             let mut new_ui = UiState::default();
 

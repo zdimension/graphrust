@@ -153,7 +153,8 @@ impl RenderedGraph {
                     gl.link_program(program);
                     assert!(
                         gl.get_program_link_status(program),
-                        "{}",
+                        "({} classes) {}",
+                        num_classes,
                         gl.get_program_info_log(program)
                     );
 
