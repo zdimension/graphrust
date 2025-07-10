@@ -10,9 +10,9 @@ use modal::ModalWriter;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
+pub(crate) mod modal;
 pub mod sections;
 pub(crate) mod tabs;
-pub(crate) mod modal;
 mod widgets;
 
 use sections::*;
@@ -54,13 +54,11 @@ struct ParadoxState {
 fn rerender_graph(persons: &[Person]) -> GlTask {
     let nodes = persons
         .iter()
-        .map(|p| {
-            crate::graph_render::geom_draw::create_node_vertex(p)
-        });
+        .map(|p| crate::graph_render::geom_draw::create_node_vertex(p));
 
-    let edges = persons.iter().get_edges().flat_map(
-        |(a, b)| crate::graph_render::geom_draw::create_edge_vertices(&persons[a], &persons[b])
-    );
+    let edges = persons.iter().get_edges().flat_map(|(a, b)| {
+        crate::graph_render::geom_draw::create_edge_vertices(&persons[a], &persons[b])
+    });
     let vertices = nodes.chain(edges).collect_vec();
 
     let closure = move |graph: &mut RenderedGraph, gl: &glow::Context| unsafe {
@@ -159,43 +157,42 @@ impl UiState {
         modal: &impl ModalWriter,
     ) {
         ui.spacing_mut().slider_width = 200.0;
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            self.display.show(graph, ui, &self.stats);
+        egui::ScrollArea::vertical()
+            .max_width(ui.ctx().screen_rect().width() / 3.0)
+            .show(ui, |ui| {
+                self.display.show(graph, ui, &self.stats);
 
-            if self.display.deg_filter_changed {
-                *self.stats.write() = NodeStats::new(&data.read(), graph.read().node_filter);
-            }
+                if self.display.deg_filter_changed {
+                    *self.stats.write() = NodeStats::new(&data.read(), graph.read().node_filter);
+                }
 
-            self.path.show(
-                data,
-                ui,
-                &mut self.infos,
-                &mut self.selected_user_field,
-            );
+                self.path
+                    .show(data, ui, &mut self.infos, &mut self.selected_user_field);
 
-            self.infos.show(
-                data,
-                tab_request,
-                ui,
-                &camera.camera,
-                &self.path,
-                &mut self.selected_user_field,
-                modal,
-            );
+                self.infos.show(
+                    data,
+                    tab_request,
+                    ui,
+                    &camera.camera,
+                    &self.path,
+                    &mut self.selected_user_field,
+                    modal,
+                );
 
-            self.classes.show(
-                ui,
-                &self.infos,
-                data, tab_request,
-                &camera.camera,
-                &self.path,
-                modal,
-                &self.stats,
-            );
+                self.classes.show(
+                    ui,
+                    &self.infos,
+                    data,
+                    tab_request,
+                    &camera.camera,
+                    &self.path,
+                    modal,
+                    &self.stats,
+                );
 
-            self.algorithms.show(data, ui, graph, &self.stats, modal);
+                self.algorithms.show(data, ui, graph, &self.stats, modal);
 
-            self.details.show(ui, camera, cid);
-        });
+                self.details.show(ui, camera, cid);
+            });
     }
 }

@@ -52,7 +52,7 @@ impl Camera {
 
     pub fn with_window_size(mut self, size: Vec2) -> Self {
         self.transf
-            .append_scaling_mut(if size.x < size.y { size.x } else { size.y });
+            .append_scaling_mut((if size.x < size.y { size.x } else { size.y }).max(1.0));
         self.ortho = Camera::create_orthographic(size.x as u32, size.y as u32);
         self
     }
