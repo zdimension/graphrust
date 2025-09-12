@@ -13,6 +13,7 @@ use eframe::epaint::text::TextWrapMode;
 use eframe::epaint::Shape::LineSegment;
 use eframe::epaint::{CircleShape, Color32, PathStroke, Stroke, TextShape};
 use egui::{emath, pos2, Id, Layout, Rect, RichText, TextStyle, Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use graph_format::nalgebra::{Similarity3, Vector4};
 use graph_format::EdgeStore;
 use itertools::Itertools;
@@ -454,13 +455,13 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
         tab.closeable
     }
 
-    fn on_close(&mut self, tab: &mut Self::Tab) -> bool {
+    fn on_close(&mut self, tab: &mut Self::Tab) -> OnCloseResponse {
         if let GraphTabState::Loaded(ref mut tab) = tab.state {
             tab.rendered_graph
                 .write()
                 .destroy(&self.frame.gl().unwrap().clone());
         }
-        true
+        OnCloseResponse::Close
     }
 }
 

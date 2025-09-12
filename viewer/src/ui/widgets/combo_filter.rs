@@ -6,8 +6,8 @@ use egui::style::WidgetVisuals;
 use std::ops::Add;
 
 use egui::{
-    Align, Id, Layout, Painter, PopupCloseBehavior, Response, ScrollArea, SelectableLabel, Sense,
-    Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText,
+    Align, Id, Layout, Painter, PopupCloseBehavior, RectAlign, Response, ScrollArea,
+    SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText,
 };
 
 use crate::threading::MyRwLock;
@@ -195,16 +195,18 @@ pub fn combo_with_filter(
     });
 
     if button_response.clicked() {
-        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+        egui::Popup::toggle_id(ui.ctx(), popup_id);
     }
 
     let mut sel_changed = false;
-    let inner = egui::popup::popup_below_widget(
-        ui,
-        popup_id,
-        &button_response,
-        PopupCloseBehavior::CloseOnClick,
-        |ui| {
+    let inner = egui::Popup::from_response(&button_response)
+        .layout(Layout::top_down_justified(Align::LEFT))
+        .open_memory(None)
+        .close_behavior(PopupCloseBehavior::CloseOnClick)
+        .id(popup_id)
+        .align(RectAlign::BOTTOM_START)
+        .width(button_response.rect.width())
+        .show(|ui| {
             ui.vertical(|ui| {
                 let binding =
                     ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone());
@@ -311,8 +313,8 @@ pub fn combo_with_filter(
                     );
                 }
             })
-        },
-    );
+        })
+        .map(|frame_r| frame_r.inner);
     if let Some(frame_r) = inner {
         if !sel_changed
             && !frame_r.response.clicked_elsewhere()

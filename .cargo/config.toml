@@ -2,7 +2,12 @@
 run-wasm = "run --release --package run-wasm --"
 
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-Ctarget-cpu=native"]
+rustflags = [
+    "-C", "target-cpu=native",
+    "-C", "opt-level=3",
+    "-C", "codegen-units=1",
+    "-C", "embed-bitcode",
+]
 
 [target.wasm32-unknown-unknown]
 rustflags = [
@@ -12,5 +17,6 @@ rustflags = [
     "-C", "panic=abort",
     "-C", "target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128",
     "-C", "link-arg=--max-memory=4294967296",
-    "--cfg=web_sys_unstable_apis"
+    "--cfg=web_sys_unstable_apis",
+    '--cfg', 'getrandom_backend="wasm_js"'
 ]
