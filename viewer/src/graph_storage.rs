@@ -254,7 +254,7 @@ extern "C" {
     // Use `js_namespace` here to bind `console.log(..)` instead of just
     // `log(..)`
     #[wasm_bindgen(js_namespace = console, js_name = log)]
-    fn js_console_log(s: &str);
+    pub fn js_console_log(s: &str);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -310,6 +310,7 @@ pub async fn load_file(status_tx: &StatusWriter) -> Cancelable<GraphFile> {
     let status_tx_ = status_tx.clone();
     use crate::threading::StatusWriterInterface;
     let progress_handler = Closure::wrap(Box::new(move |progress: usize| {
+        js_console_log("progress");
         status_tx_
             .send(crate::threading::Progress {
                 max: 100,

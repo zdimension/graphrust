@@ -13,7 +13,7 @@ use ahash::{AHashMap, AHashSet};
 use derivative::Derivative;
 use eframe::emath::vec2;
 use eframe::epaint::Color32;
-use egui::{CollapsingHeader, Hyperlink, Id, SliderClamping, Ui};
+use egui::{CollapsingHeader, Hyperlink, Id, OutputCommand, SliderClamping, Ui};
 use graph_format::EdgeStore;
 use itertools::Itertools;
 use std::sync::{mpsc, Arc};
@@ -75,7 +75,7 @@ impl InfosSection {
                                 } else {
                                     person.id.to_string()
                                 };
-                                ui.output_mut(|out| out.copied_text = text);
+                                ui.output_mut(|out| out.commands.push(OutputCommand::CopyText(text)));
                             }
                         });
                         ui.end_row();

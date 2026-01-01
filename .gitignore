@@ -4,3 +4,5 @@ dist/
 import.toml
 edges.txt
 *.br
+distances.txt
+n4j_deg_dist.csv
