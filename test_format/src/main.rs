@@ -1,11 +1,6 @@
 #![feature(cmp_minmax)]
 
-use graph_format::{Color3b, EdgeStore, GraphFile, LenType, NodeStore, Point, Readable, Writable};
-use speedy::*;
-use std::collections::{HashMap, HashSet};
-use std::ffi::CStr;
-
-#[derive(Readable, Writable)]
+/*#[derive(Readable, Writable)]
 pub struct NodeStore2 {
     pub position: Point,
     pub size: f32,
@@ -275,3 +270,83 @@ fn main() {
         .wait()
         .unwrap();*/
 }
+*/
+
+/*#[derive(Readable, Default)]
+#[cfg_attr(target_pointer_width = "64", derive(Writable))]
+pub struct GraphFile2 {
+    pub class_count: u16,
+    #[speedy(length = class_count)]
+    pub classes: Vec<Color3b>,
+
+    pub node_count: LenType,
+    #[speedy(length = node_count)]
+    pub nodes: Vec<NodeStore2>,
+
+    pub edge_count: LenType,
+    #[speedy(length = edge_count)]
+    pub edges: Vec<u32>,
+
+    pub ids_size: LenType,
+    #[speedy(length = ids_size)]
+    pub ids: Vec<u8>,
+
+    pub names_size: LenType,
+    #[speedy(length = names_size)]
+    pub names: Vec<u8>,
+}
+
+#[derive(Readable, Writable)]
+pub struct NodeStore2 {
+    pub position: Point,
+    pub size: f32,
+    pub class: u16,
+    pub offset_id: u32,
+    pub offset_name: u32,
+    pub total_edge_count: u16,
+    pub edge_count: u16,
+    pub edges_start: u32, // start index in edge list
+}
+
+// migrate GraphFile to GraphFile2
+fn main() {
+    let f = GraphFile::read_from_file("graph_n4j.bin").unwrap();
+
+    // Build the flattened edge list and nodes with edges_start
+    let mut all_edges: Vec<u32> = Vec::new();
+    let mut nodes2: Vec<NodeStore2> = Vec::new();
+
+    for node in &f.nodes {
+        let edges_start = all_edges.len() as u32;
+        all_edges.extend(node.edges.iter().copied());
+
+        nodes2.push(NodeStore2 {
+            position: node.position,
+            size: node.size,
+            class: node.class,
+            offset_id: node.offset_id,
+            offset_name: node.offset_name,
+            total_edge_count: node.total_edge_count,
+            edge_count: node.edge_count,
+            edges_start,
+        });
+    }
+
+    let f2 = GraphFile2 {
+        class_count: f.class_count,
+        classes: f.classes,
+        node_count: f.node_count,
+        nodes: nodes2,
+        edge_count: all_edges.len() as LenType,
+        edges: all_edges,
+        ids_size: f.ids_size,
+        ids: f.ids,
+        names_size: f.names_size,
+        names: f.names,
+    };
+
+    f2.write_to_file("graph_n4j_flatedge.bin").unwrap();
+}
+*/
+
+fn main() {}

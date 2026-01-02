@@ -367,6 +367,21 @@ pub fn load_binary(
         .map(|(id, color)| ModularityClass::new(color, id as u16))
         .collect_vec();
 
+    // on Wasm, growing memory takes time so we preallocate all vectors first
+    #[cfg(target_arch = "wasm32")]
+    {
+        let total_edges: usize = content
+            .nodes
+            .iter()
+            .map(|n| n.total_edge_count as usize)
+            .sum();
+        log!(
+            status_tx,
+            t!("Preallocating %{count} edges", count = total_edges)
+        );
+        let _edge_store_prealloc: Vec<EdgeStore> = Vec::with_capacity(total_edges);
+    }
+
     log!(status_tx, t!("Processing nodes"));
 
     let start = chrono::Local::now();
@@ -410,7 +425,7 @@ pub fn load_binary(
 
     for_progress!(status_tx, (i, n) in content.nodes.iter().enumerate(), {
         edges.reserve(n.edge_count as usize);
-        for e in n.edges.iter().copied() {
+        for e in n.edges(&content.edges).iter().copied() {
             neighbor_lists[i].push(e as usize);
             neighbor_lists[e as usize].push(i);
             edges.push(EdgeStore {

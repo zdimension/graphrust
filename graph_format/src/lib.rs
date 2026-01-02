@@ -71,7 +71,7 @@ pub struct Point {
 }
 
 impl Sum for Point {
-    fn sum<I: Iterator<Item=Point>>(iter: I) -> Point {
+    fn sum<I: Iterator<Item = Point>>(iter: I) -> Point {
         iter.fold(Point::new(0.0, 0.0), |a, b| a + b)
     }
 }
@@ -188,8 +188,15 @@ pub struct NodeStore {
     pub offset_name: u32,
     pub total_edge_count: u16,
     pub edge_count: u16,
-    #[speedy(length = edge_count)]
-    pub edges: Vec<u32>,
+    pub edges_start: u32, // start index in edge list
+}
+
+impl NodeStore {
+    pub fn edges<'a>(&self, edge_list: &'a [u32]) -> &'a [u32] {
+        let start = self.edges_start as usize;
+        let end = start + self.edge_count as usize;
+        &edge_list[start..end]
+    }
 }
 
 #[derive(Readable, Writable, Hash, PartialEq, Eq, Copy, Clone)]
@@ -215,6 +222,10 @@ pub struct GraphFile {
     #[speedy(length = node_count)]
     pub nodes: Vec<NodeStore>,
 
+    pub edge_count: LenType,
+    #[speedy(length = edge_count)]
+    pub edges: Vec<u32>,
+
     pub ids_size: LenType,
     #[speedy(length = ids_size)]
     pub ids: Vec<u8>,
@@ -226,9 +237,13 @@ pub struct GraphFile {
 
 impl GraphFile {
     pub fn get_adjacency(&self) -> Vec<Vec<u32>> {
-        let mut persons: Vec<_> = self.nodes.iter().map(|n| Vec::with_capacity(n.total_edge_count as usize)).collect();
+        let mut persons: Vec<_> = self
+            .nodes
+            .iter()
+            .map(|n| Vec::with_capacity(n.total_edge_count as usize))
+            .collect();
         for (i, n) in self.nodes.iter().enumerate() {
-            for e in n.edges.iter().copied() {
+            for e in n.edges(&self.edges).iter().copied() {
                 persons[i].push(e);
                 persons[e as usize].push(i as u32);
             }
