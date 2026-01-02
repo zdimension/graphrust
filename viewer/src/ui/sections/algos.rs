@@ -15,6 +15,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, RecvError, Sender, TryRecvError};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
+use web_time::Instant;
 
 pub struct ForceAtlasRenderDone;
 
@@ -307,7 +308,7 @@ impl AlgosSection {
                         thread::spawn(move || {
                             loop {
                                 loop {
-                                    let iter_start = std::time::Instant::now();
+                                    let iter_start = Instant::now();
                                     {
                                         let mut layout = layout_thr.write();
 

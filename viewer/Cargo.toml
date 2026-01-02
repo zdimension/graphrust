@@ -34,6 +34,7 @@ egui_commonmark = "0.22.0"
 bit-set = "0.8.0"
 single_value_channel = "1.2.2"
 getrandom = { version = "0.3", features = ["wasm_js"] }
+web-time = "1"
 
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]

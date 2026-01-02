@@ -4526,6 +4526,7 @@ dependencies = [
  "wasm-logger",
  "wasm_thread",
  "web-sys",
+ "web-time",
  "zearch",
 ]
 
