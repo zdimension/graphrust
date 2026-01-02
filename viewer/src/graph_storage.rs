@@ -379,7 +379,7 @@ pub fn load_binary(
             status_tx,
             t!("Preallocating %{count} edges", count = total_edges)
         );
-        let _edge_store_prealloc: Vec<EdgeStore> = Vec::with_capacity(total_edges);
+        std::hint::black_box(Vec::<EdgeStore>::with_capacity(total_edges));
     }
 
     log!(status_tx, t!("Processing nodes"));

@@ -31,9 +31,20 @@ impl Graph {
     pub fn new(persons: &[impl AbstractNode]) -> Self {
         let mut nodes = Vec::with_capacity(persons.len());
         let mut total_links = 0;
+        #[cfg(target_arch = "wasm32")]
+        {
+            std::hint::black_box(Vec::<PersonId>::with_capacity(persons.len()));
+        }
         for (i, pers) in persons.iter().enumerate() {
             let mut comm = Community::new(Some(vec![PersonId(i)]));
-            comm.neighbors = pers.neighbors().iter().map(|&x| Edge { other: CommunityId(x), weight: 1 }).collect();
+            comm.neighbors = pers
+                .neighbors()
+                .iter()
+                .map(|&x| Edge {
+                    other: CommunityId(x),
+                    weight: 1,
+                })
+                .collect();
             nodes.push(comm);
             total_links += pers.neighbors().len();
         }
@@ -88,7 +99,7 @@ impl Graph {
                         let gain = if comm == node_tmp_comm {
                             neigh_links[comm] as f32
                                 - (comm_total[comm] - node_degree) as f32 * node_degree as f32
-                                / g_total as f32
+                                    / g_total as f32
                         } else {
                             neigh_links[comm] as f32
                                 - comm_total[comm] as f32 * node_degree as f32 / g_total as f32
@@ -148,9 +159,10 @@ impl Graph {
                 .neighbors
                 .splice(
                     0..0,
-                    links
-                        .iter()
-                        .map(|(&comm, &weight)| Edge { other: CommunityId(comm), weight }),
+                    links.iter().map(|(&comm, &weight)| Edge {
+                        other: CommunityId(comm),
+                        weight,
+                    }),
                 )
                 .collect();
             comm.payload = Some(merge(&self.nodes, &comm.children));
