@@ -5,10 +5,7 @@ use eframe::epaint::{Shape, Stroke, StrokeKind};
 use egui::style::WidgetVisuals;
 use std::ops::Add;
 
-use egui::{
-    Align, Id, Layout, Painter, PopupCloseBehavior, RectAlign, Response, ScrollArea,
-    SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText,
-};
+use egui::{Align, Button, Id, Layout, Painter, Popup, PopupCloseBehavior, RectAlign, Response, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText};
 
 use crate::threading::MyRwLock;
 use derivative::Derivative;
@@ -105,7 +102,7 @@ pub fn combo_with_filter(
     let popup_id = id.with("popup");
     let wrap_enabled = false;
     let width = Some(COMBO_WIDTH);
-    let is_popup_open = ui.memory(|m| m.is_popup_open(popup_id));
+    let is_popup_open = Popup::is_id_open(ui.ctx(), popup_id);
     if !is_popup_open {
         ui.memory_mut(|m| m.data.get_persisted_mut_or_default::<StateType>(id).clone())
             .write()
@@ -269,7 +266,7 @@ pub fn combo_with_filter(
                         if show_count == 0 {
                             ui.add_enabled(
                                 false,
-                                SelectableLabel::new(false, t!("No results found")),
+                                Button::selectable(false, t!("No results found")),
                             );
                         } else {
                             let data = viewer_data.read();
@@ -284,7 +281,7 @@ pub fn combo_with_filter(
                                         |ui| {
                                             ui.add_enabled(
                                                 !loading,
-                                                SelectableLabel::new(
+                                                Button::selectable(
                                                     *current_item == Some(idx),
                                                     data.persons[idx].name,
                                                 ),
@@ -320,7 +317,7 @@ pub fn combo_with_filter(
             && !frame_r.response.clicked_elsewhere()
             && button_response.clicked_elsewhere()
         {
-            ui.memory_mut(|mem| mem.open_popup(popup_id));
+            Popup::open_id(ui.ctx(), popup_id);
         }
     }
 

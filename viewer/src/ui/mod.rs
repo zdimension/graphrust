@@ -182,7 +182,7 @@ impl UiState {
     ) {
         ui.spacing_mut().slider_width = 200.0;
         egui::ScrollArea::vertical()
-            .max_width(ui.ctx().screen_rect().width() / 3.0)
+            .max_width(ui.ctx().content_rect().width() / 3.0)
             .show(ui, |ui| {
                 self.display.show(graph, ui, &self.stats);
 
