@@ -3,6 +3,7 @@ use crate::graph_render::PersonVertex;
 use graph_format::Point;
 
 pub const VERTS_PER_NODE: usize = 6;
+pub const VERTS_PER_EDGE: usize = 6;
 
 /// Creates a template quad for instanced rendering
 /// The quad is centered at origin with size calculated based on node degree in the shader
@@ -29,7 +30,26 @@ pub fn create_quad_template() -> [PersonVertex; VERTS_PER_NODE] {
     ]
 }
 
-pub const VERTS_PER_EDGE: usize = 6;
+/// Creates a template edge quad for instanced rendering
+/// The quad will be transformed by the shader to connect two points
+pub fn create_edge_quad_template() -> [PersonVertex; VERTS_PER_EDGE] {
+    // Unit quad from (0,0) to (1,0) with half-width of 1
+    // The shader will transform this to the actual edge
+    let v0 = (Point::new(0.0, 1.0), Point::new(0.0, 0.0));
+    let v1 = (Point::new(0.0, -1.0), Point::new(0.0, 0.0));
+    let v2 = (Point::new(1.0, -1.0), Point::new(0.0, 0.0));
+    let v3 = (Point::new(1.0, 1.0), Point::new(0.0, 0.0));
+    
+    // Two triangles forming a quad
+    [
+        PersonVertex::with_tex_coord(v0.0, 0, 0, v0.1),
+        PersonVertex::with_tex_coord(v1.0, 0, 0, v1.1),
+        PersonVertex::with_tex_coord(v2.0, 0, 0, v2.1),
+        PersonVertex::with_tex_coord(v2.0, 0, 0, v2.1),
+        PersonVertex::with_tex_coord(v3.0, 0, 0, v3.1),
+        PersonVertex::with_tex_coord(v0.0, 0, 0, v0.1),
+    ]
+}
 
 pub fn create_edge_vertices(pa: &Person, pb: &Person) -> [PersonVertex; VERTS_PER_EDGE] {
     let a = pa.position;

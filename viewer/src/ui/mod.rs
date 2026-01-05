@@ -52,7 +52,7 @@ struct ParadoxState {
 }
 
 fn rerender_graph(persons: &[Person]) -> GlTask {
-    use crate::graph_render::NodeInstanceData;
+    use crate::graph_render::{NodeInstanceData, EdgeInstanceData};
     
     let node_instances: Vec<NodeInstanceData> = persons
         .iter()
@@ -62,9 +62,16 @@ fn rerender_graph(persons: &[Person]) -> GlTask {
         })
         .collect();
 
-    let edge_vertices = persons.iter().get_edges().flat_map(|(a, b)| {
-        crate::graph_render::geom_draw::create_edge_vertices(&persons[a], &persons[b])
-    }).collect_vec();
+    let edge_instances: Vec<EdgeInstanceData> = persons.iter().get_edges().map(|(a, b)| {
+        let pa = &persons[a];
+        let pb = &persons[b];
+        EdgeInstanceData {
+            position_a: pa.position,
+            position_b: pb.position,
+            degree_and_class_a: ((pa.modularity_class as u32) << 16) | (pa.neighbors.len() as u32),
+            degree_and_class_b: ((pb.modularity_class as u32) << 16) | (pb.neighbors.len() as u32),
+        }
+    }).collect();
 
     let closure = move |graph: &mut RenderedGraph, gl: &glow::Context| unsafe {
         // Update instance buffer for nodes
@@ -78,14 +85,14 @@ fn rerender_graph(persons: &[Person]) -> GlTask {
             ),
         );
         
-        // Update edge vertices
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(graph.nodes_buffer));
+        // Update edge instance buffer
+        gl.bind_buffer(glow::ARRAY_BUFFER, Some(graph.edge_instance_buffer));
         gl.buffer_sub_data_u8_slice(
             glow::ARRAY_BUFFER,
             0,
             std::slice::from_raw_parts(
-                edge_vertices.as_ptr() as *const u8,
-                edge_vertices.len() * size_of::<PersonVertex>(),
+                edge_instances.as_ptr() as *const u8,
+                edge_instances.len() * size_of::<EdgeInstanceData>(),
             ),
         );
     };

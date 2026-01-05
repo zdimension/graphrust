@@ -71,12 +71,13 @@ pub struct RenderedGraph {
     pub program_node: glow::Program,
     pub program_basic: glow::Program,
     pub program_edge: glow::Program,
-    pub nodes_buffer: glow::Buffer,
     pub nodes_instance_buffer: glow::Buffer,
     pub nodes_count: usize,
-    pub nodes_array: glow::VertexArray,
     pub quad_vao: glow::VertexArray,
     pub quad_vbo: glow::Buffer,
+    pub edge_quad_vao: glow::VertexArray,
+    pub edge_quad_vbo: glow::Buffer,
+    pub edge_instance_buffer: glow::Buffer,
     pub edges_count: usize,
     pub node_filter: NodeFilter,
     pub destroyed: bool,
@@ -102,20 +103,22 @@ impl RenderedGraph {
         };
 
         unsafe {
+            let common_glsl = include_str!("shaders/common.glsl");
+            
             let programs = [
                 [
                     (glow::VERTEX_SHADER, include_str!("shaders/basic.vert")),
                     (glow::FRAGMENT_SHADER, include_str!("shaders/basic.frag")),
                 ],
                 [
-                    (glow::VERTEX_SHADER, include_str!("shaders/graph.vert")),
+                    (glow::VERTEX_SHADER, include_str!("shaders/graph_edge.vert")),
                     (
                         glow::FRAGMENT_SHADER,
                         include_str!("shaders/graph_edge.frag"),
                     ),
                 ],
                 [
-                    (glow::VERTEX_SHADER, include_str!("shaders/graph.vert")),
+                    (glow::VERTEX_SHADER, include_str!("shaders/graph_node.vert")),
                     (
                         glow::FRAGMENT_SHADER,
                         include_str!("shaders/graph_node.frag"),
@@ -135,13 +138,21 @@ impl RenderedGraph {
                             let shader = gl
                                 .create_shader(*shader_type)
                                 .expect("Cannot create shader");
-                            gl.shader_source(
-                                shader,
-                                &format!(
+                            
+                            // For graph shaders, prepend common code
+                            let full_source = if shader_source.contains("unpack_color") {
+                                format!(
+                                    "{shader_version}\n#define NUM_CLASSES {0}\n{common_glsl}\n{shader_source}",
+                                    num_classes,
+                                )
+                            } else {
+                                format!(
                                     "{shader_version}\n#define NUM_CLASSES {0}\n{shader_source}",
                                     num_classes,
-                                ),
-                            );
+                                )
+                            };
+                            
+                            gl.shader_source(shader, &full_source);
                             gl.compile_shader(shader);
                             assert!(
                                 gl.get_shader_compile_status(shader),
@@ -186,49 +197,33 @@ impl RenderedGraph {
                 })
                 .collect();
 
-            let edge_vertices = edges
+            // Create instance data for edges with rendering cap
+            #[cfg(target_arch = "wasm32")]
+            const MAX_RENDERED_EDGES: usize = 1_000_000;
+            #[cfg(not(target_arch = "wasm32"))]
+            const MAX_RENDERED_EDGES: usize = 10_000_000;
+            
+            let edge_instances: Vec<EdgeInstanceData> = edges
                 .map(|e| {
                     let pa = &viewer.persons[e.a as usize];
                     let pb = &viewer.persons[e.b as usize];
                     let dist = (pa.position - pb.position).norm_squared();
-                    (pa, pb, dist)
+                    (pa, pb, dist, e)
                 })
-                .sorted_unstable_by(|(_, _, dist1), (_, _, dist2)| {
+                .sorted_unstable_by(|(_, _, dist1, _), (_, _, dist2, _)| {
                     dist2.partial_cmp(dist1).unwrap()
                 })
-                .flat_map(|(pa, pb, _)| geom_draw::create_edge_vertices(pa, pb));
+                .take(MAX_RENDERED_EDGES)
+                .map(|(pa, pb, _, _)| EdgeInstanceData {
+                    position_a: pa.position,
+                    position_b: pb.position,
+                    degree_and_class_a: ((pa.modularity_class as u32) << 16) | (pa.neighbors.len() as u32),
+                    degree_and_class_b: ((pb.modularity_class as u32) << 16) | (pb.neighbors.len() as u32),
+                })
+                .collect();
 
             let nodes_count = viewer.persons.len();
-            
-            let edge_vertices = {
-                const THRESHOLD: usize = 256 * 1024 * 1024;
-                const MAX_VERTS_IN_THRESHOLD: usize = THRESHOLD / size_of::<PersonVertex>();
-                let num_vertices = edges_count * geom_draw::VERTS_PER_EDGE;
-                if num_vertices > MAX_VERTS_IN_THRESHOLD {
-                    log!(
-                        status_tx,
-                        t!(
-                            "More than %{got}MB of edge vertices (%{num}), truncating",
-                            got = THRESHOLD / 1024 / 1024,
-                            num = num_vertices
-                        )
-                    );
-                    edge_vertices.take(MAX_VERTS_IN_THRESHOLD).collect_vec()
-                } else {
-                    log!(
-                        status_tx,
-                        t!(
-                            "Less than %{got}MB of edge vertices (%{num}), keeping all",
-                            got = THRESHOLD / 1024 / 1024,
-                            num = num_vertices
-                        )
-                    );
-                    edge_vertices.collect_vec()
-                }
-            };
-
-            let edges_count = edge_vertices.len() / geom_draw::VERTS_PER_EDGE;
-            let edge_vertices_len = edge_vertices.len();
+            let edges_count = edge_instances.len();
 
             log!(
                 status_tx,
@@ -239,14 +234,15 @@ impl RenderedGraph {
                 )
             );
 
-            log!(status_tx, t!("Creating quad template and buffers"));
+            log!(status_tx, t!("Creating quad templates and buffers"));
             
-            // Create a single quad template with texture coordinates
+            // Create templates
             let quad_template = geom_draw::create_quad_template();
+            let edge_quad_template = geom_draw::create_edge_quad_template();
             
-            let (quad_vao, quad_vbo, instance_vao, instance_buffer, edges_buffer) = 
+            let (quad_vao, quad_vbo, edge_quad_vao, edge_quad_vbo, node_instance_buffer, edge_instance_buffer) = 
                 gl.run(move |gl: &glow::Context| {
-                    // Create quad VAO and VBO
+                    // Create node quad VAO and VBO
                     let quad_vao = gl.create_vertex_array().expect("Cannot create quad VAO");
                     gl.bind_vertex_array(Some(quad_vao));
                     
@@ -266,11 +262,11 @@ impl RenderedGraph {
                         size_of::<PersonVertex>() as i32, 0);
                     gl.enable_vertex_attrib_array(0);
                     
-                    // Texture coordinates (location = 2)
-                    gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false,
+                    // Texture coordinates (location = 1)
+                    gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false,
                         size_of::<PersonVertex>() as i32,
                         (size_of::<Point>() + size_of::<u32>()) as i32);
-                    gl.enable_vertex_attrib_array(2);
+                    gl.enable_vertex_attrib_array(1);
                     
                     // Create instance buffer
                     let instance_buffer = gl.create_buffer().expect("Cannot create instance buffer");
@@ -281,46 +277,82 @@ impl RenderedGraph {
                         glow::STATIC_DRAW,
                     );
                     
-                    // Instance position (location = 3)
-                    gl.vertex_attrib_pointer_f32(3, 2, glow::FLOAT, false,
+                    // Instance position (location = 2)
+                    gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false,
                         size_of::<NodeInstanceData>() as i32, 0);
+                    gl.enable_vertex_attrib_array(2);
+                    gl.vertex_attrib_divisor(2, 1);
+                    
+                    // Instance degree_and_class (location = 3)
+                    gl.vertex_attrib_pointer_i32(3, 1, glow::UNSIGNED_INT,
+                        size_of::<NodeInstanceData>() as i32,
+                        size_of::<Point>() as i32);
                     gl.enable_vertex_attrib_array(3);
                     gl.vertex_attrib_divisor(3, 1);
                     
-                    // Instance degree_and_class (location = 4)
-                    gl.vertex_attrib_pointer_i32(4, 1, glow::UNSIGNED_INT,
-                        size_of::<NodeInstanceData>() as i32,
-                        size_of::<Point>() as i32);
-                    gl.enable_vertex_attrib_array(4);
-                    gl.vertex_attrib_divisor(4, 1);
+                    // Create edge quad VAO and VBO
+                    let edge_quad_vao = gl.create_vertex_array().expect("Cannot create edge quad VAO");
+                    gl.bind_vertex_array(Some(edge_quad_vao));
                     
-                    // Create edge VAO
-                    let instance_vao = gl.create_vertex_array().expect("Cannot create edge VAO");
-                    gl.bind_vertex_array(Some(instance_vao));
-                    
-                    let edges_buffer = gl.create_buffer().expect("Cannot create edges buffer");
-                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(edges_buffer));
-                    gl.buffer_data_size(
+                    let edge_quad_vbo = gl.create_buffer().expect("Cannot create edge quad VBO");
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(edge_quad_vbo));
+                    gl.buffer_data_u8_slice(
                         glow::ARRAY_BUFFER,
-                        (edge_vertices_len * size_of::<PersonVertex>()).try_into().unwrap(),
+                        std::slice::from_raw_parts(
+                            edge_quad_template.as_ptr() as *const u8,
+                            size_of_val(&edge_quad_template[..]),
+                        ),
                         glow::STATIC_DRAW,
                     );
                     
+                    // Vertex position (location = 0)
                     gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false,
                         size_of::<PersonVertex>() as i32, 0);
                     gl.enable_vertex_attrib_array(0);
                     
-                    gl.vertex_attrib_pointer_i32(1, 1, glow::UNSIGNED_INT,
-                        size_of::<PersonVertex>() as i32,
-                        size_of::<Point>() as i32);
-                    gl.enable_vertex_attrib_array(1);
-                    
-                    gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false,
+                    // Texture coordinates (location = 1)
+                    gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false,
                         size_of::<PersonVertex>() as i32,
                         (size_of::<Point>() + size_of::<u32>()) as i32);
+                    gl.enable_vertex_attrib_array(1);
+                    
+                    // Create edge instance buffer
+                    let edge_instance_buffer = gl.create_buffer().expect("Cannot create edge instance buffer");
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(edge_instance_buffer));
+                    gl.buffer_data_size(
+                        glow::ARRAY_BUFFER,
+                        (edges_count * size_of::<EdgeInstanceData>()).try_into().unwrap(),
+                        glow::STATIC_DRAW,
+                    );
+                    
+                    // Edge position A (location = 2)
+                    gl.vertex_attrib_pointer_f32(2, 2, glow::FLOAT, false,
+                        size_of::<EdgeInstanceData>() as i32, 0);
                     gl.enable_vertex_attrib_array(2);
+                    gl.vertex_attrib_divisor(2, 1);
+                    
+                    // Edge position B (location = 3)
+                    gl.vertex_attrib_pointer_f32(3, 2, glow::FLOAT, false,
+                        size_of::<EdgeInstanceData>() as i32,
+                        size_of::<Point>() as i32);
+                    gl.enable_vertex_attrib_array(3);
+                    gl.vertex_attrib_divisor(3, 1);
+                    
+                    // Edge degree_and_class A (location = 4)
+                    gl.vertex_attrib_pointer_i32(4, 1, glow::UNSIGNED_INT,
+                        size_of::<EdgeInstanceData>() as i32,
+                        (2 * size_of::<Point>()) as i32);
+                    gl.enable_vertex_attrib_array(4);
+                    gl.vertex_attrib_divisor(4, 1);
+                    
+                    // Edge degree_and_class B (location = 5)
+                    gl.vertex_attrib_pointer_i32(5, 1, glow::UNSIGNED_INT,
+                        size_of::<EdgeInstanceData>() as i32,
+                        (2 * size_of::<Point>() + size_of::<u32>()) as i32);
+                    gl.enable_vertex_attrib_array(5);
+                    gl.vertex_attrib_divisor(5, 1);
 
-                    (quad_vao, quad_vbo, instance_vao, instance_buffer, edges_buffer)
+                    (quad_vao, quad_vbo, edge_quad_vao, edge_quad_vbo, instance_buffer, edge_instance_buffer)
                 })?;
 
             log!(
@@ -337,7 +369,7 @@ impl RenderedGraph {
                     let start = i * BATCH_SIZE;
                     let end = ((i + 1) * BATCH_SIZE).min(node_instances.len());
                     let batch = &node_instances[start..end];
-                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(instance_buffer));
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(node_instance_buffer));
                     gl.buffer_sub_data_u8_slice(
                         glow::ARRAY_BUFFER,
                         (start * size_of::<NodeInstanceData>()).try_into().unwrap(),
@@ -349,19 +381,19 @@ impl RenderedGraph {
                 })?;
             });
 
-            log!(status_tx, t!("Buffering %{num} edge vertices", num = edge_vertices.len()));
-            let edge_vertices = std::sync::Arc::new(edge_vertices);
+            log!(status_tx, t!("Buffering %{num} edge instances", num = edge_instances.len()));
+            let edge_instances = std::sync::Arc::new(edge_instances);
 
-            for_progress!(status_tx, i in 0..edge_vertices.len().div_ceil(BATCH_SIZE), {
-                let edge_vertices = edge_vertices.clone();
+            for_progress!(status_tx, i in 0..edge_instances.len().div_ceil(BATCH_SIZE), {
+                let edge_instances = edge_instances.clone();
                 gl.run(move |gl: &glow::Context| {
                     let start = i * BATCH_SIZE;
-                    let end = ((i + 1) * BATCH_SIZE).min(edge_vertices.len());
-                    let batch = &edge_vertices[start..end];
-                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(edges_buffer));
+                    let end = ((i + 1) * BATCH_SIZE).min(edge_instances.len());
+                    let batch = &edge_instances[start..end];
+                    gl.bind_buffer(glow::ARRAY_BUFFER, Some(edge_instance_buffer));
                     gl.buffer_sub_data_u8_slice(
                         glow::ARRAY_BUFFER,
-                        (start * size_of::<PersonVertex>()).try_into().unwrap(),
+                        (start * size_of::<EdgeInstanceData>()).try_into().unwrap(),
                         std::slice::from_raw_parts(
                             batch.as_ptr() as *const u8,
                             size_of_val(batch),
@@ -382,12 +414,13 @@ impl RenderedGraph {
                 program_basic,
                 program_edge,
                 program_node,
-                nodes_buffer: edges_buffer,
-                nodes_instance_buffer: instance_buffer,
+                nodes_instance_buffer: node_instance_buffer,
                 nodes_count,
-                nodes_array: instance_vao,
                 quad_vao,
                 quad_vbo,
+                edge_quad_vao,
+                edge_quad_vbo,
+                edge_instance_buffer,
                 edges_count,
                 node_filter: NodeFilter::default(),
                 destroyed: false,
@@ -407,12 +440,13 @@ impl RenderedGraph {
             gl.delete_program(self.program_edge);
             gl.delete_program(self.program_node);
             log::info!("Deleting buffers");
-            gl.delete_buffer(self.nodes_buffer);
             gl.delete_buffer(self.nodes_instance_buffer);
             gl.delete_buffer(self.quad_vbo);
+            gl.delete_buffer(self.edge_quad_vbo);
+            gl.delete_buffer(self.edge_instance_buffer);
             log::info!("Deleting arrays");
-            gl.delete_vertex_array(self.nodes_array);
             gl.delete_vertex_array(self.quad_vao);
+            gl.delete_vertex_array(self.edge_quad_vao);
         }
     }
 
@@ -437,9 +471,9 @@ impl RenderedGraph {
         unsafe {
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
-            // Draw edges
+            // Draw edges with instanced rendering
             if edges.0 {
-                gl.bind_vertex_array(Some(self.nodes_array));
+                gl.bind_vertex_array(Some(self.edge_quad_vao));
                 gl.use_program(Some(self.program_edge));
                 gl.uniform_matrix_4_f32_slice(
                     Some(
@@ -472,11 +506,11 @@ impl RenderedGraph {
                     ),
                     &class_colors,
                 );
-                let verts = geom_draw::VERTS_PER_EDGE as i32 * self.edges_count as i32;
-                // if wasm, clamp verts at 30M, because Firefox refuses to draw anything above that
+                
+                let instances = self.edges_count as i32;
                 #[cfg(target_arch = "wasm32")]
-                let verts = verts.min(30_000_000);
-                gl.draw_arrays(glow::TRIANGLES, 0, verts);
+                let instances = instances.min(5_000_000); // Limit for Firefox
+                gl.draw_arrays_instanced(glow::TRIANGLES, 0, 6, instances);
             }
             
             // Draw nodes with instanced rendering
@@ -544,6 +578,15 @@ pub struct PersonVertex {
 pub struct NodeInstanceData {
     pub position: Point,
     pub degree_and_class: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct EdgeInstanceData {
+    pub position_a: Point,
+    pub position_b: Point,
+    pub degree_and_class_a: u32,
+    pub degree_and_class_b: u32,
 }
 
 impl PersonVertex {
