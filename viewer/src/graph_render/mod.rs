@@ -259,13 +259,13 @@ impl RenderedGraph {
                     
                     // Vertex position (location = 0)
                     gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 
-                        size_of::<PersonVertex>() as i32, 0);
+                        size_of::<QuadVertex>() as i32, 0);
                     gl.enable_vertex_attrib_array(0);
                     
                     // Texture coordinates (location = 1)
                     gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false,
-                        size_of::<PersonVertex>() as i32,
-                        (size_of::<Point>() + size_of::<u32>()) as i32);
+                        size_of::<QuadVertex>() as i32,
+                        size_of::<Point>() as i32);
                     gl.enable_vertex_attrib_array(1);
                     
                     // Create instance buffer
@@ -307,13 +307,13 @@ impl RenderedGraph {
                     
                     // Vertex position (location = 0)
                     gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false,
-                        size_of::<PersonVertex>() as i32, 0);
+                        size_of::<QuadVertex>() as i32, 0);
                     gl.enable_vertex_attrib_array(0);
                     
                     // Texture coordinates (location = 1)
                     gl.vertex_attrib_pointer_f32(1, 2, glow::FLOAT, false,
-                        size_of::<PersonVertex>() as i32,
-                        (size_of::<Point>() + size_of::<u32>()) as i32);
+                        size_of::<QuadVertex>() as i32,
+                        size_of::<Point>() as i32);
                     gl.enable_vertex_attrib_array(1);
                     
                     // Create edge instance buffer
@@ -560,17 +560,18 @@ impl RenderedGraph {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct Vertex {
+pub struct QuadVertex {
     pub position: Point,
-    pub color: Color3b,
+    pub tex_coord: Point,
 }
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct PersonVertex {
-    pub position: Point,
-    pub degree_and_class: u32,
-    pub tex_coord: Point,
+impl QuadVertex {
+    pub fn new(position: Point, tex_coord: Point) -> QuadVertex {
+        QuadVertex {
+            position,
+            tex_coord,
+        }
+    }
 }
 
 #[repr(C)]
@@ -587,28 +588,4 @@ pub struct EdgeInstanceData {
     pub position_b: Point,
     pub degree_and_class_a: u32,
     pub degree_and_class_b: u32,
-}
-
-impl PersonVertex {
-    pub fn new(position: Point, degree: u16, class: u16) -> PersonVertex {
-        PersonVertex {
-            position,
-            degree_and_class: ((class as u32) << 16) | (degree as u32),
-            tex_coord: Point::new(0.0, 0.0),
-        }
-    }
-    
-    pub fn with_tex_coord(position: Point, degree: u16, class: u16, tex_coord: Point) -> PersonVertex {
-        PersonVertex {
-            position,
-            degree_and_class: ((class as u32) << 16) | (degree as u32),
-            tex_coord,
-        }
-    }
-}
-
-impl Vertex {
-    pub fn new(position: Point, color: Color3b) -> Vertex {
-        Vertex { position, color }
-    }
 }

@@ -1,6 +1,6 @@
 use crate::algorithms::AbstractGraph;
 use crate::app::{Person, ViewerData};
-use crate::graph_render::{GlTask, NodeFilter, PersonVertex, RenderedGraph};
+use crate::graph_render::{GlTask, NodeFilter, RenderedGraph};
 use crate::threading::MyRwLock;
 use eframe::glow;
 use eframe::glow::HasContext;
