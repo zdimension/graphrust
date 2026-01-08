@@ -9,6 +9,7 @@ use graph_format::{Color3b, Color3f, EdgeStore, Point};
 use std::collections::VecDeque;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
+use rayon::prelude::*;
 
 pub mod camera;
 pub mod geom_draw;
@@ -88,7 +89,7 @@ impl RenderedGraph {
     pub fn new<'a>(
         gl: GlForwarder,
         viewer: &ViewerData,
-        edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
+        edges: Vec<EdgeStore>,
         status_tx: StatusWriter,
     ) -> Cancelable<Self> {
         use eframe::glow::HasContext;
@@ -185,7 +186,7 @@ impl RenderedGraph {
             let edges = edges.take(10_000_000);
 
             let edges_count = edges.len();
-            log!(status_tx, t!("Creating instance data"));
+            log!(status_tx, t!("Creating node instance data"));
             
             // Create instance data for nodes (position, degree, class)
             let node_instances: Vec<NodeInstanceData> = viewer
@@ -203,16 +204,27 @@ impl RenderedGraph {
             #[cfg(not(target_arch = "wasm32"))]
             const MAX_RENDERED_EDGES: usize = 10_000_000;
             
-            let edge_instances: Vec<EdgeInstanceData> = edges
+            log!(status_tx, t!("Sorting edges data (max %{num})", num = MAX_RENDERED_EDGES));
+
+            let mut edge_data = Vec::new();
+            edges
+                .into_par_iter()
                 .map(|e| {
                     let pa = &viewer.persons[e.a as usize];
                     let pb = &viewer.persons[e.b as usize];
                     let dist = (pa.position - pb.position).norm_squared();
                     (pa, pb, dist, e)
                 })
-                .sorted_unstable_by(|(_, _, dist1, _), (_, _, dist2, _)| {
-                    dist2.partial_cmp(dist1).unwrap()
-                })
+                .collect_into_vec(&mut edge_data);
+
+            edge_data.par_sort_unstable_by_key(|&(_, _, dist, _)| {
+                // Reverse order
+                std::cmp::Reverse(dist.to_bits())
+            });
+            
+            log!(status_tx, t!("Creating edge instance data"));
+            
+            let edge_instances: Vec<EdgeInstanceData> = edge_data.into_iter()
                 .take(MAX_RENDERED_EDGES)
                 .map(|(pa, pb, _, _)| EdgeInstanceData {
                     position_a: pa.position,

@@ -50,7 +50,7 @@ pub struct GraphTab {
 
 pub fn create_tab<'a>(
     viewer: ViewerData,
-    edges: impl ExactSizeIterator<Item = &'a EdgeStore>,
+    edges: Vec<EdgeStore>,
     gl: GlForwarder,
     default_filter: u16,
     camera: Camera,

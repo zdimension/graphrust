@@ -410,7 +410,7 @@ impl eframe::App for GraphViewApp {
 
                                 let tab = tabs::create_tab(
                                     file.viewer,
-                                    file.edges.iter(),
+                                    file.edges,
                                     gl_fwd,
                                     if cfg!(target_arch = "wasm32") {
                                         120

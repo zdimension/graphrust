@@ -359,7 +359,7 @@ impl InfosSection {
 
             state_tx.send(create_tab(
                 viewer,
-                edges.iter(),
+                edges,
                 gl_fwd,
                 filter,
                 camera,
