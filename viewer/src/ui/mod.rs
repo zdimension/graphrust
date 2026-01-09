@@ -1,9 +1,7 @@
 use crate::algorithms::AbstractGraph;
 use crate::app::{Person, ViewerData};
-use crate::graph_render::{GlTask, NodeFilter, RenderedGraph};
+use crate::graph_render::{WgpuTask, NodeFilter, RenderedGraph};
 use crate::threading::MyRwLock;
-use eframe::glow;
-use eframe::glow::HasContext;
 use egui::{Color32, Id, Ui};
 use itertools::Itertools;
 use modal::ModalWriter;
@@ -51,7 +49,7 @@ struct ParadoxState {
     max: usize,
 }
 
-fn rerender_graph(persons: &[Person]) -> GlTask {
+fn rerender_graph(persons: &[Person]) -> WgpuTask {
     use crate::graph_render::{NodeInstanceData, EdgeInstanceData};
     
     let node_instances: Vec<NodeInstanceData> = persons
@@ -73,28 +71,23 @@ fn rerender_graph(persons: &[Person]) -> GlTask {
         }
     }).collect();
 
-    let closure = move |graph: &mut RenderedGraph, gl: &glow::Context| unsafe {
+    let closure = move |graph: &mut RenderedGraph, _device: &eframe::wgpu::Device, queue: &eframe::wgpu::Queue| {
         // Update instance buffer for nodes
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(graph.nodes_instance_buffer));
-        gl.buffer_sub_data_u8_slice(
-            glow::ARRAY_BUFFER,
+        queue.write_buffer(
+            &graph.nodes_instance_buffer,
             0,
-            std::slice::from_raw_parts(
-                node_instances.as_ptr() as *const u8,
-                node_instances.len() * size_of::<NodeInstanceData>(),
-            ),
+            bytemuck::cast_slice(&node_instances),
         );
-        
-        // Update edge instance buffer
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(graph.edge_instance_buffer));
-        gl.buffer_sub_data_u8_slice(
-            glow::ARRAY_BUFFER,
+
+        // Update instance buffer for edges
+        queue.write_buffer(
+            &graph.edge_instance_buffer,
             0,
-            std::slice::from_raw_parts(
-                edge_instances.as_ptr() as *const u8,
-                edge_instances.len() * size_of::<EdgeInstanceData>(),
-            ),
+            bytemuck::cast_slice(&edge_instances),
         );
+
+        graph.nodes_count = node_instances.len();
+        graph.edges_count = edge_instances.len();
     };
 
     Box::new(closure)

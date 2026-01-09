@@ -1,25 +1,79 @@
 use crate::app::{GraphTabState, Person, ViewerData};
 use crate::graph_render::camera::{CamXform, Camera};
-use crate::graph_render::{GlForwarder, RenderedGraph};
+use crate::graph_render::{WgpuForwarder, RenderedGraph};
 use crate::threading::{Cancelable, MyRwLock, StatusWriter};
 use crate::ui::modal::ModalInfo;
 use crate::ui::sections::display;
 use crate::ui::sections::path::PathStatus;
 use crate::ui::{SelectedUserField, UiState};
 use crate::{app, log};
-use eframe::egui_glow;
-use eframe::emath::{vec2, Align, Vec2};
+use eframe::emath::{vec2, Vec2};
 use eframe::epaint::text::TextWrapMode;
 use eframe::epaint::Shape::LineSegment;
-use eframe::epaint::{CircleShape, Color32, PathStroke, Stroke, TextShape};
-use egui::{emath, pos2, Id, Layout, Rect, RichText, TextStyle, Ui, WidgetText};
+use eframe::epaint::{CircleShape, Color32, Stroke, TextShape};
+use eframe::egui_wgpu;
+use egui::{emath, pos2, Id, Rect, RichText, TextStyle, Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
-use graph_format::nalgebra::{Similarity3, Vector4};
+use graph_format::nalgebra::{Similarity3, Vector4, Matrix4};
 use graph_format::EdgeStore;
 use itertools::Itertools;
-use std::ops::Deref;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
+
+// WGPU callback for rendering the graph
+struct WgpuGraphCallback {
+    graph: Arc<MyRwLock<RenderedGraph>>,
+    cam: Matrix4<f32>,
+    edges: bool,
+    nodes: bool,
+    opac_edges: f32,
+    opac_nodes: f32,
+    class_colors: Vec<u32>,
+}
+
+impl egui_wgpu::CallbackTrait for WgpuGraphCallback {
+    fn prepare(
+        &self,
+        _device: &eframe::wgpu::Device,
+        queue: &eframe::wgpu::Queue,
+        _screen_descriptor: &egui_wgpu::ScreenDescriptor,
+        _egui_encoder: &mut eframe::wgpu::CommandEncoder,
+        _callback_resources: &mut egui_wgpu::CallbackResources,
+    ) -> Vec<eframe::wgpu::CommandBuffer> {
+        // Update class colors and uniforms in prepare phase
+        queue.write_buffer(
+            &self.graph.read().class_colors_buffer,
+            0,
+            bytemuck::cast_slice(&self.class_colors),
+        );
+        
+        self.graph.write().update_uniforms(
+            queue,
+            self.cam,
+            (self.edges, self.opac_edges),
+            (self.nodes, self.opac_nodes),
+        );
+        
+        Vec::new()
+    }
+
+    fn paint(
+        &self,
+        _info: egui::PaintCallbackInfo,
+        render_pass: &mut eframe::wgpu::RenderPass<'_>,
+        _callback_resources: &egui_wgpu::CallbackResources,
+    ) {
+        let mut graph = self.graph.write();
+        graph.paint(
+            render_pass,
+            self.cam,
+            (self.edges, self.opac_edges),
+            (self.nodes, self.opac_nodes),
+            0, // degfilter passed via uniforms now
+            0, // node_degfilter passed via uniforms now
+        );
+    }
+}
 
 #[derive(Copy, Clone)]
 pub enum CamAnimating {
@@ -51,7 +105,7 @@ pub struct GraphTab {
 pub fn create_tab<'a>(
     viewer: ViewerData,
     edges: Vec<EdgeStore>,
-    gl: GlForwarder,
+    wgpu: WgpuForwarder,
     default_filter: u16,
     camera: Camera,
     ui_state: UiState,
@@ -90,7 +144,7 @@ pub fn create_tab<'a>(
             ..ui_state
         },
         rendered_graph: Arc::new(MyRwLock::new({
-            let mut graph = RenderedGraph::new(gl, &viewer, edges, status_tx)?;
+            let mut graph = RenderedGraph::new(wgpu, &viewer, edges, status_tx)?;
             graph.node_filter.degree_filter = (default_filter, u16::MAX);
             graph
         })),
@@ -117,10 +171,11 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
             GraphTabState::Loading {
                 status_rx,
                 state_rx,
-                gl_mpsc,
+                wgpu_mpsc,
             } => {
-                if let Ok(work) = gl_mpsc.0.try_recv() {
-                    work.0(self.frame.gl().unwrap().deref(), &gl_mpsc.1);
+                if let Ok(work) = wgpu_mpsc.0.try_recv() {
+                    let render_state = self.frame.wgpu_render_state().unwrap();
+                    work.0(&render_state.device, &render_state.queue, &wgpu_mpsc.1);
                 }
                 app::show_status(ui, status_rx);
                 if let Ok(state) = state_rx.try_recv() {
@@ -330,20 +385,19 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                             .iter()
                             .map(|c| c.color.to_u32())
                             .collect_vec();
-                        let callback = egui::PaintCallback {
+                        
+                        let callback = egui_wgpu::Callback::new_paint_callback(
                             rect,
-                            callback: Arc::new(egui_glow::CallbackFn::new(
-                                move |_info, painter| {
-                                    graph.write().paint(
-                                        painter.gl(),
-                                        cam,
-                                        (edges, opac_edges),
-                                        (nodes, opac_nodes),
-                                        &class_colors,
-                                    );
-                                },
-                            )),
-                        };
+                            WgpuGraphCallback {
+                                graph,
+                                cam,
+                                edges,
+                                nodes,
+                                opac_edges,
+                                opac_nodes,
+                                class_colors,
+                            },
+                        );
                         ui.painter().add(callback);
 
                         let clipped_painter = ui.painter().with_clip_rect(rect);
@@ -457,9 +511,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
 
     fn on_close(&mut self, tab: &mut Self::Tab) -> OnCloseResponse {
         if let GraphTabState::Loaded(ref mut tab) = tab.state {
-            tab.rendered_graph
-                .write()
-                .destroy(&self.frame.gl().unwrap().clone());
+            tab.rendered_graph.write().destroy();
         }
         OnCloseResponse::Close
     }

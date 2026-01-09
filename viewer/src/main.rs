@@ -12,7 +12,7 @@ fn main() -> eframe::Result<()> {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "info");
     }
-    env::set_var("RUST_LOG", "debug");
+    //env::set_var("RUST_LOG", "debug");
     env_logger::builder()
         .format(|buf, record| {
             use io::Write;
@@ -56,8 +56,7 @@ fn main() -> eframe::Result<()> {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1600.0, 900.0]),
-        renderer: eframe::Renderer::Glow,
-        multisampling: 4,
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
     eframe::run_native(

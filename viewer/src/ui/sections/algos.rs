@@ -173,7 +173,7 @@ impl AlgosSection {
                     self.force_atlas_state.render_thread = None;
                     let data = data.clone();
                     let graph = graph.clone();
-                    let thr = spawn_cancelable(modal.clone(), move || {
+                    let _thr = spawn_cancelable(modal.clone(), move || {
                         let mut data = data.write();
                         let mut persons = data.persons.as_ref().clone();
                         for person in persons.iter_mut() {

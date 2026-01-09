@@ -2,7 +2,6 @@ use crate::algorithms::AbstractNode;
 use ahash::AHashSet;
 use bit_set::BitSet;
 use derivative::*;
-use itertools::Itertools;
 use std::collections::VecDeque;
 
 pub fn do_pathfinding(

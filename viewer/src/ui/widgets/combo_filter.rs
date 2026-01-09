@@ -5,7 +5,7 @@ use eframe::epaint::{Shape, Stroke, StrokeKind};
 use egui::style::WidgetVisuals;
 use std::ops::Add;
 
-use egui::{Align, Button, Id, Layout, Painter, Popup, PopupCloseBehavior, RectAlign, Response, ScrollArea, SelectableLabel, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText};
+use egui::{Align, Button, Id, Layout, Painter, Popup, PopupCloseBehavior, RectAlign, Response, ScrollArea, Sense, Spinner, TextEdit, TextStyle, Ui, UiBuilder, WidgetText};
 
 use crate::threading::MyRwLock;
 use derivative::Derivative;

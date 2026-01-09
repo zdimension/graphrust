@@ -1,6 +1,6 @@
 use crate::app::{GraphTabState, Person, ViewerData};
 use crate::graph_render::camera::Camera;
-use crate::graph_render::GlForwarder;
+use crate::graph_render::WgpuForwarder;
 use crate::threading::{spawn_cancelable, status_pipe, Cancelable, MyRwLock, StatusWriter};
 use crate::ui::class::ClassSection;
 use crate::ui::modal::ModalWriter;
@@ -248,13 +248,13 @@ impl InfosSection {
     ) {
         let (status_tx, status_rx) = status_pipe(ui.ctx());
         let (state_tx, state_rx) = mpsc::channel();
-        let (gl_fwd, gl_mpsc) = GlForwarder::new();
+        let (wgpu_fwd, wgpu_mpsc) = WgpuForwarder::new();
 
         *tab_request = Some(NewTabRequest {
             id: Id::new((&title, chrono::Utc::now())),
             title,
             closeable: true,
-            state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),
+            state: GraphTabState::loading(status_rx, state_rx, wgpu_mpsc),
         });
 
         let infos_current = self.infos_current;
@@ -360,7 +360,7 @@ impl InfosSection {
             state_tx.send(create_tab(
                 viewer,
                 edges,
-                gl_fwd,
+                wgpu_fwd,
                 filter,
                 camera,
                 new_ui,

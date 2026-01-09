@@ -2,13 +2,12 @@ use crate::app::{iter_progress, ModularityClass, Person, StringTables, ViewerDat
 
 use graph_format::{EdgeStore, GraphFile};
 use itertools::Itertools;
-use rayon::prelude::*;
 
 use speedy::Readable;
 
-use crate::utils::{str_from_null_terminated_utf8, SliceExt};
+use crate::utils::str_from_null_terminated_utf8;
 
-use crate::threading::{Cancelable, StatusWriter, StatusWriterInterface};
+use crate::threading::{Cancelable, StatusWriterInterface};
 use crate::{for_progress, log};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;

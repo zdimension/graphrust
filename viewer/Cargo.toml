@@ -9,9 +9,11 @@ chrono = "0.4"
 derivative = "2.2"
 eframe = { version = "0.33.0", default-features = false, features = [
     "default_fonts", # Embed the default egui fonts.
-    "glow", # Use the glow rendering backend. Alternative: "wgpu".
+    "wgpu", # Use the wgpu rendering backend.
 ] }
 egui = "0.33.0"
+wgpu = { version = "*", features = ["dx12", "vulkan"] }
+bytemuck = { version = "1.14", features = ["derive"] }
 itertools = "0.14.0"
 speedy = "0.8"
 log = "0.4"

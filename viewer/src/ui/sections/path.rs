@@ -1,19 +1,14 @@
 use crate::algorithms::pathfinding::{do_pathfinding, PathSectionResults, PathSectionSettings};
-use crate::algorithms::AbstractNode;
 use crate::app::ViewerData;
 use crate::thread;
 use crate::thread::JoinHandle;
 use crate::threading::MyRwLock;
 use crate::ui::infos::InfosSection;
-use crate::ui::sections::path::PathStatus::{NoPath, SameSrcDest};
 use crate::ui::widgets::combo_filter::{combo_with_filter, COMBO_WIDTH};
 use crate::ui::SelectedUserField;
-use ahash::AHashSet;
 use derivative::Derivative;
 use eframe::emath::vec2;
-use egui::{CollapsingHeader, Sense, Spinner, TextStyle, Ui};
-use itertools::Itertools;
-use std::collections::VecDeque;
+use egui::{CollapsingHeader, Sense, Spinner, Ui};
 use std::sync::Arc;
 
 #[derive(Derivative)]

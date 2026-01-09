@@ -1,11 +1,9 @@
 use crate::graph_render::camera::{Camera};
 use crate::graph_storage::{load_binary, load_file, ProcessedData};
 use crate::ui::{tabs, UiState};
-use eframe::glow::HasContext;
-use eframe::{glow};
 use egui::{
-    vec2, CentralPanel, Context, FontFamily, FontId, Frame, Hyperlink, Id, Image, Layout,
-    RichText, TextFormat, TextStyle, Ui, Vec2, WidgetText,
+    vec2, Align, CentralPanel, Context, FontFamily, Frame, Hyperlink, Id, Image, Layout,
+    Ui,
 };
 use egui_dock::{DockArea, DockState, Style};
 use graph_format::{Color3b, Point};
@@ -13,13 +11,12 @@ use graph_format::{Color3b, Point};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Arc};
 
-use crate::graph_render::{GlForwarder, GlMpsc};
+use crate::graph_render::{WgpuForwarder, WgpuMpsc};
 use crate::search::SearchEngine;
 use crate::threading;
 use crate::threading::{Cancelable, StatusReader, StatusWriterInterface};
 use crate::ui::modal::{show_modal, ModalInfo};
 use crate::ui::tabs::{GraphTab, GraphTabLoaded, TabViewer};
-use eframe::emath::Align;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 #[cfg(not(target_arch = "wasm32"))]
 pub use std::thread;
@@ -171,7 +168,7 @@ pub enum GraphTabState {
     Loading {
         status_rx: StatusReader,
         state_rx: Receiver<GraphTabLoaded>,
-        gl_mpsc: GlMpsc,
+        wgpu_mpsc: WgpuMpsc,
     },
     Loaded(GraphTabLoaded),
 }
@@ -180,12 +177,12 @@ impl GraphTabState {
     pub fn loading(
         status_rx: StatusReader,
         state_rx: Receiver<GraphTabLoaded>,
-        gl_mpsc: GlMpsc,
+        wgpu_mpsc: WgpuMpsc,
     ) -> Self {
         GraphTabState::Loading {
             status_rx,
             state_rx,
-            gl_mpsc,
+            wgpu_mpsc,
         }
     }
 }
@@ -265,14 +262,7 @@ impl GraphViewApp {
 
         egui_extras::install_image_loaders(&cc.egui_ctx);
 
-        let gl = cc
-            .gl
-            .as_ref()
-            .expect("You need to run eframe with the glow backend");
-        // SAFETY: duh
-        unsafe {
-            gl.enable(glow::PROGRAM_POINT_SIZE);
-        }
+        // wgpu doesn't need special OpenGL setup
 
         let (status_tx, status_rx) = threading::status_pipe(&cc.egui_ctx);
         let (file_tx, file_rx) = mpsc::channel();
@@ -378,13 +368,13 @@ impl eframe::App for GraphViewApp {
                         if let Ok(file) = file_rx.try_recv() {
                             let (status_tx, status_rx) = threading::status_pipe(ctx);
                             let (state_tx, state_rx) = mpsc::channel();
-                            let (gl_fwd, gl_mpsc) = GlForwarder::new();
+                            let (wgpu_fwd, wgpu_mpsc) = WgpuForwarder::new();
                             self.state = AppState::Loaded {
                                 tree: DockState::new(vec![GraphTab {
                                     id: Id::new(("main_tab", chrono::Utc::now())),
                                     closeable: false,
                                     title: t!("Graph").to_string(),
-                                    state: GraphTabState::loading(status_rx, state_rx, gl_mpsc),
+                                    state: GraphTabState::loading(status_rx, state_rx, wgpu_mpsc),
                                 }]),
                                 string_tables: file.strings,
                             };
@@ -411,7 +401,7 @@ impl eframe::App for GraphViewApp {
                                 let tab = tabs::create_tab(
                                     file.viewer,
                                     file.edges,
-                                    gl_fwd,
+                                    wgpu_fwd,
                                     if cfg!(target_arch = "wasm32") {
                                         120
                                     } else {
@@ -449,7 +439,7 @@ impl eframe::App for GraphViewApp {
                             tree.push_to_focused_leaf(request);
                         }
                     }
-                };
+                }
 
                 if !self.top_bar {
                     let rect = ctx.content_rect().translate(vec2(-4.0, 26.0));
@@ -479,7 +469,7 @@ impl GraphViewApp {
                         self.top_bar = false;
                     }
                 }
-            };
+            }
             let small_window = ctx.content_rect().width() < 1100.0;
             ui.horizontal(|ui| {
                 //ui.spacing_mut().item_spacing.x = 50.0;
