@@ -94,41 +94,50 @@ pub fn load_file(_status_tx: &impl StatusWriterInterface) -> Cancelable<GraphFil
             metaRequest.onsuccess = event => {
                 const meta = event.target.result;
                 if (meta && meta.size === filesize && meta.parts) {
-                    const parts = new Array(meta.parts).fill(null).map((_, i) => {
-                        return new Promise((resolve, reject) => {
-                            const partRequest = store.get(`${FILE_NAME}_part${i}`);
-                            partRequest.onsuccess = event => {
-                                const data = event.target.result.data;
-                                if (!data || data == {}) {
-                                    console.warn(`Part ${i} not found in IndexedDB`);
-                                    resolve(null);
-                                } else {
-                                    resolve(event.target.result.data);
-                                }
-                            };
-                            partRequest.onerror = event => {
-                                reject(`Error retrieving part ${i} from IndexedDB: ${event.target.errorCode}`);
-                            };
-                        });
-                    });
+                    queueMicrotask(() => {
+                        const partRequests = [];
+                        
+                        for (let i = 0; i < meta.parts; i++) {
+                            partRequests.push(
+                                new Promise((resolvepart, rejectPart) => {
+                                    const partRequest = store.get(`${FILE_NAME}_part${i}`);
+                                    partRequest.onsuccess = e => {
+                                        const result = e.target.result;
+                                        if (!result || !result.data) {
+                                            console.warn(`Part ${i} not found in IndexedDB`);
+                                            resolvepart(null);
+                                        } else {
+                                            resolvepart(result.data);
+                                        }
+                                    };
+                                    partRequest.onerror = e => {
+                                        rejectPart(`Error retrieving part ${i}: ${e.target.errorCode}`);
+                                    };
+                                })
+                            );
+                        }
     
-                    Promise.all(parts).then(chunks => {
-                        const fileData = new Uint8Array(filesize);
-                        let offset = 0;
-                        for (const chunk of chunks) {
-                            if (!chunk) {
-                                console.log('Part not found');
+                        Promise.all(partRequests).then(chunks => {
+                            if (chunks.some(chunk => !chunk)) {
+                                console.log('Some parts not found');
                                 resolve(null);
                                 return;
                             }
-                            fileData.set(new Uint8Array(chunk), offset);
-                            offset += chunk.byteLength;
-                        }
-                        resolve(fileData.buffer);
-                    }).catch(reject);
+                            
+                            const fileData = new Uint8Array(filesize);
+                            let offset = 0;
+                            
+                            for (const chunk of chunks) {
+                                fileData.set(new Uint8Array(chunk), offset);
+                                offset += chunk.byteLength;
+                            }
+                            
+                            resolve(fileData.buffer);
+                        }).catch(reject);
+                    });
                 } else {
                     console.log('File not found or size mismatch');
-                    resolve(null); // Return null if file not found or size mismatch
+                    resolve(null);
                 }
             };
     
@@ -382,12 +391,13 @@ pub fn load_binary(
         std::hint::black_box(Vec::<EdgeStore>::with_capacity(total_edges));
     }
 
-    log!(status_tx, t!("Processing nodes"));
 
     let start = chrono::Local::now();
+    log!(status_tx, t!("Allocating neighbor lists"));
     let mut neighbor_lists: Vec<_> = iter_progress(content.nodes.iter(), status_tx)
         .map(|node| Vec::with_capacity(node.total_edge_count as usize))
         .collect();
+    log!(status_tx, t!("Processing nodes"));
     let mut person_data: Vec<_> = iter_progress(content.nodes.iter(), status_tx)
         .map(|node| {
             Person::new(
@@ -421,7 +431,7 @@ pub fn load_binary(
 
     let start = chrono::Local::now();
 
-    let mut edges = Vec::new();
+    /*let mut edges = Vec::new();
 
     for_progress!(status_tx, (i, n) in content.nodes.iter().enumerate(), {
         edges.reserve(n.edge_count as usize);
@@ -433,11 +443,32 @@ pub fn load_binary(
                 b: e,
             });
         }
+    });*/
+
+    log!(status_tx, t!("Building edge list"));
+
+    // tried to do it using zip and repeat_n, actually takes the same time. good job rustc!
+    let edges: Vec<EdgeStore> = content.nodes
+        .iter()
+        .enumerate()
+        .flat_map(|(i, n)| {
+            n.edges(&content.edges)
+                .iter()
+                .map(move |&e| EdgeStore { a: i as u32, b: e })
+        })
+        .collect();
+    
+    log!(status_tx, t!("Building neighbor lists"));
+    for_progress!(status_tx, (i, n) in content.nodes.iter().enumerate(), {
+        for e in n.edges(&content.edges).iter().copied() {
+            neighbor_lists[i].push(e as usize);
+            neighbor_lists[e as usize].push(i);
+        }
     });
 
     log!(status_tx, t!("Associating neighbor lists"));
-
-    for_progress!(status_tx, (person, nblist) in person_data.iter_mut().zip(neighbor_lists.iter()), {
+    
+    person_data.par_iter_mut().zip(neighbor_lists.par_iter()).for_each(|(person, nblist)| {
         // SAFETY: neighbor_lists is kept alive
         person.neighbors = unsafe { std::mem::transmute(nblist.as_slice()) };
     });
