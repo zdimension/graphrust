@@ -86,6 +86,12 @@ pub struct RenderedGraph {
 }
 
 impl RenderedGraph {
+    pub const MAX_RENDERED_EDGES: usize = if cfg!(target_arch = "wasm32") {
+        1_000_000
+    } else {
+        10_000_000
+    };
+    
     pub fn new<'a>(
         gl: GlForwarder,
         viewer: &ViewerData,
@@ -182,10 +188,6 @@ impl RenderedGraph {
                 })
             })?;
 
-            #[cfg(target_arch = "wasm32")]
-            let edges = edges.take(10_000_000);
-
-            let edges_count = edges.len();
             log!(status_tx, t!("Creating node instance data"));
             
             // Create instance data for nodes (position, degree, class)
@@ -199,12 +201,8 @@ impl RenderedGraph {
                 .collect();
 
             // Create instance data for edges with rendering cap
-            #[cfg(target_arch = "wasm32")]
-            const MAX_RENDERED_EDGES: usize = 1_000_000;
-            #[cfg(not(target_arch = "wasm32"))]
-            const MAX_RENDERED_EDGES: usize = 10_000_000;
             
-            log!(status_tx, t!("Sorting edges data (max %{num})", num = MAX_RENDERED_EDGES));
+            log!(status_tx, t!("Computing edge lengths"));
 
             let mut edge_data = Vec::new();
             edges
@@ -216,6 +214,8 @@ impl RenderedGraph {
                     (pa, pb, dist, e)
                 })
                 .collect_into_vec(&mut edge_data);
+            
+            log!(status_tx, t!("Sorting edges by length"));
 
             edge_data.par_sort_unstable_by_key(|&(_, _, dist, _)| {
                 // Reverse order
@@ -225,7 +225,6 @@ impl RenderedGraph {
             log!(status_tx, t!("Creating edge instance data"));
             
             let edge_instances: Vec<EdgeInstanceData> = edge_data.into_iter()
-                .take(MAX_RENDERED_EDGES)
                 .map(|(pa, pb, _, _)| EdgeInstanceData {
                     position_a: pa.position,
                     position_b: pb.position,

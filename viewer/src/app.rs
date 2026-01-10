@@ -30,6 +30,7 @@ pub use wasm_thread as thread;
 macro_rules! log {
     ($ch:expr, $fmt:literal, $($arg:tt)+) => {
         {
+            #[allow(unused_imports)]
             use $crate::threading::StatusWriterInterface as _;
             let msg = format!($fmt, $($arg)+);
             log::info!("{}", &msg);
@@ -44,6 +45,7 @@ macro_rules! log {
 #[macro_export]
 macro_rules! try_log_progress {
     ($ch: expr, $val:expr, $max:expr) => {{
+        #[allow(unused_imports)]
         use $crate::threading::StatusWriterInterface as _;
         $ch.send($crate::threading::Progress {
             max: $max,
@@ -479,7 +481,7 @@ impl GraphViewApp {
                         self.top_bar = false;
                     }
                 }
-            };
+            }
             let small_window = ctx.content_rect().width() < 1100.0;
             ui.horizontal(|ui| {
                 //ui.spacing_mut().item_spacing.x = 50.0;

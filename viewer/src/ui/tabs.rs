@@ -50,7 +50,7 @@ pub struct GraphTab {
 
 pub fn create_tab<'a>(
     viewer: ViewerData,
-    edges: Vec<EdgeStore>,
+    mut edges: Vec<EdgeStore>,
     gl: GlForwarder,
     default_filter: u16,
     camera: Camera,
@@ -74,6 +74,7 @@ pub fn create_tab<'a>(
         .max()
         .unwrap() as u16;
     log!(status_tx, t!("Maximum degree is %{d}", d = max_degree));
+    edges.truncate(RenderedGraph::MAX_RENDERED_EDGES);
     Ok(GraphTabLoaded {
         tab_camera: TabCamera {
             camera,
