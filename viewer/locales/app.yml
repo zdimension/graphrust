@@ -320,7 +320,7 @@ tr_7g1cZlhpFMpt:
     Essayez de diminuer la précision.
 tr_7j1nPfcwPt29:
   en: Buffering %{num} vertices
-  fr: Mise en tampon de %{num} vertex
+  fr: Chargement de %{num} vertex
 tr_8PLTSIBmhSZo:
   en: 'Translation:'
   fr: 'Translation :'
@@ -339,3 +339,43 @@ tr_7eKL8ChJmiRi:
 tr_5fWeh15GFpL5:
   en: Randomize positions
   fr: Randomiser les positions
+tr_1DQAMjRtTNL8:
+  en: Creating tab with %{n} nodes, %{m} edges, and %{c} classes
+  fr: Création d'un onglet avec %{n} nœuds, %{m} liens et %{c} classes
+tr_2YAO1kLeJuY9:
+  en: Associating neighbor lists
+  fr: Association des listes de voisinage
+tr_2iwoUeKZ9MF2:
+  en: Allocating neighbor lists
+  fr: Allocation des listes de voisinage
+tr_2rKdDGHVc080:
+  en: Computing edge lengths
+  fr: Calcul des longueurs des liens
+tr_2sTEnVB885S2:
+  en: Creating node instance data
+  fr: Création des données d'instance des nœuds
+tr_3JvS6jq9UbwY:
+  en: Buffering %{num} node instances
+  fr: Mise en tampon de %{num} instances de nœuds
+tr_4kVCAVJ5JLLe:
+  en: Creating quad templates and buffers
+  fr: Création des modèles de quads et des buffers
+tr_5kktZ7ogfLnd:
+  en: Creating edge instance data
+  fr: Création des données d'instance des liens
+tr_5lyPlx40FFMM:
+  en: Sorting edges by length
+  fr: Tri des liens par longueur
+tr_66fWOPmsVWN9:
+  en: Preallocating %{count} edges
+  fr: Préallocation de %{count} liens
+tr_6Uhv2sNu6FK8:
+  en: Building neighbor lists
+  fr: Construction des listes de voisinage
+tr_6gJhaM9kdjCB:
+  en: Building edge list
+  fr: Construction de la liste des liens
+tr_C6j9lKfmJenl:
+  en: Buffering %{num} edge instances
+  fr: Chargement de %{num} instances de liens
+  
