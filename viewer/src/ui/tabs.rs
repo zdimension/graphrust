@@ -287,6 +287,10 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                                             tab.ui_state.path.path_settings.path_dest =
                                                 Some(closest);
                                             tab.ui_state.path.path_dirty = true;
+                                            if ui.input(|i| i.modifiers.alt) {
+                                                tab.ui_state.selected_user_field =
+                                                    SelectedUserField::PathSource;
+                                            }
                                         }
                                     }
                                 }
