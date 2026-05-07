@@ -360,25 +360,25 @@ pub fn show_progress_bar(ui: &mut Ui, status_rx: &StatusReader) {
 
 impl eframe::App for GraphViewApp {
     /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         let mut new_tab_request = None;
 
         while let Ok(task) = self.tasks.try_recv() {
-            task(ctx);
+            task(ui.ctx());
         }
 
-        self.show_top_bar(ctx, self.top_bar);
+        self.show_top_bar(ui, self.top_bar);
 
-        show_modal(ctx, &self.modal.0, "modal");
+        show_modal(ui.ctx(), &self.modal.0, "modal");
 
         CentralPanel::default()
-            .frame(Frame::central_panel(&ctx.style()).inner_margin(0.))
-            .show(ctx, |ui| {
+            .frame(Frame::central_panel(&ui.global_style()).inner_margin(0.))
+            .show_inside(ui, |ui| {
                 match &mut self.state {
                     AppState::Loading { status_rx, file_rx } => {
                         show_status(ui, status_rx);
                         if let Ok(file) = file_rx.try_recv() {
-                            let (status_tx, status_rx) = threading::status_pipe(ctx);
+                            let (status_tx, status_rx) = threading::status_pipe(ui.ctx());
                             let (state_tx, state_rx) = mpsc::channel();
                             let (gl_fwd, gl_mpsc) = GlForwarder::new();
                             self.state = AppState::Loaded {
@@ -433,7 +433,7 @@ impl eframe::App for GraphViewApp {
                     AppState::Loaded { tree, .. } => {
                         DockArea::new(tree)
                             .style({
-                                let style = Style::from_egui(ctx.style().as_ref());
+                                let style = Style::from_egui(ui.ctx().style().as_ref());
                                 style
                             })
                             .show_leaf_collapse_buttons(false)
@@ -454,7 +454,7 @@ impl eframe::App for GraphViewApp {
                 };
 
                 if !self.top_bar {
-                    let rect = ctx.content_rect().translate(vec2(-4.0, 26.0));
+                    let rect = ui.ctx().content_rect().translate(vec2(-4.0, 26.0));
                     if ui
                         .put(rect, |ui: &mut Ui| {
                             ui.with_layout(Layout::default().with_cross_align(Align::RIGHT), |ui| {
@@ -472,8 +472,8 @@ impl eframe::App for GraphViewApp {
 }
 
 impl GraphViewApp {
-    fn show_top_bar(&mut self, ctx: &Context, shown: bool) {
-        egui::TopBottomPanel::top("top_panel").show_animated(ctx, shown, |ui| {
+    fn show_top_bar(&mut self, ui: &mut Ui, shown: bool) {
+        egui::Panel::top("top_panel").show_animated_inside(ui, shown, |ui| {
             ui.add_space(10.0);
             macro_rules! hide_header {
                 ($ui:expr) => {
@@ -482,7 +482,7 @@ impl GraphViewApp {
                     }
                 }
             }
-            let small_window = ctx.content_rect().width() < 1100.0;
+            let small_window = ui.ctx().content_rect().width() < 1100.0;
             ui.horizontal(|ui| {
                 //ui.spacing_mut().item_spacing.x = 50.0;
                 ui.vertical(|ui| {

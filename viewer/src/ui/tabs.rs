@@ -293,7 +293,7 @@ impl egui_dock::TabViewer for TabViewer<'_, '_> {
                             }
 
                             let (scroll_delta, zoom_delta, multi_touch) = ui.input(|is| {
-                                (is.raw_scroll_delta, is.zoom_delta(), is.multi_touch())
+                                (is.smooth_scroll_delta(), is.zoom_delta(), is.multi_touch())
                             });
 
                             if scroll_delta.y != 0.0 {
